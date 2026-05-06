@@ -1,1 +1,1 @@
-https://yancyqin.github.io/lucasgame/
+[Game](https://yancyqin.github.io/lucasgame/) 
