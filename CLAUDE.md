@@ -4,39 +4,58 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Run
 
-Open `index.html` directly in any browser — no build step, no server needed.
+**Local dev** (required for ES modules):
+```bash
+cd tower-defense
+python3 -m http.server 8080
+# open http://localhost:8080
+```
+
+**Production**: served via GitHub Pages. `index.html` is the entry point.
 
 ## Architecture
 
-Everything lives in a single `index.html` file. The JS is structured around a fixed game loop:
+The game is split into ES modules under `js/`. `index.html` is just HTML + CSS — all logic lives in the JS files.
 
 ```
-loop() → update() → draw() → requestAnimationFrame(loop)
+js/
+  constants.js    — TYPES, ENEMIES, PATH, MAX_MONEY, distance()
+  Map.js          — GameMap class: terrain, isOnPath(), draw()
+  Tower.js        — Tower class: shoot, takeDamage, draw
+  Enemy.js        — Enemy class: move, attack, draw (all 5 types)
+  Projectile.js   — Projectile class: 3 flavours (auto/manual/enemy)
+  WaveManager.js  — WaveManager class: wave cycle, spawn queue
+  Game.js         — Game class (orchestrator) + loop() entry point
 ```
 
-**Data layer** (top of script, constants + `let` globals):
-- `TYPES` — tower definitions (cost, range, fireRate, damage, color)
-- `ENEMIES` — enemy definitions (speed, hp, size, reward)
-- `path` — array of `{x, y}` waypoints enemies walk along
-- `player` — single hero object with position, sword stats, slash animation state
-- `towers`, `enemies`, `projectiles` — live arrays that grow/shrink each frame
+**Game loop** (bottom of `Game.js`):
+```
+loop() → game.update() → game.draw() → requestAnimationFrame(loop)
+```
 
-**Wave system**: `inBreak` / `breakTimer` / `spawnQueue` control the wave cycle. `buildWave(n)` returns a queue of enemy type name strings. When the queue empties and `enemies` is empty, a new break begins with a bonus gold payout.
+**Key OOP concepts to point out when teaching:**
+- **Encapsulation** — `tower.isDead()` hides `hp <= 0`; callers don't need to know the internals
+- **Single Responsibility** — each file has one job; `Enemy.js` handles enemies, not waves
+- **Constructor as factory** — `new Tower(x, y, 'sniper')` returns a ready-to-use object
+- **Composition** — `Game` has-a `GameMap`, has-a `WaveManager`, has-many `Tower`s
+- **Private helpers** — methods prefixed `_` (e.g. `_drawWeapon`, `_runnerShoot`) are internal details
 
-**Collision / geometry**: `distance(a, b)` is used everywhere. `onPath(x, y)` uses point-to-line-segment projection (the `t = clamp(dot/len2)` pattern) to block tower placement on the path.
+## Key patterns
 
-**Rendering**: Canvas 2D only. Draw order matters — path → towers → player → enemies → projectiles → HUD → overlays. The slash arc uses `ctx.arc` with `player.facing` as the center angle.
+- **Adding a tower type**: add an entry to `TYPES` in `constants.js` — buttons and behavior are automatic
+- **Adding an enemy type**: add an entry to `ENEMIES` in `constants.js`, reference it in `WaveManager._buildWave()`
+- **Wave difficulty**: adjust the `i % N === M` conditions in `WaveManager._buildWave()`
+- **Flash messages**: call `game.flash("text")` — fades over 2 seconds
+- **Manual tower control**: `Game.trySelectTower()` / `tryFireManual()` handle the player-controlled tower
 
-**Economy**: `money` is the single resource. Towers cost on placement, enemies pay `reward` on death, waves pay `20 * wave` bonus. `updateButtons()` syncs button opacity to affordability after any money change.
+## Economy
 
-## Key patterns to know
-
-- **Adding a tower type**: add an entry to `TYPES`, button and behavior are automatic.
-- **Adding an enemy type**: add an entry to `ENEMIES`, then reference it by name in `buildWave()`.
-- **Flash messages**: call `flash("text")` — draws a fading centered message for 2 seconds.
-- **Wave composition**: controlled entirely by `buildWave(n)` — adjust the `i % N === M` conditions to change wave difficulty curve.
-- `player.cooldown` counts down every frame; attack only triggers when it reaches 0 *and* an enemy is in range. `player.slashTimer` drives the visual arc fade separately.
+`money` is capped at `MAX_MONEY` (500). It increases from `e.reward` on kill and `20 * wave` bonus on wave clear. Always use `Math.min(money + amount, MAX_MONEY)` when adding gold.
 
 ## This project's context
 
-Built by a 12-year-old learning to code with AI assistance. Prioritize readability and teachability over cleverness. When suggesting changes, point to specific line numbers and explain the *why*. Prefer small, single-concept edits over rewrites.
+Built by a 12-year-old learning to code with AI assistance. **Prioritize readability and teachability over cleverness.** When suggesting changes:
+- Point to specific file names and line numbers
+- Explain the *why*, not just the *what*
+- Prefer small, single-concept edits over rewrites
+- Use the OOP patterns already established — don't introduce new abstractions
