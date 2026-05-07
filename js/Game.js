@@ -1,12 +1,12 @@
-import { TYPES, TRAPS, MINE, GUARD_CONFIG, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=8';
-import { GameMap }     from './Map.js?v=8';
-import { Tower }       from './Tower.js?v=8';
-import { Enemy }       from './Enemy.js?v=8';
-import { Projectile }  from './Projectile.js?v=8';
-import { Trap }        from './Trap.js?v=8';
-import { Mine }        from './Mine.js?v=8';
-import { Guard }       from './Guard.js?v=8';
-import { WaveManager } from './WaveManager.js?v=8';
+import { TYPES, TRAPS, MINE, GUARD_CONFIG, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=9';
+import { GameMap }     from './Map.js?v=9';
+import { Tower }       from './Tower.js?v=9';
+import { Enemy }       from './Enemy.js?v=9';
+import { Projectile }  from './Projectile.js?v=9';
+import { Trap }        from './Trap.js?v=9';
+import { Mine }        from './Mine.js?v=9';
+import { Guard }       from './Guard.js?v=9';
+import { WaveManager } from './WaveManager.js?v=9';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -654,6 +654,7 @@ class Game {
   }
 
   _selectType(key) {
+    this.selectedTower = null; // exit manual-shot mode when switching tool
     this.selectedType = key;
     const allKeys = [...this.typeKeys, ...this.trapKeys.map(k => 'trap_' + k), 'mine', 'guard'];
     for (const k of allKeys) {
