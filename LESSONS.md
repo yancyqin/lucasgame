@@ -893,11 +893,854 @@ if (this.type === 'laser') {
 
 ---
 
-(English versions of all 10 lessons follow the same structure as above, covering:
-- Learning Objectives
-- Tasks with step-by-step instructions
-- Thinking Questions
-- Extension Tasks)
+## 📖 Lesson 1: Modify Data (20 minutes)
+
+### Learning Objectives
+- Understand the relationship between data and game behavior
+- Find and modify game data
+- Understand the impact of modifications
+
+### Tasks
+
+**Step 1: Open the game file**
+1. Open the `lucasgame` folder in VS Code
+2. Find the `js/constants.js` file
+3. Open it (click on the filename)
+
+**Step 2: Find the tower data**
+```javascript
+// Look for this section (around lines 10-20):
+const TYPES = {
+  sniper: {
+    cost: 150,          // Sniper tower cost
+    damage: 30,         // Sniper tower damage
+    range: 150,         // Sniper tower attack range
+    fireRate: 1500      // Sniper tower fire rate
+  },
+  // ... other towers
+}
+```
+
+**Step 3: Modify a value**
+```javascript
+// Change the sniper's damage from 30 to 60
+sniper: {
+  cost: 150,
+  damage: 60,   // ← Change this (from 30 to 60)
+  range: 150,
+  fireRate: 1500
+}
+```
+
+**Step 4: Save the file**
+- Press `Ctrl + S` to save
+
+**Step 5: Test in the browser**
+1. Open the game: `http://localhost:8080`
+2. If you don't see changes, do a hard refresh: `Ctrl + Shift + R`
+3. Build a sniper tower and observe if the damage has doubled
+
+### Thinking Questions
+
+1. **Observation:** After the damage changed from 30 to 60, does the tower kill enemies faster?
+2. **Comparison:** How does the sniper's damage compare to the machine gun's damage?
+3. **Reflection:** What would happen if you changed the damage to 10?
+
+### Extension Tasks
+
+- Change another tower's cost and see the impact
+- Modify the enemy reward value (`e.reward`)
+- Record 5 different modifications and observe their effects
+
+---
+
+## 📖 Lesson 2: Game Balance (30 minutes)
+
+### Learning Objectives
+- Understand the concept of game balance
+- Implement balance through data design
+- Conduct game testing and adjustments
+
+### Background Knowledge
+
+**Three elements of game balance:**
+1. **Cost** — How much money does it take to build a tower?
+2. **Benefit** — How many enemies can a tower kill? How much damage does it do?
+3. **Time** — How long does a tower take to start working?
+
+For example:
+- Cheap towers (low cost) should be weak (low damage)
+- Expensive towers (high cost) should be strong (high damage)
+
+### Tasks
+
+**Step 1: Analyze the balance of existing towers**
+
+Open `constants.js` and fill in the table:
+
+| Tower Type | Cost | Damage | Attack Speed | Balance Index |
+|-----------|------|--------|--------------|---------------|
+| sniper | 150 | 30 | 1500 | ? |
+| machinegun | ? | ? | ? | ? |
+| cannon | ? | ? | ? | ? |
+| tesla | ? | ? | ? | ? |
+| ice | ? | ? | ? | ? |
+
+**Step 2: Calculate the balance index**
+```
+Balance Index = Damage / Cost
+  
+For example, Sniper: 30 / 150 = 0.2
+```
+
+**Step 3: Test the game**
+1. Play until wave 5
+2. Record: Which tower is the best? Which is the worst?
+3. Why is that?
+
+**Step 4: Adjust the balance**
+
+Based on test results, adjust the data:
+```javascript
+// If the ice tower is too weak, boost it
+ice: {
+  cost: 100,
+  damage: 25,
+  range: 120,
+  fireRate: 2000  // Change from 2000 to 1500
+}
+```
+
+### Thinking Questions
+
+1. **Balance:** Do you think the game is balanced now? Why?
+2. **Design:** If you design a new tower, what should its attributes be?
+3. **Testing:** How do you determine if a game is balanced?
+
+### Extension Tasks
+
+- Design a "perfectly balanced" new tower
+- Calculate the balance index for all towers
+- Create a "hard mode" (towers are more expensive, enemies are stronger)
+
+---
+
+## 📖 Lesson 3: Trace Code (25 minutes)
+
+### Learning Objectives
+- Understand how code is executed
+- Track an object from creation to destruction
+- Understand "data flow"
+
+### Tasks
+
+**Step 1: Track the enemy lifecycle**
+
+Open `Game.js` and find this line:
+```javascript
+// Around line 60
+this.enemies = [];
+```
+
+This is the enemy list. Now let's track an enemy's entire life:
+
+**Step 2: How is an enemy born?**
+
+1. Open `WaveManager.js`
+2. Find the `spawn` method (a method is a function)
+3. Look at this line:
+```javascript
+const enemy = new Enemy(x, y, type);
+this.enemies.push(enemy);
+```
+
+This means: **Create a new enemy and add it to the enemy list**
+
+**Step 3: How does an enemy move?**
+
+1. Open `Enemy.js`
+2. Find the `update` method
+3. See how it changes the `x` and `y` coordinates
+
+**Step 4: How does an enemy die?**
+
+1. Find `isDead()` in `Enemy.js`
+2. This method checks if the enemy's HP is ≤ 0
+3. When an enemy dies, it's removed from the list
+
+**Step 5: Track with logs**
+
+In the `update()` method of `Game.js`, add:
+```javascript
+console.log(`Enemy count: ${this.enemies.length}`);
+```
+
+Reload the game and watch in the console how the enemy count changes.
+
+### Thinking Questions
+
+1. **Process:** What steps does an enemy go through from birth to death?
+2. **Modification:** If I change `Enemy.speed`, what will it affect?
+3. **Tracking:** Where does the enemy's damage value come from?
+
+### Extension Tasks
+
+- Track the complete lifecycle of a tower (build → shoot → destroy)
+- Track a projectile from launch to impact
+- Create a "tracking log" that records enemy coordinate changes
+
+---
+
+## 📖 Lesson 4: Understand Loops (35 minutes)
+
+### Learning Objectives
+- Understand how `for` loops work
+- Find loops in the game
+- Understand how loops create repetition
+
+### Background Knowledge
+
+**Three parts of a loop:**
+```javascript
+for (let i = 0; i < 5; i++) {
+    //  ↑              ↑     ↑
+    // initial      condition increment
+    console.log(i);  // 0, 1, 2, 3, 4
+}
+```
+
+**Explanation:** i starts at 0, each loop increases i by 1, until i is no longer < 5.
+
+### Tasks
+
+**Step 1: Find loops in the game**
+
+1. Open `WaveManager.js`
+2. Find the `_buildWave()` method
+3. Look at this section:
+```javascript
+for (let i = 0; i < 5; i++) {
+    // This means spawn 5 enemies
+    enemies.push(new Enemy(...));
+}
+```
+
+**Step 2: Understand the wave pattern**
+
+Continue looking at the code in `_buildWave()`:
+```javascript
+for (let i = 0; i < count; i++) {
+    if (i % 3 === 0) {
+        // Every 3rd enemy is a tank
+        enemies.push(new Enemy(x, y, 'tank'));
+    } else {
+        // Others are runners
+        enemies.push(new Enemy(x, y, 'runner'));
+    }
+}
+```
+
+**This means:** Enemies are generated in the pattern tank, runner, runner, tank, runner, runner, ...
+
+**Step 3: Modify the wave pattern**
+
+```javascript
+// Original: tank, runner, runner
+// Change to: tank, runner (alternating)
+if (i % 2 === 0) {  // Change 3 to 2
+    enemies.push(new Enemy(x, y, 'tank'));
+} else {
+    enemies.push(new Enemy(x, y, 'runner'));
+}
+```
+
+Save and test to see if the enemy pattern changes.
+
+**Step 4: Understand nested loops**
+
+In `Game.js`, find code like this:
+```javascript
+for (let tower of this.towers) {      // Loop 1: iterate all towers
+    for (let enemy of this.enemies) { // Loop 2: iterate all enemies
+        // Check if this tower can hit this enemy
+        tower.tryShoot(enemy);
+    }
+}
+```
+
+**This means:** For each tower, check each enemy to see if it can be hit.
+
+### Thinking Questions
+
+1. **Pattern:** If `i % 4 === 0`, what is the enemy pattern?
+2. **Efficiency:** How long does it take to spawn a wave of 100 enemies?
+3. **Design:** How would you design a "hard wave" (more and stronger enemies)?
+
+### Extension Tasks
+
+- Modify the wave pattern to create an "alternating pattern"
+- Count how many tanks and runners are in a certain wave
+- Design a "pyramid pattern" (few at start, many in middle, few at end)
+
+---
+
+## 📖 Lesson 5: Debug Tips (30 minutes)
+
+### Learning Objectives
+- Learn to debug with `console.log`
+- Understand "print debugging"
+- Find the cause of bugs
+
+### Tasks
+
+**Step 1: Add basic logging**
+
+At the beginning of the `update()` method in `Game.js`, add:
+```javascript
+update() {
+    console.log(`Wave: ${this.wave}, Money: ${this.money}`);
+    // ... other code
+}
+```
+
+Reload the game and watch the output in the console.
+
+**Step 2: Track specific events**
+
+In the `takeDamage()` method of `Enemy.js`, add:
+```javascript
+takeDamage(amount) {
+    console.log(`Enemy takes damage! HP changed from ${this.hp} to ${this.hp - amount}`);
+    this.hp -= amount;
+    console.log(`Current HP: ${this.hp}`);
+}
+```
+
+Observe the output when enemies take damage.
+
+**Step 3: Debug conditional logic**
+
+In `WaveManager.js`, add:
+```javascript
+for (let i = 0; i < count; i++) {
+    if (i % 3 === 0) {
+        console.log(`Spawn tank, i = ${i}`);
+        enemies.push(new Enemy(x, y, 'tank'));
+    } else {
+        console.log(`Spawn runner, i = ${i}`);
+        enemies.push(new Enemy(x, y, 'runner'));
+    }
+}
+```
+
+Check if the pattern matches expectations.
+
+**Step 4: Debug object state**
+
+```javascript
+// Print the complete object
+console.log("Player's towers:", this.towers);
+console.log("Current enemies:", this.enemies);
+console.log("Game state:", {
+    wave: this.wave,
+    money: this.money,
+    towerCount: this.towers.length,
+    enemyCount: this.enemies.length
+});
+```
+
+### Common debugging patterns
+
+```javascript
+// 1. Print if a function was called
+console.log("This function was called");
+
+// 2. Print a variable's value
+console.log("Variable x value:", x);
+
+// 3. Print timestamps (track order)
+console.log("step 1");
+console.log("step 2");
+console.log("step 3");
+
+// 4. Print errors
+if (value < 0) {
+    console.log("Error! value cannot be negative:", value);
+}
+
+// 5. Print an object
+console.log("Entire object:", JSON.stringify(object, null, 2));
+```
+
+### Thinking Questions
+
+1. **Debugging:** If money isn't increasing, how do you find out why?
+2. **Tracking:** If a tower isn't shooting, how do you verify it's updating?
+3. **Verification:** How do you ensure enemies are spawned in the correct pattern?
+
+### Extension Tasks
+
+- Add 10 different `console.log` statements to track each stage of the game
+- Find a bug (e.g., money not increasing) and track it with logs
+- Create a "debug dashboard" that prints all important game states
+
+---
+
+## 📖 Lesson 6: OOP Basics (40 minutes)
+
+### Learning Objectives
+- Understand "classes" and "objects"
+- Understand the concept of "encapsulation"
+- Understand "single responsibility"
+
+### Background Knowledge
+
+**Classes vs Objects:**
+- **Class** is a "blueprint" or "template"
+- **Object** is an "instance" created from the blueprint
+
+```javascript
+// Class (blueprint)
+class Tower {
+    constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+    }
+}
+
+// Objects (instances)
+const tower1 = new Tower(100, 200, 'sniper');
+const tower2 = new Tower(300, 400, 'machinegun');
+```
+
+### Tasks
+
+**Step 1: Understand the Tower class**
+
+Open `Tower.js` and find:
+```javascript
+class Tower {
+    constructor(x, y, type) {
+        // constructor is a "constructor" that initializes the object
+        // This sets the tower's initial properties
+    }
+}
+```
+
+**Step 2: Understand properties and methods**
+
+In `Tower.js`, find:
+```javascript
+// Properties (what the object has)
+this.x = x;           // Tower's X coordinate
+this.y = y;           // Tower's Y coordinate
+this.hp = 50;         // Tower's health
+
+// Methods (what the object can do)
+shoot() { }           // Tower can shoot
+takeDamage(amount) { } // Tower can take damage
+isDead() { }          // Check if tower is dead
+```
+
+**Step 3: Understand encapsulation**
+
+```javascript
+// In Tower.js
+isDead() {
+    // Outside code doesn't need to know the hp <= 0 logic
+    // It only needs to call isDead()
+    return this.hp <= 0;
+}
+
+// Using in Game.js
+if (tower.isDead()) {
+    // Remove this tower
+    this.towers.splice(i, 1);
+}
+```
+
+**This is "encapsulation":** Hide internal details and only expose necessary interfaces.
+
+**Step 4: Understand single responsibility**
+
+Compare:
+```javascript
+// ❌ Bad: Tower manages itself and enemies
+class Tower {
+    shoot() { }
+    takeDamage() { }
+    spawnEnemy() { }    // Shouldn't be here!
+}
+
+// ✅ Good: Tower only manages itself, Enemy only manages enemies
+class Tower {
+    shoot() { }
+    takeDamage() { }
+}
+
+class Enemy {
+    move() { }
+    takeDamage() { }
+}
+```
+
+### Thinking Questions
+
+1. **Design:** Why should `Tower` and `Enemy` be separate classes?
+2. **Interface:** What are the main methods `Tower` exposes to the outside?
+3. **Hidden:** What are the private details inside `Tower`?
+
+### Extension Tasks
+
+- List all properties and methods of the `Enemy` class
+- Compare the `Tower`, `Enemy`, and `Projectile` classes
+- Design a new `Upgrade` class to manage tower upgrades
+
+---
+
+## 📖 Lesson 7: Inheritance & Polymorphism (45 minutes)
+
+### Learning Objectives
+- Understand "inheritance" (code reuse)
+- Understand "polymorphism" (same name, different behavior)
+- Understand different types of Enemy classes
+
+### Background Knowledge
+
+**Idea of inheritance:**
+```
+Enemy (parent class)
+  ├─ Runner (child class)
+  ├─ Tank (child class)
+  ├─ Speedy (child class)
+  └─ ...
+```
+
+All enemies have: `move()`, `takeDamage()`, `draw()`.
+
+But their **specific behaviors are different**:
+- Runner moves fast but has low HP
+- Tank moves slow but has high HP
+
+### Tasks
+
+**Step 1: Find the Enemy base class**
+
+Open `Enemy.js`, and at the top you'll find:
+```javascript
+class Enemy {
+    constructor(x, y, type) {
+        this.type = type;
+        // Set different properties based on type
+    }
+}
+```
+
+**Step 2: Understand polymorphism**
+
+Find the `move()` method in `Enemy.js`:
+```javascript
+move() {
+    if (this.type === 'runner') {
+        // Runner's movement
+        this.moveAlongPath(this.speed * 1.5);
+    } else if (this.type === 'tank') {
+        // Tank's movement
+        this.moveAlongPath(this.speed * 0.5);
+    }
+    // ... other types
+}
+```
+
+**This is "polymorphism":** The same method `move()` behaves differently in different objects.
+
+**Step 3: Analyze each enemy type**
+
+Fill in the table:
+
+| Enemy Type | Speed | HP | Characteristics |
+|-----------|-------|----|--------------------|
+| Runner | ? | ? | ? |
+| Tank | ? | ? | ? |
+| Speedy | ? | ? | ? |
+| Heavy | ? | ? | ? |
+| Regenerator | ? | ? | ? |
+
+**Step 4: Modify enemy properties**
+
+```javascript
+// Find ENEMIES in constants.js
+const ENEMIES = {
+    runner: { speed: 3, hp: 20, reward: 50 },
+    // ... others
+}
+
+// Change an enemy's properties and see the effect
+```
+
+### Thinking Questions
+
+1. **Inheritance:** Why do all enemies inherit from Enemy?
+2. **Reuse:** How much code in the `move()` method is reused?
+3. **Extension:** How do you add a new enemy type?
+
+### Extension Tasks
+
+- Add a new enemy type and define its properties
+- Compare Runner and Tank to understand the "speed-HP" tradeoff
+- Design an "ultimate enemy" that is both fastest and strongest
+
+---
+
+## 📖 Lesson 8: Modular Design (35 minutes)
+
+### Learning Objectives
+- Understand the importance of "modularity"
+- Understand the responsibility of each file
+- Understand communication between modules
+
+### Background Knowledge
+
+**Benefits of modularity:**
+1. Code is easy to understand (each file does one thing)
+2. Code is easy to modify (changes in one place don't affect others)
+3. Code is easy to reuse (copy a file and use it)
+
+### Tasks
+
+**Step 1: Draw a module relationship diagram**
+
+```
+index.html (entry point)
+    ↓
+js/Game.js (main program)
+    ├─→ js/Map.js (map)
+    ├─→ js/Tower.js (towers)
+    ├─→ js/Enemy.js (enemies)
+    ├─→ js/Projectile.js (projectiles)
+    ├─→ js/WaveManager.js (wave management)
+    └─→ js/constants.js (data)
+```
+
+**Step 2: Understand each module's responsibility**
+
+| File | Responsibility | Should NOT do |
+|------|-----------------|---------------|
+| constants.js | Store data | Should not have logic |
+| Map.js | Manage map | Should not manage enemies or towers |
+| Tower.js | Manage towers | Should not manage enemies |
+| Enemy.js | Manage enemies | Should not manage towers |
+| Game.js | Coordinate all modules | Should not do specific business logic |
+
+**Step 3: Track an operation**
+
+When a player builds a tower:
+```
+1. Player clicks button (index.html)
+2. Trigger Game.tryBuildTower() (Game.js)
+3. Create new Tower object (Tower.js)
+4. Add to this.towers list (Game.js)
+5. Next frame draws tower (Tower.js draw())
+```
+
+**Step 4: Understand data flow**
+
+```
+constants.js defines data
+    ↓
+Each module reads data
+    ↓
+Game.js coordinates modules
+    ↓
+index.html displays result
+```
+
+### Thinking Questions
+
+1. **Separation:** Why should `Tower` and `Enemy` be in different files?
+2. **Communication:** How does `Tower` know an enemy has arrived?
+3. **Coordination:** What coordination work does `Game` do?
+
+### Extension Tasks
+
+- Draw a "detailed module relationship diagram" with all function calls
+- Track the complete flow of "get reward when enemy dies"
+- Design a new `UI.js` module responsible for displaying score, money, etc.
+
+---
+
+## 📖 Lesson 9: Add New Tower (60 minutes)
+
+### Learning Objectives
+- Apply all previous knowledge
+- Design and implement a new feature from scratch
+- Understand the complete "Requirements → Design → Implementation → Testing" flow
+
+### Tasks
+
+**Step 1: Design the new tower**
+
+Answer these questions:
+- What is the tower's name? (e.g., "Laser")
+- What is its attack method? (e.g., continuous laser beam)
+- What should its properties be?
+  - Cost: How much money?
+  - Damage: How much damage?
+  - Range: How far the range?
+  - Fire Rate: How fast the fire rate?
+
+**Step 2: Add to constants.js**
+
+```javascript
+const TYPES = {
+  // Original towers...
+  laser: {
+    cost: 200,        // Determines rarity
+    damage: 40,       // More powerful than normal towers
+    range: 200,       // Longer range
+    fireRate: 800     // Very fast shooting
+  }
+}
+```
+
+**Step 3: Add logic in Tower.js**
+
+Find the Tower's `shoot()` method and add laser-specific behavior:
+```javascript
+if (this.type === 'laser') {
+    // laser special logic
+    // For example: more accurate, more damage, etc.
+}
+```
+
+**Step 4: Add UI button**
+
+In `index.html`, find the tower buttons section and add:
+```html
+<button onclick="game.tryBuildTower('laser')">Laser (200)</button>
+```
+
+**Step 5: Test**
+
+1. Reload the game
+2. You should see the new "Laser" button
+3. Try building a laser tower
+4. Observe if it works correctly
+5. Adjust properties until satisfied with balance
+
+### Checklist
+
+- [ ] Defined new tower in constants.js
+- [ ] Added logic in Tower.js
+- [ ] Added button in index.html
+- [ ] Game can successfully build new tower
+- [ ] New tower's behavior matches expectations
+- [ ] New tower's balance is reasonable with others
+
+### Thinking Questions
+
+1. **Tradeoff:** How do the new tower's properties compare to other towers?
+2. **Uniqueness:** What's unique about the new tower?
+3. **Balance:** Is the game still balanced?
+
+### Extension Tasks
+
+- Add 2-3 new towers
+- Design an "ultimate tower" that is very powerful but very expensive
+- Create an "exclusive mode" using only new towers
+
+---
+
+## 📖 Lesson 10: Free Project (120 minutes)
+
+### Learning Objectives
+- Apply all knowledge comprehensively
+- Complete a self-designed project
+- Experience the complete journey from idea to implementation
+
+### Project Options
+
+**Option 1: Extend enemy types**
+- Add 2-3 new enemy types
+- Design unique properties and behaviors for each
+
+**Option 2: Design new map**
+- Modify the enemy path
+- Create "hard" and "easy" difficulty maps
+
+**Option 3: Upgrade system**
+- Implement tower upgrade functionality
+- Towers become stronger after upgrade
+
+**Option 4: Wave editor**
+- Let players customize enemy waves
+- Save and load custom waves
+
+**Option 5: Free creativity**
+- Come up with your own idea
+- Implement it
+
+### Implementation Steps
+
+**Step 1: Define requirements**
+- What feature do you want to implement?
+- What data and logic does it need?
+
+**Step 2: Design solution**
+- Which files need to be modified?
+- What code needs to be added?
+
+**Step 3: Implement**
+- Complete the code step by step
+- Test frequently to ensure each step is correct
+
+**Step 4: Test and debug**
+- Play the game and test new features
+- Use `console.log` to debug issues
+- Adjust data until satisfied
+
+**Step 5: Optimize**
+- Is the code clear?
+- Is there duplicate code?
+- Can performance be optimized?
+
+### Checklist
+
+- [ ] Core feature is complete
+- [ ] Feature is thoroughly tested
+- [ ] Code is clear and understandable
+- [ ] No obvious bugs
+- [ ] Game can still be played normally
+
+### Showcase your work
+
+1. Commit changes to Git
+2. Write a brief description (what feature, how to use)
+3. Invite friends to play your game
+
+---
+
+## Summary
+
+Congratulations! You have completed all Lucas Game courses!
+
+### What you learned
+- ✅ Data-driven development
+- ✅ Game balance design
+- ✅ Code reading and tracking
+- ✅ Loops and conditional logic
+- ✅ Debugging techniques
+- ✅ Object-oriented programming
+- ✅ Inheritance and polymorphism
+- ✅ Modular design
+- ✅ Feature implementation and integration
+- ✅ Project management
+
+### What's next?
+- Try modifying or extending Lucas Game
+- Use the same methods to create other games
+- Learn more advanced programming concepts
 
 ---
 
