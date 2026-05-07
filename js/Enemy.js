@@ -1,20 +1,24 @@
-import { ENEMIES, distance } from './constants.js?v=7';
-import { Projectile } from './Projectile.js?v=7';
+import { ENEMIES, distance } from './constants.js?v=8';
+import { Projectile } from './Projectile.js?v=8';
 
 export class Enemy {
-  constructor(kind, spawnX, spawnY) {
+  constructor(kind, spawnX, spawnY, difficulty = 1) {
     const cfg = ENEMIES[kind];
     Object.assign(this, cfg);
     this.x = spawnX;
     this.y = spawnY;
-    this.maxHp = cfg.hp;
-    this.hp = cfg.hp;
+    // Scale HP and speed with difficulty
+    this.hp = Math.round(cfg.hp * difficulty);
+    this.maxHp = this.hp;
+    this.speed = cfg.speed * Math.min(1 + (difficulty - 1) * 0.25, 2.5);
     this.waypoint = 1;
     this.slowTimer = 0;
+    this.stunTimer = 0;
     this.hitTimer = 0;
     this.shootTimer  = Math.floor(Math.random() * 120);
     this.fireTimer   = Math.floor(Math.random() * 120);
     this.saboteurTimer = 0;
+    this.trapTarget = null;
     // Attack swing animation state
     this.attackTimer = 0;
     this.attackAngle = 0;
@@ -23,14 +27,14 @@ export class Enemy {
     // Gate siege state
     this.atGate = false;
     this.gateAttackTimer = 30;
-    this.comboPhase = 0; // dragonRider only: 0=dragon breathes, 1=rider strikes
+    this.comboPhase = 0;
   }
 
-  // traps passed in so saboteur can target them
   update(path, towers, projectiles, traps = []) {
-    if (this.hitTimer  > 0) this.hitTimer--;
+    if (this.hitTimer   > 0) this.hitTimer--;
     if (this.attackTimer > 0) this.attackTimer--;
-    if (this.slowTimer > 0) this.slowTimer--;
+    if (this.slowTimer  > 0) this.slowTimer--;
+    if (this.stunTimer  > 0) { this.stunTimer--; return; }
 
     // Siege mode: stop moving, attack the castle periodically
     if (this.atGate) {
@@ -51,25 +55,48 @@ export class Enemy {
     const spd = this.slowTimer > 0 ? this.speed * 0.35 : this.speed;
     const target = path[this.waypoint];
 
-    // Check for a barricade blocking the path ahead — stop and attack it
-    if (target) {
-      const fdx = target.x - this.x, fdy = target.y - this.y;
-      const blocker = traps.find(t => {
-        if (t.typeKey !== 'barricade' || t.disabledTimer > 0) return false;
-        const dist = Math.hypot(t.x - this.x, t.y - this.y);
-        if (dist > t.radius + this.size + 6) return false;
-        // Only block if the barricade is in the forward direction
-        return (t.x - this.x) * fdx + (t.y - this.y) * fdy > 0;
-      });
-      if (blocker) {
-        // Pound the barricade until it breaks
-        this.triggerAttack(blocker.x, blocker.y);
-        this._runnerShoot(towers, projectiles);
-        return; // don't move
+    // Saboteur: seek and destroy any trap within detection radius
+    if (this.kind === 'saboteur') {
+      if (this.trapTarget && (this.trapTarget.isDead() || Math.hypot(this.trapTarget.x - this.x, this.trapTarget.y - this.y) > 150)) {
+        this.trapTarget = null;
+      }
+      if (!this.trapTarget) {
+        this.trapTarget = traps.find(t => !t.isDead() && Math.hypot(t.x - this.x, t.y - this.y) < 100);
+      }
+      if (this.trapTarget) {
+        const td = Math.hypot(this.trapTarget.x - this.x, this.trapTarget.y - this.y);
+        if (td > 28) {
+          this.x += ((this.trapTarget.x - this.x) / td) * spd;
+          this.y += ((this.trapTarget.y - this.y) / td) * spd;
+        } else {
+          this.triggerAttack(this.trapTarget.x, this.trapTarget.y);
+          if (this.saboteurTimer <= 0) {
+            this.trapTarget.takeDamage(60); // destroys most traps in 1-2 hits
+            this.saboteurTimer = 60;
+          } else {
+            this.saboteurTimer--;
+          }
+        }
+        return;
       }
     }
 
-    // Off-path tower aggro — nearby towers pull enemy off the road to attack
+    // Barricade blocking the path — stop and pound it
+    if (target) {
+      const fdx = target.x - this.x, fdy = target.y - this.y;
+      const blocker = traps.find(t => {
+        if (t.typeKey !== 'barricade' || t.isDead()) return false;
+        if (Math.hypot(t.x - this.x, t.y - this.y) > t.radius + this.size + 6) return false;
+        return (t.x - this.x) * fdx + (t.y - this.y) * fdy > 0;
+      });
+      if (blocker) {
+        this.triggerAttack(blocker.x, blocker.y);
+        this._runnerShoot(towers, projectiles);
+        return;
+      }
+    }
+
+    // Off-path tower aggro
     if (!this.offPathTarget) {
       const near = towers.find(t => Math.hypot(t.x - this.x, t.y - this.y) < 80);
       if (near) this.offPathTarget = near;
@@ -85,7 +112,6 @@ export class Enemy {
         else { this.triggerAttack(tgt.x, tgt.y); }
         this._runnerShoot(towers, projectiles);
         this._dragonBreath(path, projectiles);
-        this._saboteurStrike(traps);
         return;
       }
     }
@@ -98,7 +124,6 @@ export class Enemy {
     }
     this._runnerShoot(towers, projectiles);
     this._dragonBreath(path, projectiles);
-    this._saboteurStrike(traps);
   }
 
   takeDamage(amt) { this.hp -= amt; this.hitTimer = 8; }
@@ -123,6 +148,19 @@ export class Enemy {
       this._drawSaboteur(ctx, facing, bc);
     } else {
       this._drawKnight(ctx, facing, bc);
+    }
+
+    // Stun stars
+    if (this.stunTimer > 0) {
+      const s2 = this.size;
+      for (let i = 0; i < 3; i++) {
+        const a = (Date.now() / 200 + i * Math.PI * 2 / 3) % (Math.PI * 2);
+        const sx = this.x + Math.cos(a) * (s2 + 6), sy = this.y - s2 - 16 + Math.sin(a) * 6;
+        ctx.fillStyle = '#ffff44';
+        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('★', sx, sy);
+      }
+      ctx.textAlign = 'left';
     }
 
     // HP bar
@@ -162,20 +200,6 @@ export class Enemy {
       projectiles.push(new Projectile({ x: this.x, y: this.y, vx: Math.cos(a)*5, vy: Math.sin(a)*5, damage: this.kind === 'dragonRider' ? 3 : 2, fromEnemy: true, fire: true }));
     }
     this.fireTimer = 180 + Math.floor(Math.random() * 90);
-  }
-
-  _saboteurStrike(traps) {
-    if (this.kind !== 'saboteur') return;
-    if (this.saboteurTimer > 0) { this.saboteurTimer--; return; }
-    for (const trap of traps) {
-      if (Math.hypot(trap.x - this.x, trap.y - this.y) < 44) {
-        trap.disable(300); // 5 seconds disabled
-        this.triggerAttack(trap.x, trap.y);
-        this.saboteurTimer = 150;
-        return;
-      }
-    }
-    this.saboteurTimer = 30;
   }
 
   // ── Drawing helpers ───────────────────────────────────────────────────────
