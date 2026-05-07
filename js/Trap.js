@@ -1,6 +1,6 @@
-import { TRAPS } from './constants.js';
+import { TRAPS } from './constants.js?v=7';
 
-// Trap is placed on the road (spike/tar) or beside it (wall).
+// Trap is placed on the road (spike/tar/barricade) or beside it (wall).
 // Composition: Game has-many Traps, just like it has-many Towers.
 export class Trap {
   constructor(x, y, typeKey) {
@@ -10,9 +10,15 @@ export class Trap {
     this.y = y;
     this.typeKey = typeKey;
     this.cooldownTimer = 0;
+    this.disabledTimer = 0; // set by saboteur strikes
   }
 
+  // Called by saboteur enemies — shuts the trap off for `frames` frames
+  disable(frames) { this.disabledTimer = Math.max(this.disabledTimer, frames); }
+
   update(enemies) {
+    if (this.disabledTimer > 0) { this.disabledTimer--; return; }
+
     if (this.typeKey === 'spike') {
       if (this.cooldownTimer > 0) { this.cooldownTimer--; return; }
       let hit = false;
@@ -26,7 +32,14 @@ export class Trap {
     } else if (this.typeKey === 'tar') {
       for (const e of enemies) {
         if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius) {
-          e.slowTimer = Math.max(e.slowTimer, 30); // keep refreshed while on tar
+          e.slowTimer = Math.max(e.slowTimer, 30);
+        }
+      }
+    } else if (this.typeKey === 'barricade') {
+      // Slows enemies that walk through it (like tar but on the road)
+      for (const e of enemies) {
+        if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius) {
+          e.slowTimer = Math.max(e.slowTimer, 20);
         }
       }
     } else if (this.typeKey === 'wall') {
@@ -43,9 +56,65 @@ export class Trap {
   isDead()        { return this.hp != null && this.hp <= 0; }
 
   draw(ctx) {
-    if      (this.typeKey === 'spike') this._drawSpike(ctx);
-    else if (this.typeKey === 'tar')   this._drawTar(ctx);
-    else                               this._drawWall(ctx);
+    if      (this.typeKey === 'spike')     this._drawSpike(ctx);
+    else if (this.typeKey === 'tar')       this._drawTar(ctx);
+    else if (this.typeKey === 'barricade') this._drawBarricade(ctx);
+    else                                   this._drawWall(ctx);
+
+    // Disabled overlay — purple spark effect from saboteur
+    if (this.disabledTimer > 0) {
+      const p = Math.min(this.disabledTimer / 60, 1);
+      ctx.save();
+      ctx.globalAlpha = p * 0.7;
+      ctx.fillStyle = '#bb44ff';
+      ctx.beginPath(); ctx.arc(this.x, this.y, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = p;
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('ZAP', this.x, this.y + 4);
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  }
+
+  _drawBarricade(ctx) {
+    const hpFrac = this.hp / this.maxHp;
+
+    // Drop shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(this.x - 22, this.y + 15, 44, 6);
+
+    // Three X-frames (chevaux-de-frise)
+    for (let i = -1; i <= 1; i++) {
+      const cx = this.x + i * 14;
+      ctx.save(); ctx.translate(cx, this.y);
+      ctx.fillStyle = '#7a4820';
+      ctx.save(); ctx.rotate(0.65);  ctx.fillRect(-2, -14, 4, 28); ctx.restore();
+      ctx.save(); ctx.rotate(-0.65); ctx.fillRect(-2, -14, 4, 28); ctx.restore();
+      ctx.fillStyle = '#c87030';
+      ctx.save(); ctx.rotate(0.65);  ctx.fillRect(-0.5, -13, 1.5, 8); ctx.restore();
+      // Center iron bolt
+      ctx.fillStyle = '#888';
+      ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#aaa';
+      ctx.beginPath(); ctx.arc(-0.8, -0.8, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    // Top connecting bar with iron bands
+    ctx.fillStyle = '#5a2e0a'; ctx.fillRect(this.x - 22, this.y - 12, 44, 5);
+    ctx.fillStyle = '#7a4820'; ctx.fillRect(this.x - 22, this.y - 12, 44, 2);
+    ctx.fillStyle = '#444';
+    for (const bx of [-14, 0, 14]) {
+      ctx.fillRect(this.x + bx - 3, this.y - 14, 6, 9);
+      ctx.fillStyle = '#666'; ctx.fillRect(this.x + bx - 2, this.y - 13, 4, 7);
+      ctx.fillStyle = '#444';
+    }
+
+    // HP bar
+    ctx.fillStyle = '#222'; ctx.fillRect(this.x - 20, this.y + 18, 40, 5);
+    ctx.fillStyle = hpFrac > 0.5 ? '#0f0' : hpFrac > 0.25 ? '#f80' : '#f00';
+    ctx.fillRect(this.x - 20, this.y + 18, 40 * hpFrac, 5);
   }
 
   _drawSpike(ctx) {

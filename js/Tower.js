@@ -1,5 +1,5 @@
-import { TYPES, distance } from './constants.js';
-import { Projectile } from './Projectile.js';
+import { TYPES, distance } from './constants.js?v=7';
+import { Projectile } from './Projectile.js?v=7';
 
 // A single tower on the map.
 // Constructor pattern: new Tower(x, y, 'sniper') gives back a fully ready tower object.
@@ -16,23 +16,28 @@ export class Tower {
     this.maxHp = 8;
     this.angle = 0;        // direction the weapon currently points
     this.manualCooldown = 0; // reload timer for manual player shots
+    this.fireTimer = 0;    // brief flash when a shot is fired
   }
 
   // Auto-shoot: find the first enemy in range and fire at it.
   // Pushes a new Projectile into the shared projectiles array.
   update(enemies, projectiles) {
+    if (this.fireTimer > 0) this.fireTimer--;
     this.cooldown--;
     if (this.cooldown > 0) return;
     const target = enemies.find(e => distance(this, e) < this.range);
     if (target) {
       this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+      this.fireTimer = 10;
       if (this.typeKey === 'rapid') {
         for (const spread of [-0.22, 0, 0.22]) {
           const a = this.angle + spread;
-          projectiles.push(new Projectile({ x: this.x, y: this.y, vx: Math.cos(a) * 8, vy: Math.sin(a) * 8, damage: this.damage, slows: this.slows, manual: true }));
+          projectiles.push(new Projectile({ x: this.x, y: this.y, vx: Math.cos(a) * 8, vy: Math.sin(a) * 8, damage: this.damage, slows: this.slows, manual: true, arrow: true }));
         }
+      } else if (this.typeKey === 'slow') {
+        projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 5, damage: this.damage, slows: true, magic: true }));
       } else {
-        projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 6, damage: this.damage, slows: this.slows, boulder: this.typeKey === 'sniper' }));
+        projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 6, damage: this.damage, slows: this.slows, boulder: this.typeKey === 'sniper', arrow: this.typeKey === 'basic' }));
       }
       this.cooldown = this.fireRate;
     }
@@ -89,7 +94,9 @@ export class Tower {
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(this.x - 3, ty + 7, 6, 13);
     ctx.fillStyle = '#0a0a0a'; ctx.fillRect(this.x - 2, ty + 8, 4, 11);
 
-    // Archer head peeking from battlement gap
+    // Archer neck + head peeking from battlement gap
+    ctx.fillStyle = '#e8b890'; // neck
+    ctx.fillRect(this.x - 2, ty + 3, 4, 5);
     ctx.fillStyle = '#e8b890';
     ctx.beginPath(); ctx.arc(this.x, ty - 2, 5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#888'; // helmet
@@ -101,6 +108,21 @@ export class Tower {
     } else {
       ctx.save(); ctx.translate(this.x, this.y - 5); ctx.rotate(angle);
       this._drawWeapon(ctx);
+      ctx.restore();
+    }
+
+    // Muzzle flash — brief burst when a shot fires
+    if (this.fireTimer > 0) {
+      const p = this.fireTimer / 10;
+      const flashColor = this.typeKey === 'slow' ? '#cc66ff' : this.typeKey === 'sniper' ? '#aaa' : '#ffe080';
+      const tipX = this.x + Math.cos(angle) * 28;
+      const tipY = (this.y - 5) + Math.sin(angle) * 28;
+      ctx.save();
+      ctx.globalAlpha = p * 0.85;
+      ctx.shadowColor = flashColor; ctx.shadowBlur = 16;
+      ctx.fillStyle = flashColor;
+      ctx.beginPath(); ctx.arc(tipX, tipY, 9 * p, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
       ctx.restore();
     }
 
