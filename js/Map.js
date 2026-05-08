@@ -1,4 +1,4 @@
-import { distance } from './constants.js?v=8';
+import { distance } from './constants.js?v=11';
 
 // GameMap owns the terrain: the path, grass tufts, trees, rocks, and the enemy camp.
 export class GameMap {
@@ -9,6 +9,8 @@ export class GameMap {
     this.grassTufts = this._generateGrass();
     this.trees = this._generateTrees();
     this.rocks = this._generateRocks();
+    this.craters = this._generateCraters();
+    this.sandbags = this._generateSandbags();
   }
 
   // Returns true if (x, y) is too close to the path for tower placement.
@@ -25,9 +27,19 @@ export class GameMap {
   }
 
   draw(ctx) {
-    // Base grass
-    ctx.fillStyle = '#4a7a3e';
+    // Base — darker military mud-green
+    ctx.fillStyle = '#3a5228';
     ctx.fillRect(0, 0, this.W, this.H);
+
+    // Worn dirt patches (battlefield damage)
+    ctx.fillStyle = '#4a3c1e';
+    for (let i = 0; i < 14; i++) {
+      const px = (this.W * ((i * 137 + 53) % 100)) / 100;
+      const py = (this.H * ((i * 97  + 29) % 100)) / 100;
+      ctx.save(); ctx.translate(px, py); ctx.scale(1, 0.55);
+      ctx.beginPath(); ctx.arc(0, 0, 28 + (i % 4) * 12, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
 
     // Grass tufts
     for (const g of this.grassTufts) {
@@ -46,6 +58,16 @@ export class GameMap {
       ctx.fillStyle = r.light;
       ctx.save(); ctx.translate(r.x, r.y); ctx.scale(r.rx, r.ry);
       ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+
+    // Craters — bomb holes scattered across battlefield
+    for (const c of this.craters) {
+      ctx.fillStyle = '#2a1e0a';
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.r + 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0e0a04';
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3a2a10';
+      ctx.beginPath(); ctx.arc(c.x - c.r*0.25, c.y - c.r*0.25, c.r*0.55, 0, Math.PI * 2); ctx.fill();
     }
 
     // Enemy camp dirt ground — drawn before path so the road leads out of it
@@ -81,6 +103,19 @@ export class GameMap {
         ctx.lineTo(px - Math.cos(perp) * len * 0.5, py - Math.sin(perp) * len * 0.5);
         ctx.stroke();
       }
+    }
+
+    // Sandbags along path edges at corners and choke points
+    for (const sb of this.sandbags) {
+      ctx.fillStyle = '#6e5830';
+      ctx.save(); ctx.translate(sb.x, sb.y); ctx.rotate(sb.ang);
+      for (let i = -1; i <= 1; i++) {
+        ctx.fillStyle = i === 0 ? '#7a6438' : '#5a4824';
+        ctx.save(); ctx.translate(i * 12, 0); ctx.scale(1, 0.55);
+        ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
     }
 
     // Trees
@@ -250,5 +285,40 @@ export class GameMap {
         trees.push({ x: tx, y: ty, r: 14 + Math.random() * 10 });
     }
     return trees;
+  }
+
+  _generateCraters() {
+    const craters = [];
+    let attempts = 0;
+    while (craters.length < 14 && attempts++ < 3000) {
+      const x = 30 + Math.random() * (this.W - 60);
+      const y = 30 + Math.random() * (this.H - 60);
+      if (!this.isOnPath(x, y) && craters.every(c => Math.hypot(c.x-x, c.y-y) > 28))
+        craters.push({ x, y, r: 10 + Math.random() * 16 });
+    }
+    return craters;
+  }
+
+  _generateSandbags() {
+    // Place sandbag piles beside path at regular intervals along each segment
+    const bags = [];
+    for (let seg = 0; seg < this.path.length - 1; seg++) {
+      const a = this.path[seg], b = this.path[seg+1];
+      const len = Math.hypot(b.x-a.x, b.y-a.y);
+      const ang = Math.atan2(b.y-a.y, b.x-a.x);
+      const perp = ang + Math.PI/2;
+      const steps = Math.floor(len / 70);
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        const mx = a.x + (b.x-a.x)*t, my = a.y + (b.y-a.y)*t;
+        const side = (i % 2 === 0) ? 1 : -1;
+        bags.push({
+          x: mx + Math.cos(perp) * 36 * side,
+          y: my + Math.sin(perp) * 36 * side,
+          ang: ang,
+        });
+      }
+    }
+    return bags;
   }
 }

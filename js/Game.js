@@ -1,12 +1,12 @@
-import { TYPES, TRAPS, MINE, GUARD_CONFIG, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=10';
-import { GameMap }     from './Map.js?v=10';
-import { Tower }       from './Tower.js?v=10';
-import { Enemy }       from './Enemy.js?v=10';
-import { Projectile }  from './Projectile.js?v=10';
-import { Trap }        from './Trap.js?v=10';
-import { Mine }        from './Mine.js?v=10';
-import { Guard }       from './Guard.js?v=10';
-import { WaveManager } from './WaveManager.js?v=10';
+import { TYPES, TRAPS, MINE, GUARD_CONFIG, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=11';
+import { GameMap }     from './Map.js?v=11';
+import { Tower }       from './Tower.js?v=11';
+import { Enemy }       from './Enemy.js?v=11';
+import { Projectile }  from './Projectile.js?v=11';
+import { Trap }        from './Trap.js?v=11';
+import { Mine }        from './Mine.js?v=11';
+import { Guard }       from './Guard.js?v=11';
+import { WaveManager } from './WaveManager.js?v=11';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -141,6 +141,8 @@ class Game {
     };
 
     this.selectedTower = null;
+    this.viewMode  = 'flat';  // 'flat' or '3d'
+    this.viewTower = null;
     this.flashMsg  = '';
     this.flashTimer = 0;
     this.mouse     = { x: 0, y: 0 };
@@ -209,7 +211,8 @@ class Game {
     }
 
     for (const t of this.towers) {
-      if (t === this.selectedTower) { if (t.manualCooldown > 0) t.manualCooldown--; continue; }
+      // In 3D view the viewTower handles its own cooldown but still auto-fires other towers
+      if (t === this.selectedTower || t === this.viewTower) { if (t.manualCooldown > 0) t.manualCooldown--; continue; }
       t.update(this.enemies, this.projectiles);
     }
 
@@ -287,6 +290,8 @@ class Game {
   draw() {
     if (this.titleActive) return;
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    if (this.viewMode === '3d') { this._draw3D(); return; }
 
     this.map.draw(this.ctx);
     if (this.selectedType.startsWith('trap_')) {
@@ -385,8 +390,250 @@ class Game {
   trySelectTower(x, y) {
     const clicked = this.towers.find(t => distance(t, { x, y }) < 20);
     if (!clicked) return false;
-    this.selectedTower = this.selectedTower === clicked ? null : clicked;
+    this._enter3D(clicked);   // click a tower → first-person archer view
     return true;
+  }
+
+  // ── 3D view ──────────────────────────────────────────────────────────────────
+
+  _enter3D(tower) {
+    this.viewMode  = '3d';
+    this.viewTower = tower;
+    this.selectedTower = null;
+    this.flash('Click enemies to shoot! Press ESC or EXIT to leave.');
+  }
+
+  _exit3D() {
+    this.viewMode  = 'flat';
+    this.viewTower = null;
+  }
+
+  _shoot3D(mx, my) {
+    const tower = this.viewTower;
+    if (tower.manualCooldown > 0) { this.flash('Still reloading!'); return; }
+    // Find enemy closest to click in screen space (uses coords stored by _draw3D)
+    let best = null, bestD = 60;
+    for (const e of this.enemies) {
+      if (e._3dx == null) continue;
+      const d = Math.hypot(mx - e._3dx, my - e._3dy);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    const dmg = tower.damage * 4;
+    if (best) {
+      best.takeDamage(dmg);
+      this.flash(best.isDead() ? `KILL! +$${best.reward}` : `HIT! −${dmg} dmg`);
+    } else {
+      this.flash('Missed!');
+    }
+    tower.manualCooldown = tower.fireRate * 2;
+  }
+
+  _draw3D() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    const tower = this.viewTower;
+    const cx = tower.x, cy = tower.y;
+
+    // Camera: always face the enemy spawn side of the path
+    const camAng = Math.atan2(this.path[0].y - cy, this.path[0].x - cx);
+    const cosA = Math.cos(camAng), sinA = Math.sin(camAng);
+    const eyeH = 85, horizon = H * 0.38;
+    const focal = (W / 2) / Math.tan(0.58); // ~66° FoV
+
+    // Project ground point (wx,wy) → screen {x,y,fwd,sc}
+    const proj = (wx, wy) => {
+      const dx = wx - cx, dy = wy - cy;
+      const fwd  = dx * cosA + dy * sinA;
+      const side = -dx * sinA + dy * cosA;
+      if (fwd < 2) return null;
+      return { x: W/2 + (side/fwd)*focal, y: horizon + (eyeH/fwd)*focal, fwd, sc: focal/fwd };
+    };
+
+    // ── SKY ──
+    const sg = ctx.createLinearGradient(0, 0, 0, horizon);
+    sg.addColorStop(0, '#0d1a2a'); sg.addColorStop(0.55, '#1a3a5a'); sg.addColorStop(1, '#3a5a48');
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, W, horizon);
+
+    // Distant clouds
+    ctx.fillStyle = 'rgba(200,200,175,0.07)';
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.ellipse(W*(0.1+i*0.2)+Math.sin(i*1.7)*50, horizon*(0.25+i*0.06), 90+i*12, 18+i*3, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Far tree-line silhouette
+    ctx.fillStyle = '#182e12';
+    ctx.beginPath(); ctx.moveTo(0, horizon);
+    for (let x = 0; x <= W; x += 12)
+      ctx.lineTo(x, horizon - 22 + Math.sin(x*0.022)*20 + Math.sin(x*0.058)*10);
+    ctx.lineTo(W, horizon); ctx.closePath(); ctx.fill();
+
+    // ── GROUND ──
+    const gg = ctx.createLinearGradient(0, horizon, 0, H);
+    gg.addColorStop(0, '#3a4824'); gg.addColorStop(0.45, '#30401c'); gg.addColorStop(1, '#242e14');
+    ctx.fillStyle = gg; ctx.fillRect(0, horizon, W, H - horizon);
+
+    // Perspective depth grid
+    ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.lineWidth = 1;
+    for (let z = 40; z <= 600; z += 40) {
+      const lp = proj(cx + cosA*z - sinA*500, cy + sinA*z + cosA*500);
+      const rp = proj(cx + cosA*z + sinA*500, cy + sinA*z - cosA*500);
+      if (!lp || !rp) continue;
+      ctx.beginPath(); ctx.moveTo(lp.x, lp.y); ctx.lineTo(rp.x, rp.y); ctx.stroke();
+    }
+
+    // ── PATH ──
+    for (let seg = 0; seg < this.path.length - 1; seg++) {
+      const a = this.path[seg], b = this.path[seg+1];
+      const ang = Math.atan2(b.y-a.y, b.x-a.x) + Math.PI/2;
+      const pw = 28, px = Math.cos(ang)*pw, py = Math.sin(ang)*pw;
+      for (let t = 0; t < 10; t++) {
+        const t0=t/10, t1=(t+1)/10;
+        const x0=a.x+(b.x-a.x)*t0, y0=a.y+(b.y-a.y)*t0;
+        const x1=a.x+(b.x-a.x)*t1, y1=a.y+(b.y-a.y)*t1;
+        const c = [proj(x0-px,y0-py), proj(x0+px,y0+py), proj(x1+px,y1+py), proj(x1-px,y1-py)];
+        if (c.some(p => !p)) continue;
+        ctx.fillStyle = (seg+t)%2===0 ? '#7a5520' : '#6a4818';
+        ctx.beginPath();
+        ctx.moveTo(c[0].x,c[0].y); ctx.lineTo(c[1].x,c[1].y);
+        ctx.lineTo(c[2].x,c[2].y); ctx.lineTo(c[3].x,c[3].y);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
+    // ── TREES + ENEMIES (sorted far→near) ──
+    const objs = [];
+    for (const tr of this.map.trees) {
+      const p = proj(tr.x, tr.y);
+      if (p && p.x > -100 && p.x < W+100) objs.push({ kind:'tree', p, tr });
+    }
+    for (const e of this.enemies) {
+      e._3dx = null; // reset each frame
+      const p = proj(e.x, e.y);
+      if (p) objs.push({ kind:'enemy', p, e });
+    }
+    objs.sort((a,b) => b.p.fwd - a.p.fwd);
+
+    const openB = H * 0.73; // bottom of viewport opening
+    for (const obj of objs) {
+      const { p } = obj;
+      if (obj.kind === 'tree') {
+        const sz = obj.tr.r * p.sc;
+        const gy = Math.min(p.y, openB);
+        ctx.fillStyle = '#2a1a06';
+        ctx.fillRect(p.x - sz*0.22, gy - sz*2.2, sz*0.44, sz*2.2);
+        ctx.fillStyle = '#1e3d18';
+        ctx.beginPath(); ctx.arc(p.x, gy - sz*2.2, sz, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#2e5a24';
+        ctx.beginPath(); ctx.arc(p.x - sz*0.15, gy - sz*2.5, sz*0.72, 0, Math.PI*2); ctx.fill();
+      } else {
+        const { e } = obj;
+        const sz = e.size * p.sc * 1.8;
+        if (sz < 2) continue;
+        const gy = Math.min(p.y, openB);
+        const bh = sz * 2.2;
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.save(); ctx.translate(p.x+sz*0.3, gy); ctx.scale(1.1, 0.25);
+        ctx.beginPath(); ctx.arc(0, 0, sz*1.1, 0, Math.PI*2); ctx.fill(); ctx.restore();
+        // Legs
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(p.x-sz*0.5, gy-bh*0.5, sz*0.38, bh*0.52);
+        ctx.fillRect(p.x+sz*0.12, gy-bh*0.5, sz*0.38, bh*0.52);
+        // Body
+        ctx.fillStyle = e.color;
+        ctx.fillRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65);
+        // Head
+        ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
+        // HP bar
+        const bw = Math.max(sz*2.5, 22);
+        ctx.fillStyle = '#111'; ctx.fillRect(p.x-bw/2-1, gy-bh-sz*1.9-1, bw+2, 7);
+        ctx.fillStyle = e.hp/e.maxHp > 0.5 ? '#2f2' : '#f82';
+        ctx.fillRect(p.x-bw/2, gy-bh-sz*1.9, bw*(e.hp/e.maxHp), 5);
+        // Store for _shoot3D click detection
+        e._3dx = p.x; e._3dy = gy - bh/2; e._3dr = Math.max(sz*1.3, 20);
+      }
+    }
+
+    // ── STONE BATTLEMENT FRAME ──
+    const openL = W * 0.14, openR = W * 0.86;
+    const drawStone = (x1, x2) => {
+      ctx.fillStyle = '#4e4e4e'; ctx.fillRect(x1, 0, x2-x1, H);
+      ctx.fillStyle = '#5c5c5c'; ctx.fillRect(x1, 0, x2-x1, H);
+      ctx.strokeStyle = '#383838'; ctx.lineWidth = 1;
+      for (let row = 0; row < H; row += 14) {
+        const off = (Math.floor(row/14)%2)*22;
+        for (let col = x1-22+off; col < x2+22; col += 44)
+          ctx.strokeRect(col, row, 42, 13);
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.055)'; ctx.lineWidth = 0.8;
+      for (let row = 0; row < H; row += 14) {
+        ctx.beginPath(); ctx.moveTo(x1, row+1); ctx.lineTo(x2, row+1); ctx.stroke();
+      }
+    };
+    drawStone(0, openL); drawStone(openR, W);
+
+    // Crenellations (merlons) on inner edge of walls
+    ctx.fillStyle = '#4e4e4e';
+    for (let y = 10; y < H*0.55; y += 56) {
+      ctx.fillRect(openL-14, y, 20, 32); ctx.fillRect(openR-6, y, 20, 32);
+    }
+    // Bottom stone sill
+    ctx.fillStyle = '#4e4e4e'; ctx.fillRect(0, openB, W, H-openB);
+    ctx.fillStyle = '#5c5c5c'; ctx.fillRect(0, openB, W, 10);
+    ctx.strokeStyle = '#383838'; ctx.lineWidth = 1;
+    for (let col = 0; col < W; col += 48) ctx.strokeRect(col, openB+1, 46, H-openB-2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, openB); ctx.lineTo(W, openB); ctx.stroke();
+
+    // ── CROSSHAIR ──
+    const mx2 = W/2, my2 = (horizon + openB)/2;
+    ctx.strokeStyle = 'rgba(255,230,80,0.88)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(mx2-20, my2); ctx.lineTo(mx2-7, my2);
+    ctx.moveTo(mx2+7, my2);  ctx.lineTo(mx2+20, my2);
+    ctx.moveTo(mx2, my2-20); ctx.lineTo(mx2, my2-7);
+    ctx.moveTo(mx2, my2+7);  ctx.lineTo(mx2, my2+20);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,230,80,0.35)';
+    ctx.beginPath(); ctx.arc(mx2, my2, 14, 0, Math.PI*2); ctx.stroke();
+
+    // ── HUD ──
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(openL+6, 6, 210, 60);
+    ctx.fillStyle = tower.color; ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(`⚔ ${tower.typeKey.toUpperCase()} TOWER`, openL+14, 26);
+    ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
+    ctx.fillText('Click an enemy to shoot  •  ESC to exit', openL+14, 44);
+    // Reload bar
+    const maxCD = tower.fireRate * 2;
+    const pct = tower.manualCooldown > 0 ? 1 - tower.manualCooldown/maxCD : 1;
+    ctx.fillStyle = '#222'; ctx.fillRect(openL+14, 52, 180, 8);
+    ctx.fillStyle = pct < 1 ? '#f84' : '#2d8'; ctx.fillRect(openL+14, 52, 180*pct, 8);
+
+    // Exit button
+    ctx.fillStyle = '#8a0000'; ctx.fillRect(openR-90, 6, 84, 30);
+    ctx.fillStyle = '#cc2222'; ctx.fillRect(openR-90, 6, 84, 3);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('✕  EXIT', openR-76, 26);
+
+    // Enemy count
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(openL+6, openB-26, 180, 22);
+    ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif';
+    ctx.fillText(`Enemies: ${this.enemies.length}   Wave: ${this.waveManager.wave}/${this.waveManager.totalWaves}`, openL+12, openB-10);
+
+    // Flash message
+    if (this.flashTimer > 0) {
+      const p = this.flashTimer / 90;
+      ctx.fillStyle = `rgba(0,0,0,${p*0.55})`;
+      ctx.fillRect(W/2-140, openB-54, 280, 26);
+      ctx.fillStyle = `rgba(255,240,80,${p})`;
+      ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(this.flashMsg, W/2, openB-36);
+      ctx.textAlign = 'left';
+    }
   }
 
   tryFireManual(x, y) {
@@ -435,6 +682,7 @@ class Game {
 
     this.towers = []; this.enemies = []; this.projectiles = [];
     this.traps = []; this.mines = []; this.guards = []; this.workerUnits = [];
+    this.viewMode = 'flat'; this.viewTower = null;
 
     // Pre-place 3 mines at the start of each level — try candidate spots until 3 land off-path
     const W = this.canvas.width, H = this.canvas.height;
@@ -712,6 +960,13 @@ class Game {
       if (this.gameOver || this.levelComplete || this.titleActive) return;
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
+      // 3D view: exit button or shoot
+      if (this.viewMode === '3d') {
+        const openR = this.canvas.width * 0.86;
+        if (x > openR - 94 && x < openR + 2 && y > 6 && y < 36) { this._exit3D(); return; }
+        this._shoot3D(x, y);
+        return;
+      }
       if (this.trySelectTower(x, y)) return;
       if (this.selectedTower) { this.tryFireManual(x, y); return; }
       if (this.selectedType === 'mine')  { this.tryPlaceMine(x, y); return; }
@@ -742,7 +997,10 @@ class Game {
 
     document.addEventListener('keydown', e => {
       if (e.key === 'r' || e.key === 'R') { this.restart(); return; }
-      if (e.key === 'Escape') { this.selectedTower = null; return; }
+      if (e.key === 'Escape') {
+        if (this.viewMode === '3d') { this._exit3D(); return; }
+        this.selectedTower = null; return;
+      }
       if (e.key === '0') { this._selectType('guard'); return; }
       const allowedTowers = this.currentLevel ? this.currentLevel.towers : this.typeKeys;
       const allowedTraps  = this.currentLevel ? this.currentLevel.traps  : this.trapKeys;
