@@ -1,6 +1,308 @@
-# 常见错误与解决方案 🐛
+# Common Mistakes & Solutions 🐛
 
-学生在学习 Lucas Game 时经常遇到的问题和解决方法。
+**[中文版本 →](#-中文版本)**
+
+Common problems students encounter while learning Lucas Game and how to fix them.
+
+---
+
+## 📖 English Version
+
+### Error 1: Code Changes Don't Appear ❌
+
+**Symptom:** I changed `constants.js`, but the game didn't change.
+
+**Cause:** Browser cache stored the old version.
+
+**Solution:**
+
+```
+Solution 1: Hard Refresh
+  Windows: Ctrl + Shift + R
+  Mac: Cmd + Shift + R
+  
+Solution 2: Clear Cache in DevTools
+  1. Press F12 to open DevTools
+  2. Right-click the refresh button
+  3. Select "Clear cache and hard refresh"
+```
+
+**Prevention:** Use Python local server to avoid browser cache.
+
+---
+
+### Error 2: Can't Find Code to Edit ❌
+
+**Symptom:** I want to change tower price, but don't know which file.
+
+**Solution:**
+
+```
+Step 1: Guess the filename
+  - Change tower → Tower.js or constants.js
+  - Change enemy → Enemy.js or constants.js
+  - Change waves → WaveManager.js
+  
+Step 2: Use search
+  In VS Code:
+  1. Press Ctrl + F (Find)
+  2. Type your keyword, e.g., "sniper"
+  3. See all occurrences
+  
+Step 3: Check documentation
+  - Open CLAUDE.md, find "Architecture" section
+  - Learn each file's purpose
+```
+
+**Checklist:**
+- [ ] Change data → check `constants.js`
+- [ ] Change tower behavior → check `Tower.js`
+- [ ] Change enemy behavior → check `Enemy.js`
+- [ ] Change wave rules → check `WaveManager.js`
+
+---
+
+### Error 3: Syntax Errors Break Game ❌
+
+**Symptom:** Game completely broken, red errors in console.
+
+**Solution:**
+
+```
+Step 1: Open console to see error
+  1. Press F12
+  2. Click "Console" tab
+  3. Look at red error message
+  
+Step 2: Check common syntax errors
+  [ ] Missing comma?
+      ❌ { cost: 100 damage: 20 }
+      ✅ { cost: 100, damage: 20 }
+  
+  [ ] Missing quotes?
+      ❌ const TYPE_SNIPER = sniper
+      ✅ const TYPE_SNIPER = 'sniper'
+  
+  [ ] Wrong bracket count?
+      ❌ function test( {
+      ✅ function test() {
+  
+  [ ] Chinese punctuation?
+      ❌ const name = "tower"；
+      ✅ const name = "tower";
+  
+Step 3: Undo changes
+  - Press Ctrl + Z to undo
+  - Until game works again
+  - Then change carefully one step at a time
+```
+
+---
+
+### Error 4: Numbers vs Strings ❌
+
+**Symptom:** I changed `150` to `"150"` and now the game behaves strangely.
+
+**Solution:**
+
+```javascript
+// ❌ Wrong: numbers and strings are different
+let price1 = 150;       // number
+let price2 = "150";     // string
+
+console.log(price1 + 50);   // = 200 (number addition)
+console.log(price2 + 50);   // = "15050" (string concatenation!)
+
+// ✅ Correct: ensure consistent types
+let cost = 150;         // number
+let name = "sniper";    // string
+```
+
+**Checklist:**
+- [ ] Prices, damage, health are numbers: `150` (not `"150"`)
+- [ ] Names, types are strings: `"sniper"` (with quotes)
+
+---
+
+### Error 5: Don't Understand `%` Operator ❌
+
+**Symptom:** I see `i % 3 === 0` and don't understand it.
+
+**Solution:**
+
+```javascript
+// % is "remainder" (modulo operation)
+// 10 % 3 = 1 (10 divided by 3 leaves remainder 1)
+// 9 % 3 = 0 (9 divided by 3 leaves remainder 0)
+
+// Example:
+if (i % 3 === 0) {
+  // This runs when i is divisible by 3
+  // i.e., i = 0, 3, 6, 9, 12, ...
+}
+
+// Common patterns:
+i % 2 === 0    // i is even
+i % 2 === 1    // i is odd
+i % 5 === 0    // i is divisible by 5
+```
+
+**Applied to the game:**
+```javascript
+// In WaveManager.js
+if (i % 3 === 0) {
+  enemies.push(new Enemy('runner'));
+}
+// Means: every 3 enemies, the 1st is a runner
+```
+
+---
+
+### Error 6: Don't Know How to Debug ❌
+
+**Symptom:** Game has a problem, but I don't know where.
+
+**Solution:**
+
+```javascript
+// Use console.log to print information
+
+// Example 1: Check variable value
+console.log("Current money:", this.money);
+
+// Example 2: Check if code runs
+console.log("This function was called");
+
+// Example 3: Check object contents
+console.log("Enemy list:", this.enemies);
+
+// Example 4: Track execution order
+console.log("1. Game started");
+console.log("2. Updated enemies");
+console.log("3. Drew screen");
+```
+
+**Steps:**
+1. Guess where the problem is
+2. Add `console.log()` there
+3. Reload game, check console output
+4. Deduce the problem from output
+
+**Common log patterns:**
+```javascript
+// When entering function
+console.log("Entered update function");
+
+// When state changes
+console.log(`Money changed from ${oldMoney} to ${this.money}`);
+
+// When checking conditions
+if (enemy.isDead) {
+  console.log("Enemy died");
+} else {
+  console.log("Enemy alive");
+}
+```
+
+---
+
+### Error 7: Wrong Operators ❌
+
+**Symptom:** Code looks correct but game behaves wrong.
+
+**Operator Reference:**
+
+| Operator | Name | Purpose | Example |
+|----------|------|---------|---------|
+| `=` | Assignment | Set value | `cost = 150` |
+| `==` | Equals | Loose comparison | `if (a == b)` |
+| `===` | Strict Equals | Strict comparison | `if (a === b)` |
+| `!` | Not | Negate | `if (!isDead)` |
+| `&&` | And | Both must be true | `if (a && b)` |
+| `\|\|` | Or | Either can be true | `if (a \|\| b)` |
+| `+` | Plus | Math or concatenate | `a + b` |
+| `+=` | Plus Equals | Increase | `money += 50` |
+| `-` | Minus | Math | `a - b` |
+| `-=` | Minus Equals | Decrease | `hp -= 10` |
+
+**Common mistake:**
+```javascript
+// ❌ Wrong: using = instead of ===
+if (enemy.type = "runner") {  // This CHANGES the type!
+}
+
+// ✅ Correct: === just compares
+if (enemy.type === "runner") {  // This only checks
+}
+```
+
+---
+
+### Error 8: Wrong Assignment Operator ❌
+
+**Symptom:** Damage should increase but it decreases.
+
+**Operator Checklist:**
+
+```javascript
+// Assignment
+x = 10;         // x is 10
+
+// Operations
+x += 5;         // x = x + 5  (x becomes 15)
+x -= 3;         // x = x - 3  (x becomes 12)
+x *= 2;         // x = x * 2  (x becomes 24)
+x /= 4;         // x = x / 4  (x becomes 6)
+
+// ❌ Common mistakes
+x =+ 5;         // Should be += not =+
+x -= -5;        // Results in x + 5, confusing
+```
+
+---
+
+### Error 9: Edited Wrong File ❌
+
+**Symptom:** I changed `constants.js`, but maybe I edited the wrong one.
+
+**Prevention:**
+
+```
+Solution 1: Check file path
+  - Look at window title in VS Code
+  - Should show: lucasgame > js > constants.js
+
+Solution 2: Search to confirm
+  - Press Ctrl + P (Quick Open)
+  - Type filename
+  - Check if only one result
+
+Solution 3: Verify before saving
+  - Look at tab filename clearly
+  - After saving (Ctrl + S), check if "*" appears (unsaved)
+```
+
+---
+
+## Quick Troubleshooting Checklist ✅
+
+### Game Won't Start?
+- [ ] Started local server? (`python3 -m http.server 8080`)
+- [ ] Using correct URL? (`http://localhost:8080`)
+- [ ] Did hard refresh? (Ctrl + Shift + R)
+- [ ] Checked console for errors? (F12)
+
+### Changes Don't Show?
+- [ ] File saved?
+- [ ] Hard refresh done?
+- [ ] Correct file edited?
+- [ ] Correct line changed?
+
+### Game Crashed?
+- [ ] Checked console for errors? (F12)
+- [ ] Look for syntax errors?
+- [ ] Undo last change? (Ctrl + Z)
+- [ ] Restore from backup?
 
 ---
 
@@ -301,163 +603,6 @@ x -= -5;        // 结果是 x + 5，容易混淆
 - [ ] 检查是否有语法错误（逗号、引号等）
 - [ ] 撤销最后的改动（Ctrl + Z）
 - [ ] 从备份恢复（如果有的话）
-
----
-
-## 📖 English Version
-
-### Error 1: Code Changes Don't Appear ❌
-
-**Symptom:** I changed `constants.js`, but the game didn't change.
-
-**Cause:** Browser cache.
-
-**Solution:**
-```
-Option 1: Hard Refresh
-  Windows: Ctrl + Shift + R
-  Mac: Cmd + Shift + R
-  
-Option 2: Clear Cache in DevTools
-  1. Press F12
-  2. Right-click the refresh button
-  3. Select "Clear cache and hard refresh"
-```
-
----
-
-### Error 2: Can't Find Code to Edit ❌
-
-**Symptom:** I want to change tower price, but don't know which file.
-
-**Solution:**
-1. Guess the filename based on what to change
-2. Use Ctrl + F to search for keywords
-3. Refer to `CLAUDE.md` Architecture section
-
-**Checklist:**
-- [ ] Change data → `constants.js`
-- [ ] Change tower behavior → `Tower.js`
-- [ ] Change enemy behavior → `Enemy.js`
-- [ ] Change wave rules → `WaveManager.js`
-
----
-
-### Error 3: Syntax Errors Break Game ❌
-
-**Symptom:** Game completely broken, red errors in console.
-
-**Solution:**
-1. Open DevTools Console (F12)
-2. Check for syntax errors
-3. Fix common issues (missing commas, quotes, brackets)
-4. Undo changes (Ctrl + Z) until game works again
-
----
-
-### Error 4: Numbers vs Strings ❌
-
-```javascript
-// ❌ Wrong: mixing types
-let price = "150";    // string
-console.log(price + 50);  // = "15050" (concatenation!)
-
-// ✅ Correct
-let price = 150;      // number
-console.log(price + 50);  // = 200 (addition)
-```
-
-**Rule:** Prices, damage, health → numbers | Names, types → strings
-
----
-
-### Error 5: Modulo `%` Operator ❌
-
-```javascript
-// % = remainder after division
-10 % 3 = 1  (10 ÷ 3 = 3 remainder 1)
-9 % 3 = 0   (9 ÷ 3 = 3 remainder 0)
-
-// In code:
-if (i % 3 === 0) {
-  // Executes when i is divisible by 3
-  // i.e., i = 0, 3, 6, 9, 12, ...
-}
-```
-
----
-
-### Error 6: Don't Know How to Debug ❌
-
-**Solution: Use `console.log()`**
-
-```javascript
-console.log("Current money:", this.money);
-console.log("Function called");
-console.log("Enemies:", this.enemies);
-console.log(`Money changed from ${oldMoney} to ${this.money}`);
-```
-
-**Steps:**
-1. Guess where problem is
-2. Add `console.log()` there
-3. Reload and check console output
-4. Deduce the problem
-
----
-
-### Error 7: Wrong Operators ❌
-
-| Operator | Purpose | Example |
-|----------|---------|---------|
-| `=` | Assign | `cost = 150` |
-| `===` | Compare (strict) | `if (a === b)` |
-| `!` | Not | `if (!isDead)` |
-| `&&` | And | `if (a && b)` |
-| `+=` | Add | `money += 50` |
-| `-=` | Subtract | `hp -= 10` |
-
-**Common mistake:**
-```javascript
-// ❌ Wrong: = instead of ===
-if (enemy.type = "runner") {  // This CHANGES type!
-}
-
-// ✅ Correct: === just compares
-if (enemy.type === "runner") {
-}
-```
-
----
-
-### Error 8: Right File? ❌
-
-**Prevention:**
-1. Check file path in editor
-2. Use Ctrl + P to open file
-3. Verify before saving
-
----
-
-## Quick Troubleshooting Checklist ✅
-
-### Game Won't Start?
-- [ ] Started local server? (`python3 -m http.server 8080`)
-- [ ] Using correct URL? (`http://localhost:8080`)
-- [ ] Hard refresh? (Ctrl + Shift + R)
-- [ ] Check console errors? (F12)
-
-### Changes Don't Show?
-- [ ] File saved?
-- [ ] Hard refresh done?
-- [ ] Correct file edited?
-- [ ] Correct line changed?
-
-### Game Crashed?
-- [ ] Check console for errors (F12)
-- [ ] Look for syntax errors
-- [ ] Undo last change (Ctrl + Z)
-- [ ] Restore from backup
 
 ---
 
