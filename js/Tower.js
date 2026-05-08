@@ -1,5 +1,5 @@
-import { TYPES, distance } from './constants.js?v=12';
-import { Projectile } from './Projectile.js?v=12';
+import { TYPES, distance } from './constants.js?v=13';
+import { Projectile } from './Projectile.js?v=13';
 
 export class Tower {
   constructor(x, y, typeKey) {
@@ -26,11 +26,11 @@ export class Tower {
     } else if (this.typeKey === 'slow') {
       projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 5, damage: this.damage, slows: true, magic: true }));
     } else if (this.typeKey === 'fire') {
-      projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 5, damage: this.damage, splash: true, splashRadius: 45, fireball: true }));
+      projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 5, damage: this.damage, splash: true, splashRadius: 45, fireball: true, burns: 180 }));
     } else if (this.typeKey === 'ice') {
       projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 7, damage: this.damage, iceSlows: true, iceOrb: true }));
     } else if (this.typeKey === 'lightning') {
-      projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 14, damage: this.damage, chain: 2, chainRadius: 120, lightningBolt: true }));
+      projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 14, damage: this.damage, chain: 2, chainRadius: 120, lightningBolt: true, shocks: 40 }));
     } else if (this.typeKey === 'earth') {
       projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 3, damage: this.damage, stuns: 100, earthBoulder: true }));
     } else {

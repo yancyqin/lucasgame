@@ -1,12 +1,11 @@
-import { TYPES, TRAPS, MINE, GUARD_CONFIG, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=12';
-import { GameMap }     from './Map.js?v=12';
-import { Tower }       from './Tower.js?v=12';
-import { Enemy }       from './Enemy.js?v=12';
-import { Projectile }  from './Projectile.js?v=12';
-import { Trap }        from './Trap.js?v=12';
-import { Mine }        from './Mine.js?v=12';
-import { Guard }       from './Guard.js?v=12';
-import { WaveManager } from './WaveManager.js?v=12';
+import { TYPES, TRAPS, MINE, CAMP, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=13';
+import { GameMap }     from './Map.js?v=13';
+import { Tower }       from './Tower.js?v=13';
+import { Enemy }       from './Enemy.js?v=13';
+import { Projectile }  from './Projectile.js?v=13';
+import { Trap }        from './Trap.js?v=13';
+import { Mine }        from './Mine.js?v=13';
+import { WaveManager } from './WaveManager.js?v=13';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -102,6 +101,139 @@ class Worker {
   }
 }
 
+class Camp {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.hp = 100; this.maxHp = 100;
+    this.spawnTimer = 0;
+    this.spawnRate = 420; // spawn a soldier every 7 seconds
+  }
+  takeDamage(amt) { this.hp -= amt; }
+  isDead() { return this.hp <= 0; }
+  draw(ctx) {
+    const hf = this.hp / this.maxHp;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.save(); ctx.translate(this.x+4, this.y+22); ctx.scale(1, 0.3);
+    ctx.beginPath(); ctx.arc(0,0,28,0,Math.PI*2); ctx.fill(); ctx.restore();
+    // Tent body
+    ctx.fillStyle = '#7a6030';
+    ctx.beginPath(); ctx.moveTo(this.x-28,this.y+18); ctx.lineTo(this.x,this.y-26); ctx.lineTo(this.x+28,this.y+18); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#9a8040';
+    ctx.beginPath(); ctx.moveTo(this.x-22,this.y+18); ctx.lineTo(this.x-2,this.y-22); ctx.lineTo(this.x+2,this.y-22); ctx.lineTo(this.x+22,this.y+18); ctx.closePath(); ctx.fill();
+    // Door
+    ctx.fillStyle = '#2a1408'; ctx.fillRect(this.x-7, this.y+2, 14, 16);
+    // Flag pole + flag
+    ctx.fillStyle = '#3a1a05'; ctx.fillRect(this.x-1, this.y-42, 2, 20);
+    ctx.fillStyle = '#2255aa'; ctx.fillRect(this.x+1, this.y-42, 14, 9);
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('★', this.x+8, this.y-35); ctx.textAlign = 'left';
+    // Label
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('CAMP', this.x, this.y+36); ctx.textAlign = 'left';
+    // HP bar
+    ctx.fillStyle = '#111'; ctx.fillRect(this.x-22, this.y+40, 44, 5);
+    ctx.fillStyle = hf > 0.5 ? '#0f0' : '#f80';
+    ctx.fillRect(this.x-22, this.y+40, 44*hf, 5);
+  }
+}
+
+class Soldier {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.hp = 50; this.maxHp = 50;
+    this.speed = 1.0;
+    this.damage = 8;
+    this.range = 52;
+    this.waypoint = 0; // will be set to path.length-1 on spawn
+    this.attackTimer = 0;
+    this.target = null;
+    this.blocking = false;
+    this.blockTimer = 0;
+    this.jumpHeight = 0;
+    this.jumpVel = 0;
+    this.swingTimer = 0;
+    this.hitTimer = 0;
+    this._3dx = null; this._3dy = null; this._3dr = 0;
+  }
+  update(enemies, path) {
+    if (this.hitTimer > 0) this.hitTimer--;
+    if (this.attackTimer > 0) this.attackTimer--;
+    if (this.swingTimer > 0) this.swingTimer--;
+    if (this.blockTimer > 0) { this.blockTimer--; if (this.blockTimer <= 0) this.blocking = false; }
+    // Jump physics
+    if (this.jumpVel !== 0 || this.jumpHeight > 0) {
+      this.jumpHeight += this.jumpVel;
+      this.jumpVel -= 0.5;
+      if (this.jumpHeight <= 0) { this.jumpHeight = 0; this.jumpVel = 0; }
+    }
+    // Find nearest enemy in range
+    this.target = enemies
+      .filter(e => Math.hypot(e.x-this.x, e.y-this.y) < this.range)
+      .sort((a,b) => Math.hypot(a.x-this.x,a.y-this.y) - Math.hypot(b.x-this.x,b.y-this.y))[0] || null;
+    if (this.target) {
+      if (this.attackTimer <= 0) {
+        this.target.takeDamage(this.damage);
+        this.attackTimer = 45;
+        this.swingTimer = 14;
+      }
+    } else {
+      // Walk toward enemies (decreasing waypoint toward 0)
+      const dest = path[Math.max(0, this.waypoint - 1)];
+      const d = Math.hypot(dest.x - this.x, dest.y - this.y);
+      if (d < this.speed) { if (this.waypoint > 0) this.waypoint--; }
+      else { this.x += ((dest.x-this.x)/d)*this.speed; this.y += ((dest.y-this.y)/d)*this.speed; }
+    }
+  }
+  takeDamage(amt) {
+    this.hp -= this.blocking ? amt * 0.3 : amt;
+    this.hitTimer = 10;
+  }
+  isDead() { return this.hp <= 0; }
+  jump() { if (this.jumpHeight === 0) this.jumpVel = 6; }
+  draw(ctx) {
+    const hit = this.hitTimer > 0;
+    const jy = this.jumpHeight * 0.4;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.save(); ctx.translate(this.x+2,this.y+9); ctx.scale(1,0.3);
+    ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill(); ctx.restore();
+    // Legs
+    ctx.fillStyle = hit ? '#fff' : '#334488';
+    ctx.fillRect(this.x-5, this.y+2-jy, 4, 6); ctx.fillRect(this.x+1, this.y+2-jy, 4, 6);
+    // Body
+    ctx.fillStyle = hit ? '#fff' : '#2255aa';
+    ctx.fillRect(this.x-5, this.y-8-jy, 10, 10);
+    // Neck
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(this.x-1.5, this.y-11-jy, 3, 4);
+    // Head
+    ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 5, 0, Math.PI*2); ctx.fill();
+    // Helmet
+    ctx.fillStyle = '#999';
+    ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 5.5, Math.PI, 0); ctx.fill();
+    ctx.fillRect(this.x-7, this.y-16-jy, 14, 3);
+    // Shield
+    if (this.blocking) {
+      ctx.fillStyle = '#cc8822'; ctx.fillRect(this.x-12, this.y-10-jy, 6, 14);
+      ctx.strokeStyle = '#885500'; ctx.lineWidth = 1; ctx.strokeRect(this.x-12, this.y-10-jy, 6, 14);
+    }
+    // Sword
+    const sw = this.swingTimer > 0 ? Math.sin(this.swingTimer/14*Math.PI)*10 : 0;
+    ctx.fillStyle = '#ccc';
+    ctx.save(); ctx.translate(this.x+8, this.y-5-jy-sw);
+    ctx.fillRect(-1,-13,2,14); ctx.fillStyle='#884400'; ctx.fillRect(-3,-1,7,2); ctx.restore();
+    // HP bar
+    const bw = 18;
+    ctx.fillStyle = '#111'; ctx.fillRect(this.x-bw/2, this.y-24-jy, bw, 3);
+    ctx.fillStyle = '#2f8'; ctx.fillRect(this.x-bw/2, this.y-24-jy, bw*(this.hp/this.maxHp), 3);
+    // Block indicator
+    if (this.blocking) {
+      ctx.fillStyle = 'rgba(200,180,50,0.7)'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('🛡', this.x, this.y-28-jy); ctx.textAlign = 'left';
+    }
+  }
+}
+
 class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -120,6 +252,8 @@ class Game {
     this.traps       = [];
     this.mines       = [];
     this.guards      = [];
+    this.camps       = [];
+    this.soldiers    = [];
     this.workerUnits = []; // animated worker characters
 
     this.castleHp    = 10000;
@@ -235,16 +369,22 @@ class Game {
 
     for (const trap of this.traps) trap.update(this.enemies);
 
-    for (const g of this.guards) g.update(this.enemies);
-    for (const g of this.guards) {
-      for (const e of this.enemies) {
-        if (distance(g, e) < 42) {
-          g.takeDamage(e.kind === 'dragonRider' ? 0.08 : e.kind === 'dragon' ? 0.05 : 0.018);
-          e.triggerAttack(g.x, g.y);
+    // Camps spawn soldiers
+    for (const camp of this.camps) {
+      camp.spawnTimer++;
+      if (camp.spawnTimer >= camp.spawnRate) {
+        camp.spawnTimer = 0;
+        if (this.soldiers.length < this.camps.length * 3) {
+          const pathEnd = this.path[this.path.length - 1];
+          const sol = new Soldier(pathEnd.x - 30 + Math.random()*20, pathEnd.y - 10 + Math.random()*20);
+          sol.waypoint = this.path.length - 1;
+          this.soldiers.push(sol);
         }
       }
     }
-    this.guards = this.guards.filter(g => !g.isDead());
+    // Soldiers fight
+    for (const s of this.soldiers) s.update(this.enemies, this.path);
+    this.soldiers = this.soldiers.filter(s => !s.isDead());
 
     for (const t of this.towers) {
       for (const e of this.enemies) {
@@ -292,6 +432,7 @@ class Game {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     if (this.viewMode === '3d') { this._draw3D(); return; }
+    if (this.viewMode === '3d-soldier') { this._draw3DSoldier(); return; }
 
     this.map.draw(this.ctx);
     if (this.selectedType.startsWith('trap_')) {
@@ -300,7 +441,8 @@ class Game {
     }
     for (const mine  of this.mines)       mine.draw(this.ctx);
     for (const trap  of this.traps)       trap.draw(this.ctx);
-    for (const g     of this.guards)      g.draw(this.ctx);
+    for (const camp  of this.camps)       camp.draw(this.ctx);
+    for (const sol   of this.soldiers)    sol.draw(this.ctx);
     for (const w     of this.workerUnits) w.draw(this.ctx);
     for (const t     of this.towers)      t.draw(this.ctx, t === this.selectedTower, this.mouse);
     this._drawAimLine();
@@ -321,6 +463,7 @@ class Game {
   tryPlaceTower(x, y) {
     if (this.towers.length >= 30) { this.flash('Tower limit reached! (30 max)'); return false; }
     if (this.map.isOnPath(x, y))  { this.flash("Can't build on the path!"); return false; }
+    if (this.map.isOnFeature(x, y)) { this.flash("Can't place on a tree or rock!"); return false; }
     const type = TYPES[this.selectedType];
     if (this.money < type.cost) { this.flash(`Need $${type.cost} — you have $${this.money}!`); return false; }
     this.towers.push(new Tower(x, y, this.selectedType));
@@ -336,6 +479,7 @@ class Game {
     const needsPath = cfg.onPath !== false;
     if (needsPath  && !this.map.isOnPath(x, y)) { this.flash('Traps go on the road!'); return false; }
     if (!needsPath &&  this.map.isOnPath(x, y)) { this.flash("Can't place walls on the path!"); return false; }
+    if (!needsPath && this.map.isOnFeature(x, y)) { this.flash("Can't place on a tree or rock!"); return false; }
     if (this.money < cfg.cost) { this.flash(`Need $${cfg.cost} — you have $${this.money}!`); return false; }
     if (this.traps.some(t => Math.hypot(t.x - x, t.y - y) < 24)) { this.flash('Too close to another trap!'); return false; }
     this.traps.push(new Trap(x, y, key));
@@ -347,6 +491,7 @@ class Game {
   tryPlaceMine(x, y) {
     if (this.mines.length >= 5)  { this.flash('Mine limit reached! (5 max)'); return; }
     if (this.map.isOnPath(x, y)) { this.flash("Can't place mines on the path!"); return; }
+    if (this.map.isOnFeature(x, y)) { this.flash("Can't place on a tree or rock!"); return; }
     if (this.money < MINE.cost)  { this.flash(`Need $${MINE.cost} — you have $${this.money}!`); return; }
     if (this.mines.some(m => Math.hypot(m.x - x, m.y - y) < 28)) { this.flash('Too close to another mine!'); return; }
     this.mines.push(new Mine(x, y));
@@ -356,13 +501,14 @@ class Game {
     this._updateButtons();
   }
 
-  tryPlaceGuard(x, y) {
-    if (this.guards.length >= 10) { this.flash('Guard limit reached! (10 max)'); return; }
-    if (this.map.isOnPath(x, y))  { this.flash("Can't place guards on the path!"); return; }
-    if (this.money < GUARD_CONFIG.cost) { this.flash(`Need $${GUARD_CONFIG.cost}!`); return; }
-    this.guards.push(new Guard(x, y));
-    this.money -= GUARD_CONFIG.cost;
+  tryPlaceCamp(x, y) {
+    if (this.money < CAMP.cost) { this.flash(`Need $${CAMP.cost} for Camp`); return; }
+    if (this.map.isOnPath(x, y)) { this.flash("Can't place camp on the path!"); return; }
+    if (this.map.isOnFeature(x, y)) { this.flash("Too close to a tree or rock!"); return; }
+    this.money -= CAMP.cost;
+    this.camps.push(new Camp(x, y));
     this._updateButtons();
+    this.flash('Camp placed! Soldiers will spawn every 7s');
   }
 
   hireWorker() {
@@ -406,6 +552,261 @@ class Game {
   _exit3D() {
     this.viewMode  = 'flat';
     this.viewTower = null;
+  }
+
+  _enter3DSoldier(soldier) {
+    this.viewMode = '3d-soldier';
+    this.viewSoldier = soldier;
+    this.flash('Click=Attack  Right-click=Block  Space=Jump  ESC=Exit');
+  }
+
+  _exit3DSoldier() {
+    this.viewMode = 'flat';
+    this.viewSoldier = null;
+  }
+
+  _attack3DSoldier(mx, my) {
+    const sol = this.viewSoldier;
+    if (sol.attackTimer > 0) { this.flash('Still swinging!'); return; }
+    let best = null, bestD = 70;
+    for (const e of this.enemies) {
+      if (e._3dx == null) continue;
+      const d = Math.hypot(mx - e._3dx, my - e._3dy);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    if (best) {
+      best.takeDamage(sol.damage * 2);
+      sol.swingTimer = 14;
+      this.flash(best.isDead() ? `KILL! +$${best.reward}` : `HIT! −${sol.damage*2} dmg`);
+    } else {
+      sol.swingTimer = 14;
+      this.flash('Missed!');
+    }
+    sol.attackTimer = 45;
+  }
+
+  _toggleBlock3DSoldier() {
+    const sol = this.viewSoldier;
+    sol.blocking = !sol.blocking;
+    if (sol.blocking) { sol.blockTimer = 300; this.flash('Blocking! Damage reduced 70%'); }
+    else { sol.blockTimer = 0; this.flash('Block dropped'); }
+  }
+
+  _draw3DSoldier() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    const sol = this.viewSoldier;
+    // Camera at soldier position, looking toward enemies
+    const cx = sol.x, cy = sol.y;
+    const jumpCameraY = sol.jumpHeight * 0.5; // camera rises during jump
+
+    const camAng = Math.atan2(this.path[0].y - cy, this.path[0].x - cx);
+    const cosA = Math.cos(camAng), sinA = Math.sin(camAng);
+    const eyeH = 55 + jumpCameraY;
+    const horizon = H * 0.42 - jumpCameraY * 0.5;
+    const focal = (W / 2) / Math.tan(0.58);
+
+    const proj = (wx, wy, wh = 0) => {
+      const dx = wx - cx, dy = wy - cy;
+      const fwd = dx * cosA + dy * sinA;
+      const side = -dx * sinA + dy * cosA;
+      if (fwd < 2) return null;
+      return { x: W/2 + (side/fwd)*focal, y: horizon + ((eyeH-wh)/fwd)*focal, fwd, sc: focal/fwd };
+    };
+
+    // SKY
+    const sg = ctx.createLinearGradient(0, 0, 0, horizon);
+    sg.addColorStop(0, '#0d1a2a'); sg.addColorStop(0.5, '#1a3a5a'); sg.addColorStop(1, '#3a4a3a');
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, W, horizon);
+    // Distant tree line
+    ctx.fillStyle = '#182e12';
+    ctx.beginPath(); ctx.moveTo(0, horizon);
+    for (let x = 0; x <= W; x += 12) ctx.lineTo(x, horizon - 20 + Math.sin(x*0.022)*18 + Math.sin(x*0.058)*9);
+    ctx.lineTo(W, horizon); ctx.closePath(); ctx.fill();
+
+    // GROUND
+    const gg = ctx.createLinearGradient(0, horizon, 0, H);
+    gg.addColorStop(0, '#4a3018'); gg.addColorStop(0.4, '#3a2410'); gg.addColorStop(1, '#2a1808');
+    ctx.fillStyle = gg; ctx.fillRect(0, horizon, W, H - horizon);
+    // Ground grid
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
+    for (let z = 40; z <= 600; z += 40) {
+      const lp = proj(cx+cosA*z-sinA*500, cy+sinA*z+cosA*500);
+      const rp = proj(cx+cosA*z+sinA*500, cy+sinA*z-cosA*500);
+      if (!lp || !rp) continue;
+      ctx.beginPath(); ctx.moveTo(lp.x,lp.y); ctx.lineTo(rp.x,rp.y); ctx.stroke();
+    }
+
+    // PATH
+    for (let seg = 0; seg < this.path.length - 1; seg++) {
+      const a = this.path[seg], b = this.path[seg+1];
+      const ang = Math.atan2(b.y-a.y, b.x-a.x) + Math.PI/2;
+      const pw = 28, px = Math.cos(ang)*pw, py = Math.sin(ang)*pw;
+      for (let t = 0; t < 10; t++) {
+        const t0=t/10, t1=(t+1)/10;
+        const x0=a.x+(b.x-a.x)*t0, y0=a.y+(b.y-a.y)*t0;
+        const x1=a.x+(b.x-a.x)*t1, y1=a.y+(b.y-a.y)*t1;
+        const c = [proj(x0-px,y0-py),proj(x0+px,y0+py),proj(x1+px,y1+py),proj(x1-px,y1-py)];
+        if (c.some(p=>!p)) continue;
+        ctx.fillStyle = (seg+t)%2===0 ? '#7a5520':'#6a4818';
+        ctx.beginPath(); ctx.moveTo(c[0].x,c[0].y); ctx.lineTo(c[1].x,c[1].y);
+        ctx.lineTo(c[2].x,c[2].y); ctx.lineTo(c[3].x,c[3].y); ctx.closePath(); ctx.fill();
+      }
+    }
+
+    // FIRES (projected)
+    const ft = Date.now()/120;
+    for (const f of (this.map.fires || [])) {
+      const p = proj(f.x, f.y);
+      if (!p || p.x < -50 || p.x > W+50) continue;
+      const sz = f.size * p.sc * 2.5;
+      if (sz < 1) continue;
+      const fl = Math.sin(ft + f.x*0.1)*0.3+0.7;
+      ctx.fillStyle = `rgba(255,80,0,${0.4*fl})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, sz*1.8, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ff4400';
+      ctx.beginPath(); ctx.moveTo(p.x-sz*0.5, p.y); ctx.lineTo(p.x, p.y-sz*1.5); ctx.lineTo(p.x+sz*0.5, p.y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffcc00';
+      ctx.beginPath(); ctx.moveTo(p.x-sz*0.25, p.y); ctx.lineTo(p.x, p.y-sz); ctx.lineTo(p.x+sz*0.25, p.y); ctx.closePath(); ctx.fill();
+    }
+
+    // OBJECTS: trees, other soldiers, enemies (far to near)
+    const objs = [];
+    const openB = H * 0.73;
+    for (const tr of this.map.trees) {
+      const p = proj(tr.x, tr.y);
+      if (p && p.x > -100 && p.x < W+100) objs.push({ kind:'tree', p, tr });
+    }
+    for (const s2 of this.soldiers) {
+      if (s2 === sol) continue;
+      const p = proj(s2.x, s2.y);
+      if (p) objs.push({ kind:'ally', p, s2 });
+    }
+    for (const e of this.enemies) {
+      e._3dx = null;
+      const p = proj(e.x, e.y);
+      if (p) objs.push({ kind:'enemy', p, e });
+    }
+    objs.sort((a,b) => b.p.fwd - a.p.fwd);
+
+    for (const obj of objs) {
+      const { p } = obj;
+      if (obj.kind === 'tree') {
+        const sz = obj.tr.r * p.sc;
+        const gy = Math.min(p.y, openB);
+        ctx.fillStyle = '#2a1a06'; ctx.fillRect(p.x-sz*0.22, gy-sz*2.2, sz*0.44, sz*2.2);
+        ctx.fillStyle = '#1e3d18'; ctx.beginPath(); ctx.arc(p.x, gy-sz*2.2, sz, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#2e5a24'; ctx.beginPath(); ctx.arc(p.x-sz*0.15, gy-sz*2.5, sz*0.72, 0, Math.PI*2); ctx.fill();
+      } else if (obj.kind === 'ally') {
+        const { s2 } = obj;
+        const sz = 8 * p.sc;
+        if (sz < 1) continue;
+        const gy = Math.min(p.y, openB);
+        const bh = sz * 3;
+        ctx.fillStyle = '#334488'; ctx.fillRect(p.x-sz*0.7, gy-bh, sz*1.4, bh);
+        ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.7, sz*0.7, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#999'; ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.7, sz*0.75, Math.PI, 0); ctx.fill();
+        // Ally HP bar
+        const bw = Math.max(sz*2,14);
+        ctx.fillStyle='#111'; ctx.fillRect(p.x-bw/2, gy-bh-sz*2, bw, 4);
+        ctx.fillStyle='#2f8'; ctx.fillRect(p.x-bw/2, gy-bh-sz*2, bw*(s2.hp/s2.maxHp), 4);
+      } else if (obj.kind === 'enemy') {
+        const { e } = obj;
+        const sz = e.size * p.sc * 1.8;
+        if (sz < 2) continue;
+        const gy = Math.min(p.y, openB);
+        const bh = sz * 2.2;
+        ctx.fillStyle='rgba(0,0,0,0.3)';
+        ctx.save(); ctx.translate(p.x+sz*0.3,gy); ctx.scale(1.1,0.25);
+        ctx.beginPath(); ctx.arc(0,0,sz*1.1,0,Math.PI*2); ctx.fill(); ctx.restore();
+        ctx.fillStyle='#2a2a2a'; ctx.fillRect(p.x-sz*0.5,gy-bh*0.5,sz*0.38,bh*0.52); ctx.fillRect(p.x+sz*0.12,gy-bh*0.5,sz*0.38,bh*0.52);
+        ctx.fillStyle=e.color; ctx.fillRect(p.x-sz*0.72,gy-bh,sz*1.44,bh*0.65);
+        ctx.beginPath(); ctx.arc(p.x,gy-bh-sz*0.6,sz*0.65,0,Math.PI*2); ctx.fill();
+        const bw=Math.max(sz*2.5,22);
+        ctx.fillStyle='#111'; ctx.fillRect(p.x-bw/2-1,gy-bh-sz*1.9-1,bw+2,7);
+        ctx.fillStyle=e.hp/e.maxHp>0.5?'#2f2':'#f82';
+        ctx.fillRect(p.x-bw/2,gy-bh-sz*1.9,bw*(e.hp/e.maxHp),5);
+        e._3dx=p.x; e._3dy=gy-bh/2; e._3dr=Math.max(sz*1.3,20);
+      }
+    }
+
+    // STONE BATTLEMENT FRAME (same as tower view)
+    const openL = W*0.14, openR = W*0.86;
+    const drawStone = (x1, x2) => {
+      ctx.fillStyle='#4e4e4e'; ctx.fillRect(x1,0,x2-x1,H);
+      ctx.fillStyle='#5c5c5c'; ctx.fillRect(x1,0,x2-x1,H);
+      ctx.strokeStyle='#383838'; ctx.lineWidth=1;
+      for (let row=0; row<H; row+=14) {
+        const off=(Math.floor(row/14)%2)*22;
+        for (let col=x1-22+off; col<x2+22; col+=44) ctx.strokeRect(col,row,42,13);
+      }
+    };
+    drawStone(0, openL); drawStone(openR, W);
+    ctx.fillStyle='#4e4e4e'; ctx.fillRect(0,openB,W,H-openB);
+    ctx.fillStyle='#5c5c5c'; ctx.fillRect(0,openB,W,10);
+    for (let y=10; y<H*0.55; y+=56) {
+      ctx.fillStyle='#4e4e4e';
+      ctx.fillRect(openL-14,y,20,32); ctx.fillRect(openR-6,y,20,32);
+    }
+
+    // FIRST-PERSON ARMS
+    const armY = H * 0.78;
+    // Right arm + sword
+    const swingAmt = sol.swingTimer > 0 ? Math.sin(sol.swingTimer/14*Math.PI)*40 : 0;
+    ctx.fillStyle = '#2255aa';
+    ctx.fillRect(W*0.6, armY - 40 - swingAmt, 50, 40); // forearm
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(W*0.64, armY - 55 - swingAmt, 28, 18); // hand
+    ctx.fillStyle = '#ccc'; ctx.fillRect(W*0.72, armY - 100 - swingAmt, 8, 50); // blade
+    ctx.fillStyle = '#884400'; ctx.fillRect(W*0.66, armY - 58 - swingAmt, 24, 6); // guard
+    // Left arm + shield (if blocking)
+    if (sol.blocking) {
+      ctx.fillStyle = '#2255aa'; ctx.fillRect(W*0.32, armY - 50, 50, 50);
+      ctx.fillStyle = '#cc8822'; ctx.fillRect(W*0.22, armY - 80, 40, 60);
+      ctx.strokeStyle = '#885500'; ctx.lineWidth = 2; ctx.strokeRect(W*0.22, armY - 80, 40, 60);
+      ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(W*0.24+20, armY-50, 8, 0, Math.PI*2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#2255aa'; ctx.fillRect(W*0.32, armY - 40, 50, 40);
+      ctx.fillStyle = '#e8b890'; ctx.fillRect(W*0.34, armY - 55, 28, 18);
+    }
+
+    // HUD
+    const mx2 = W/2, my2 = (horizon+openB)/2;
+    ctx.strokeStyle='rgba(255,230,80,0.88)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(mx2-20,my2); ctx.lineTo(mx2-7,my2);
+    ctx.moveTo(mx2+7,my2);  ctx.lineTo(mx2+20,my2);
+    ctx.moveTo(mx2,my2-20); ctx.lineTo(mx2,my2-7);
+    ctx.moveTo(mx2,my2+7);  ctx.lineTo(mx2,my2+20);
+    ctx.stroke();
+    ctx.strokeStyle='rgba(255,230,80,0.35)';
+    ctx.beginPath(); ctx.arc(mx2,my2,14,0,Math.PI*2); ctx.stroke();
+
+    ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(openL+6,6,220,68);
+    ctx.fillStyle='#2255aa'; ctx.font='bold 14px sans-serif'; ctx.fillText('⚔ SOLDIER', openL+14, 26);
+    ctx.fillStyle='#aaa'; ctx.font='11px sans-serif'; ctx.fillText('Click=Attack  Right-click=Block  Space=Jump', openL+14, 44);
+    // HP bar
+    ctx.fillStyle='#111'; ctx.fillRect(openL+14, 52, 180, 8);
+    ctx.fillStyle = sol.hp/sol.maxHp > 0.5 ? '#2f8' : '#f82';
+    ctx.fillRect(openL+14, 52, 180*(sol.hp/sol.maxHp), 8);
+    ctx.fillStyle='#fff'; ctx.font='10px sans-serif'; ctx.fillText(`HP: ${Math.ceil(sol.hp)}/${sol.maxHp}${sol.blocking?' 🛡 BLOCKING':''}`, openL+14, 68);
+
+    // Exit button
+    ctx.fillStyle='#8a0000'; ctx.fillRect(openR-90,6,84,30);
+    ctx.fillStyle='#cc2222'; ctx.fillRect(openR-90,6,84,3);
+    ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.fillText('✕  EXIT', openR-76, 26);
+
+    // Enemies/wave
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(openL+6,openB-26,200,22);
+    ctx.fillStyle='#fff'; ctx.font='12px sans-serif';
+    ctx.fillText(`Enemies: ${this.enemies.length}   Wave: ${this.waveManager.wave}/${this.waveManager.totalWaves}`, openL+12, openB-10);
+
+    // Flash
+    if (this.flashTimer > 0) {
+      const fp = this.flashTimer/90;
+      ctx.fillStyle=`rgba(0,0,0,${fp*0.55})`; ctx.fillRect(W/2-140,openB-54,280,26);
+      ctx.fillStyle=`rgba(255,240,80,${fp})`; ctx.font='bold 15px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(this.flashMsg, W/2, openB-36); ctx.textAlign='left';
+    }
   }
 
   _shoot3D(mx, my) {
@@ -681,7 +1082,7 @@ class Game {
     this.castleArcher.angle = Math.PI;
 
     this.towers = []; this.enemies = []; this.projectiles = [];
-    this.traps = []; this.mines = []; this.guards = []; this.workerUnits = [];
+    this.traps = []; this.mines = []; this.guards = []; this.camps = []; this.soldiers = []; this.workerUnits = [];
     this.viewMode = 'flat'; this.viewTower = null;
 
     // Pre-place 3 mines at the start of each level — try candidate spots until 3 land off-path
@@ -901,13 +1302,13 @@ class Game {
     mBtn.onclick = () => this._selectType('mine');
     ui.appendChild(mBtn);
 
-    const gBtn = document.createElement('button');
-    gBtn.id = 'btn-guard';
-    gBtn.className = 'btn' + (this.selectedType === 'guard' ? ' selected' : '');
-    gBtn.textContent = GUARD_CONFIG.label;
-    gBtn.style.background = GUARD_CONFIG.color;
-    gBtn.onclick = () => this._selectType('guard');
-    ui.appendChild(gBtn);
+    const cBtn = document.createElement('button');
+    cBtn.id = 'btn-camp';
+    cBtn.className = 'btn' + (this.selectedType === 'camp' ? ' selected' : '');
+    cBtn.style.background = CAMP.color;
+    cBtn.textContent = `C Camp $${CAMP.cost}`;
+    cBtn.onclick = () => this._selectType('camp');
+    ui.appendChild(cBtn);
 
     const wBtn = document.createElement('button');
     wBtn.id = 'btn-worker';
@@ -920,9 +1321,10 @@ class Game {
   }
 
   _selectType(key) {
+    if (this.viewMode === '3d-soldier') this._exit3DSoldier();
     this.selectedTower = null; // exit manual-shot mode when switching tool
     this.selectedType = key;
-    const allKeys = [...this.typeKeys, ...this.trapKeys.map(k => 'trap_' + k), 'mine', 'guard'];
+    const allKeys = [...this.typeKeys, ...this.trapKeys.map(k => 'trap_' + k), 'mine', 'camp'];
     for (const k of allKeys) {
       const btn = document.getElementById('btn-' + k);
       if (btn) btn.className = 'btn' + (k === key ? ' selected' : '');
@@ -940,8 +1342,8 @@ class Game {
     }
     const mBtn = document.getElementById('btn-mine');
     if (mBtn) mBtn.style.opacity = this.money >= MINE.cost ? '0.9' : '0.35';
-    const gBtn = document.getElementById('btn-guard');
-    if (gBtn) gBtn.style.opacity = this.money >= GUARD_CONFIG.cost ? '0.9' : '0.35';
+    const cBtn = document.getElementById('btn-camp');
+    if (cBtn) cBtn.style.opacity = this.money >= CAMP.cost ? '0.9' : '0.35';
     const wBtn = document.getElementById('btn-worker');
     if (wBtn) {
       wBtn.style.opacity = this.money >= 35 && this.workers < 5 ? '0.9' : '0.35';
@@ -967,10 +1369,20 @@ class Game {
         this._shoot3D(x, y);
         return;
       }
+      // 3D soldier view: exit button or attack
+      if (this.viewMode === '3d-soldier') {
+        const W = this.canvas.width, openR = W * 0.86;
+        if (x > openR - 94 && y < 42) { this._exit3DSoldier(); return; }
+        this._attack3DSoldier(x, y);
+        return;
+      }
+      // Click on soldier → enter 3D soldier view
+      const clickedSoldier = this.soldiers.find(s => Math.hypot(s.x-x, s.y-y) < 16);
+      if (clickedSoldier) { this._enter3DSoldier(clickedSoldier); return; }
       if (this.trySelectTower(x, y)) return;
       if (this.selectedTower) { this.tryFireManual(x, y); return; }
       if (this.selectedType === 'mine')  { this.tryPlaceMine(x, y); return; }
-      if (this.selectedType === 'guard') { this.tryPlaceGuard(x, y); return; }
+      if (this.selectedType === 'camp')  { this.tryPlaceCamp(x, y); return; }
       if (this.selectedType.startsWith('trap_')) { this.tryPlaceTrap(x, y); }
       else { this.tryPlaceTower(x, y); }
     });
@@ -978,6 +1390,7 @@ class Game {
     this.canvas.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (this.gameOver || this.levelComplete || this.titleActive) return;
+      if (this.viewMode === '3d-soldier') { this._toggleBlock3DSoldier(); return; }
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
       const tower = this.towers.find(t => distance(t, { x, y }) < 20);
@@ -998,10 +1411,11 @@ class Game {
     document.addEventListener('keydown', e => {
       if (e.key === 'r' || e.key === 'R') { this.restart(); return; }
       if (e.key === 'Escape') {
+        if (this.viewMode === '3d-soldier') { this._exit3DSoldier(); return; }
         if (this.viewMode === '3d') { this._exit3D(); return; }
         this.selectedTower = null; return;
       }
-      if (e.key === '0') { this._selectType('guard'); return; }
+      if (e.code === 'Space' && this.viewMode === '3d-soldier') { e.preventDefault(); this.viewSoldier?.jump(); return; }
       const allowedTowers = this.currentLevel ? this.currentLevel.towers : this.typeKeys;
       const allowedTraps  = this.currentLevel ? this.currentLevel.traps  : this.trapKeys;
       const i = parseInt(e.key) - 1;

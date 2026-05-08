@@ -1,8 +1,8 @@
-import { distance } from './constants.js?v=12';
+import { distance } from './constants.js?v=13';
 
 export class Projectile {
   constructor({ x, y, target, speed, vx, vy, damage, slows, fromEnemy, fire, manual, boulder, arrow, magic,
-                fireball, iceOrb, iceSlows, lightningBolt, chain, chainRadius, earthBoulder, splash, splashRadius, stuns }) {
+                fireball, iceOrb, iceSlows, lightningBolt, chain, chainRadius, earthBoulder, splash, splashRadius, stuns, burns, shocks }) {
     this.x = x; this.y = y;
     this.target = target; this.speed = speed;
     this.vx = vx; this.vy = vy;
@@ -25,6 +25,8 @@ export class Projectile {
     this.splash       = splash;
     this.splashRadius = splashRadius || 40;
     this.stuns        = stuns || 0;
+    this.burns        = burns || 0;
+    this.shocks       = shocks || 0;
     this.dead = false;
   }
 
@@ -58,6 +60,8 @@ export class Projectile {
     if (this.slows)    target.slowTimer = 80;
     if (this.iceSlows) target.slowTimer = 220;
     if (this.stuns > 0) target.stunTimer = this.stuns;
+    if (this.burns)  target.burnTimer  = Math.max(target.burnTimer,  this.burns);
+    if (this.shocks) target.shockTimer = Math.max(target.shockTimer, this.shocks);
 
     // Splash — damage all enemies in radius at half damage
     if (this.splash) {
@@ -77,7 +81,8 @@ export class Projectile {
         .slice(0, this.chain);
       for (const e of nearby) {
         e.takeDamage(this.damage * 0.6);
-        if (this.slows) e.slowTimer = 60;
+        if (this.slows)  e.slowTimer  = 60;
+        if (this.shocks) e.shockTimer = Math.max(e.shockTimer, this.shocks);
       }
       // Store for drawing
       this._chainTargets = nearby;

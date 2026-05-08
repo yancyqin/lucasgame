@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=12';
-import { Projectile } from './Projectile.js?v=12';
+import { ENEMIES, distance } from './constants.js?v=13';
+import { Projectile } from './Projectile.js?v=13';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -15,6 +15,8 @@ export class Enemy {
     this.slowTimer = 0;
     this.stunTimer = 0;
     this.hitTimer = 0;
+    this.burnTimer = 0;
+    this.shockTimer = 0;
     this.shootTimer  = Math.floor(Math.random() * 120);
     this.fireTimer   = Math.floor(Math.random() * 120);
     this.saboteurTimer = 0;
@@ -36,6 +38,8 @@ export class Enemy {
     if (this.attackTimer > 0) this.attackTimer--;
     if (this.slowTimer  > 0) this.slowTimer--;
     if (this.stunTimer  > 0) { this.stunTimer--; return; }
+    if (this.burnTimer > 0) { this.burnTimer--; this.hp -= 0.08; if (this.burnTimer % 20 === 0) this.hitTimer = 6; }
+    if (this.shockTimer > 0) this.shockTimer--;
 
     // Siege mode: stop moving, attack the castle periodically
     if (this.atGate) {
@@ -169,6 +173,24 @@ export class Enemy {
         ctx.fillText('★', sx, sy);
       }
       ctx.textAlign = 'left';
+    }
+
+    // Shock visual
+    if (this.shockTimer > 0) {
+      ctx.strokeStyle = `rgba(255,255,80,${this.shockTimer/30})`;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) {
+        const a = (Date.now()/100 + i*Math.PI/2) % (Math.PI*2);
+        ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x+Math.cos(a)*(this.size+8), this.y+Math.sin(a)*(this.size+8)); ctx.stroke();
+      }
+    }
+
+    // Burn visual
+    if (this.burnTimer > 0) {
+      const bp = Math.min(this.burnTimer/180, 1);
+      ctx.strokeStyle = `rgba(255,100,0,${bp*0.7})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.size+4, 0, Math.PI*2); ctx.stroke();
     }
 
     // HP bar

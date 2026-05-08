@@ -1,4 +1,4 @@
-import { distance } from './constants.js?v=12';
+import { distance } from './constants.js?v=13';
 
 // GameMap owns the terrain: the path, grass tufts, trees, rocks, and the enemy camp.
 export class GameMap {
@@ -11,6 +11,7 @@ export class GameMap {
     this.rocks = this._generateRocks();
     this.craters = this._generateCraters();
     this.sandbags = this._generateSandbags();
+    this.fires = this._generateFires();
   }
 
   // Returns true if (x, y) is too close to the path for tower placement.
@@ -27,8 +28,8 @@ export class GameMap {
   }
 
   draw(ctx) {
-    // Base — darker military mud-green
-    ctx.fillStyle = '#3a5228';
+    // Base — brown dirt battlefield
+    ctx.fillStyle = '#5a3c1a';
     ctx.fillRect(0, 0, this.W, this.H);
 
     // Worn dirt patches (battlefield damage)
@@ -132,6 +133,28 @@ export class GameMap {
       ctx.beginPath(); ctx.arc(tr.x - tr.r * 0.28, tr.y - tr.r * 0.38, tr.r * 0.48, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#52a052';
       ctx.beginPath(); ctx.arc(tr.x - tr.r * 0.34, tr.y - tr.r * 0.52, tr.r * 0.26, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Fires (animated with Date.now)
+    const ft = Date.now() / 120;
+    for (const f of this.fires) {
+      const flicker = Math.sin(ft + f.x * 0.1) * 0.3 + 0.7;
+      // Outer glow
+      ctx.fillStyle = `rgba(255,80,0,${0.25 * flicker})`;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.size * 1.8, 0, Math.PI*2); ctx.fill();
+      // Main flame (3 triangles offset by flicker)
+      for (let i = 0; i < 3; i++) {
+        const off = Math.sin(ft * 1.3 + i * 2.1 + f.x) * f.size * 0.4;
+        ctx.fillStyle = i === 0 ? '#ff4400' : i === 1 ? '#ff8800' : '#ffcc00';
+        ctx.beginPath();
+        ctx.moveTo(f.x - f.size*0.5 + off, f.y + f.size*0.3);
+        ctx.lineTo(f.x + off, f.y - f.size*(0.8 + i*0.3));
+        ctx.lineTo(f.x + f.size*0.5 + off, f.y + f.size*0.3);
+        ctx.closePath(); ctx.fill();
+      }
+      // Embers
+      ctx.fillStyle = '#ffaa00';
+      ctx.beginPath(); ctx.arc(f.x + Math.sin(ft*2+f.x)*f.size*0.3, f.y - f.size*1.1, 2, 0, Math.PI*2); ctx.fill();
     }
 
     this._drawCampStructures(ctx);
@@ -250,13 +273,37 @@ export class GameMap {
     ctx.fillStyle = '#ffd700'; ctx.fillRect(ex + 52, ey - 74, 8, 8);
   }
 
+  isOnFeature(x, y) {
+    for (const tr of this.trees) {
+      if (Math.hypot(tr.x - x, tr.y - y) < tr.r + 18) return true;
+    }
+    for (const r of this.rocks) {
+      if (Math.abs(r.x - x) < r.rx + 12 && Math.abs(r.y - y) < r.ry + 12) return true;
+    }
+    return false;
+  }
+
   _generateGrass() {
     const count = Math.floor(this.W * this.H / 1500);
     return Array.from({ length: count }, () => ({
       x: Math.random() * this.W, y: Math.random() * this.H,
       r: 1.5 + Math.random() * 4.5,
-      c: ['#3a6b3e', '#4a7c4e', '#568a5a', '#3d7040', '#2e5c32', '#5e9460'][Math.floor(Math.random() * 6)],
+      c: ['#4a3018','#3a2810','#5a4020','#3d2a14','#6a4820'][Math.floor(Math.random() * 5)],
     }));
+  }
+
+  _generateFires() {
+    const fires = [];
+    let attempts = 0;
+    const count = 18 + Math.floor(Math.random() * 5);
+    while (fires.length < count && attempts++ < 3000) {
+      const x = 20 + Math.random() * (this.W - 40);
+      const y = 20 + Math.random() * (this.H - 40);
+      if (!this.isOnPath(x, y)) {
+        fires.push({ x, y, size: 8 + Math.random() * 8 });
+      }
+    }
+    return fires;
   }
 
   _generateRocks() {

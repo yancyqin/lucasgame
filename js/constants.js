@@ -3,10 +3,10 @@ export const TYPES = {
   sniper:    { label: '2 Catapult $70',    color: '#4ab4ff', range: 380, fireRate: 120, damage: 6,    cost: 70  },
   rapid:     { label: '3 Crossbow $75',    color: '#ffaa22', range: 100, fireRate: 40,  damage: 1,    cost: 75  },
   slow:      { label: '4 Mage $80',        color: '#cc66ff', range: 140, fireRate: 80,  damage: 0.5,  cost: 80, slows: true },
-  fire:      { label: 'F Fire $90',        color: '#ff5500', range: 130, fireRate: 50,  damage: 3,    cost: 90  },
-  ice:       { label: 'I Ice $85',         color: '#88ddff', range: 200, fireRate: 70,  damage: 1.5,  cost: 85  },
-  lightning: { label: 'L Lightning $110',  color: '#ffdd00', range: 180, fireRate: 80,  damage: 5,    cost: 110 },
-  earth:     { label: 'E Earth $95',       color: '#886644', range: 240, fireRate: 150, damage: 15,   cost: 95  },
+  fire:      { label: 'F Fire $90',        color: '#ff5500', range: 130, fireRate: 50,  damage: 3,    cost: 90,  elementalType: 'fire'      },
+  ice:       { label: 'I Ice $85',         color: '#88ddff', range: 200, fireRate: 70,  damage: 1.5,  cost: 85,  elementalType: 'ice'       },
+  lightning: { label: 'L Lightning $110',  color: '#ffdd00', range: 180, fireRate: 80,  damage: 5,    cost: 110, elementalType: 'lightning' },
+  earth:     { label: 'E Earth $95',       color: '#886644', range: 240, fireRate: 150, damage: 15,   cost: 95,  elementalType: 'earth'     },
 };
 
 export const ENEMIES = {
@@ -51,6 +51,7 @@ export const TRAPS = {
 
 export const MINE = { label: '9 Mine $80', color: '#a07830', cost: 80, income: 2, period: 240 };
 export const GUARD_CONFIG = { label: '0 Guard $60', color: '#4488cc', cost: 60 };
+export const CAMP = { label: 'C Camp $120', color: '#7a6030', cost: 120 };
 
 // ── Procedural 100-level generation ─────────────────────────────────────────
 
