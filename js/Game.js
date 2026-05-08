@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=13';
-import { GameMap }     from './Map.js?v=13';
-import { Tower }       from './Tower.js?v=13';
-import { Enemy }       from './Enemy.js?v=13';
-import { Projectile }  from './Projectile.js?v=13';
-import { Trap }        from './Trap.js?v=13';
-import { Mine }        from './Mine.js?v=13';
-import { WaveManager } from './WaveManager.js?v=13';
+import { TYPES, TRAPS, MINE, CAMP, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=14';
+import { GameMap }     from './Map.js?v=14';
+import { Tower }       from './Tower.js?v=14';
+import { Enemy }       from './Enemy.js?v=14';
+import { Projectile }  from './Projectile.js?v=14';
+import { Trap }        from './Trap.js?v=14';
+import { Mine }        from './Mine.js?v=14';
+import { WaveManager } from './WaveManager.js?v=14';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -280,6 +280,10 @@ class Game {
     this.flashMsg  = '';
     this.flashTimer = 0;
     this.mouse     = { x: 0, y: 0 };
+    // Camera yaw offset for 3D views — dragging left/right rotates the view
+    this.camYaw = 0;
+    this._3dDragging  = false;
+    this._3dDragLastX = 0;
     this.selectedType = 'basic';
     this.typeKeys  = Object.keys(TYPES);
     this.trapKeys  = Object.keys(TRAPS);
@@ -545,24 +549,30 @@ class Game {
   _enter3D(tower) {
     this.viewMode  = '3d';
     this.viewTower = tower;
+    this.camYaw    = 0;
     this.selectedTower = null;
-    this.flash('Click enemies to shoot! Press ESC or EXIT to leave.');
+    this.flash('Click enemies to shoot! Drag to look around. ESC=Exit');
   }
 
   _exit3D() {
     this.viewMode  = 'flat';
     this.viewTower = null;
+    this.camYaw    = 0;
+    this._3dDragging = false;
   }
 
   _enter3DSoldier(soldier) {
-    this.viewMode = '3d-soldier';
+    this.viewMode    = '3d-soldier';
     this.viewSoldier = soldier;
-    this.flash('Click=Attack  Right-click=Block  Space=Jump  ESC=Exit');
+    this.camYaw      = 0;
+    this.flash('Click=Attack  Right-click=Block  Space=Jump  Drag=Look  ESC=Exit');
   }
 
   _exit3DSoldier() {
-    this.viewMode = 'flat';
+    this.viewMode    = 'flat';
     this.viewSoldier = null;
+    this.camYaw      = 0;
+    this._3dDragging = false;
   }
 
   _attack3DSoldier(mx, my) {
@@ -600,7 +610,7 @@ class Game {
     const cx = sol.x, cy = sol.y;
     const jumpCameraY = sol.jumpHeight * 0.5; // camera rises during jump
 
-    const camAng = Math.atan2(this.path[0].y - cy, this.path[0].x - cx);
+    const camAng = Math.atan2(this.path[0].y - cy, this.path[0].x - cx) + this.camYaw;
     const cosA = Math.cos(camAng), sinA = Math.sin(camAng);
     const eyeH = 55 + jumpCameraY;
     const horizon = H * 0.42 - jumpCameraY * 0.5;
@@ -783,7 +793,7 @@ class Game {
 
     ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(openL+6,6,220,68);
     ctx.fillStyle='#2255aa'; ctx.font='bold 14px sans-serif'; ctx.fillText('⚔ SOLDIER', openL+14, 26);
-    ctx.fillStyle='#aaa'; ctx.font='11px sans-serif'; ctx.fillText('Click=Attack  Right-click=Block  Space=Jump', openL+14, 44);
+    ctx.fillStyle='#aaa'; ctx.font='11px sans-serif'; ctx.fillText('Click=Attack  Drag=Look  RClick=Block  Space=Jump', openL+14, 44);
     // HP bar
     ctx.fillStyle='#111'; ctx.fillRect(openL+14, 52, 180, 8);
     ctx.fillStyle = sol.hp/sol.maxHp > 0.5 ? '#2f8' : '#f82';
@@ -835,8 +845,8 @@ class Game {
     const tower = this.viewTower;
     const cx = tower.x, cy = tower.y;
 
-    // Camera: always face the enemy spawn side of the path
-    const camAng = Math.atan2(this.path[0].y - cy, this.path[0].x - cx);
+    // Camera: faces the enemy spawn side, offset by player drag yaw
+    const camAng = Math.atan2(this.path[0].y - cy, this.path[0].x - cx) + this.camYaw;
     const cosA = Math.cos(camAng), sinA = Math.sin(camAng);
     const eyeH = 85, horizon = H * 0.38;
     const focal = (W / 2) / Math.tan(0.58); // ~66° FoV
@@ -1006,7 +1016,7 @@ class Game {
     ctx.fillStyle = tower.color; ctx.font = 'bold 14px sans-serif';
     ctx.fillText(`⚔ ${tower.typeKey.toUpperCase()} TOWER`, openL+14, 26);
     ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif';
-    ctx.fillText('Click an enemy to shoot  •  ESC to exit', openL+14, 44);
+    ctx.fillText('Click=Shoot  •  Drag=Look  •  ESC=Exit', openL+14, 44);
     // Reload bar
     const maxCD = tower.fireRate * 2;
     const pct = tower.manualCooldown > 0 ? 1 - tower.manualCooldown/maxCD : 1;
@@ -1354,18 +1364,41 @@ class Game {
   _setupInput() {
     this.canvas.addEventListener('mousemove', e => {
       const rect = this.canvas.getBoundingClientRect();
-      this.mouse.x = e.clientX - rect.left;
+      const mx = e.clientX - rect.left;
+      this.mouse.x = mx;
       this.mouse.y = e.clientY - rect.top;
+
+      // Camera drag rotation — only active while dragging in a 3D view
+      if (this._3dDragging && (this.viewMode === '3d' || this.viewMode === '3d-soldier')) {
+        const delta = mx - this._3dDragLastX;
+        this._3dDragLastX = mx;
+        this.camYaw += delta * 0.005; // 0.005 rad per pixel — tweak for feel
+      }
+    });
+
+    this.canvas.addEventListener('mousedown', e => {
+      if (this.viewMode === '3d' || this.viewMode === '3d-soldier') {
+        const rect = this.canvas.getBoundingClientRect();
+        this._3dDragging    = true;
+        this._3dDragLastX   = e.clientX - rect.left;
+        this._3dDragStartX  = e.clientX - rect.left; // track total drag distance
+      }
+    });
+
+    this.canvas.addEventListener('mouseup', () => {
+      this._3dDragging = false;
     });
 
     this.canvas.addEventListener('click', e => {
       if (this.gameOver || this.levelComplete || this.titleActive) return;
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
-      // 3D view: exit button or shoot
+      // 3D view: exit button or shoot — but suppress if user was rotating camera
       if (this.viewMode === '3d') {
         const openR = this.canvas.width * 0.86;
         if (x > openR - 94 && x < openR + 2 && y > 6 && y < 36) { this._exit3D(); return; }
+        // Ignore click if it was a drag rotation (moved > 6px horizontally)
+        if (Math.abs(x - (this._3dDragStartX ?? x)) > 6) return;
         this._shoot3D(x, y);
         return;
       }
@@ -1373,6 +1406,7 @@ class Game {
       if (this.viewMode === '3d-soldier') {
         const W = this.canvas.width, openR = W * 0.86;
         if (x > openR - 94 && y < 42) { this._exit3DSoldier(); return; }
+        if (Math.abs(x - (this._3dDragStartX ?? x)) > 6) return;
         this._attack3DSoldier(x, y);
         return;
       }

@@ -1,4 +1,4 @@
-import { distance } from './constants.js?v=13';
+import { distance } from './constants.js?v=14';
 
 // GameMap owns the terrain: the path, grass tufts, trees, rocks, and the enemy camp.
 export class GameMap {
