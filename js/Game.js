@@ -1,12 +1,12 @@
-import { TYPES, TRAPS, MINE, GUARD_CONFIG, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=9';
-import { GameMap }     from './Map.js?v=9';
-import { Tower }       from './Tower.js?v=9';
-import { Enemy }       from './Enemy.js?v=9';
-import { Projectile }  from './Projectile.js?v=9';
-import { Trap }        from './Trap.js?v=9';
-import { Mine }        from './Mine.js?v=9';
-import { Guard }       from './Guard.js?v=9';
-import { WaveManager } from './WaveManager.js?v=9';
+import { TYPES, TRAPS, MINE, GUARD_CONFIG, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=10';
+import { GameMap }     from './Map.js?v=10';
+import { Tower }       from './Tower.js?v=10';
+import { Enemy }       from './Enemy.js?v=10';
+import { Projectile }  from './Projectile.js?v=10';
+import { Trap }        from './Trap.js?v=10';
+import { Mine }        from './Mine.js?v=10';
+import { Guard }       from './Guard.js?v=10';
+import { WaveManager } from './WaveManager.js?v=10';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -19,7 +19,7 @@ class Worker {
     this.target = null;
     this.carrying = false;
     this.gold = 0;
-    this.speed = 1.4;
+    this.speed = 0.35;
     this.flashTimer = 0;
   }
 
@@ -223,7 +223,7 @@ class Game {
     if (archerTarget && ca.cooldown <= 0) {
       const dx = archerTarget.x - ca.x, dy = archerTarget.y - ca.y, d = Math.hypot(dx, dy);
       ca.angle = Math.atan2(dy, dx);
-      this.projectiles.push(new Projectile({ x: ca.x, y: ca.y, vx: (dx/d)*8, vy: (dy/d)*8, damage: 2, arrow: true }));
+      this.projectiles.push(new Projectile({ x: ca.x, y: ca.y, vx: (dx/d)*8, vy: (dy/d)*8, damage: 2, arrow: true, manual: true }));
       ca.cooldown = 50; ca.fireTimer = 10;
     }
 
@@ -435,6 +435,24 @@ class Game {
 
     this.towers = []; this.enemies = []; this.projectiles = [];
     this.traps = []; this.mines = []; this.guards = []; this.workerUnits = [];
+
+    // Pre-place 3 mines at the start of each level — try candidate spots until 3 land off-path
+    const W = this.canvas.width, H = this.canvas.height;
+    const candidates = [
+      [0.15, 0.50], [0.45, 0.50], [0.75, 0.50],
+      [0.25, 0.35], [0.55, 0.35], [0.85, 0.35],
+      [0.25, 0.65], [0.55, 0.65], [0.85, 0.65],
+      [0.10, 0.80], [0.50, 0.80], [0.90, 0.80],
+    ];
+    let placed = 0;
+    for (const [fx, fy] of candidates) {
+      if (placed >= 3) break;
+      const mx = Math.round(W * fx), my = Math.round(H * fy);
+      if (!this.map.isOnPath(mx, my)) {
+        this.mines.push(new Mine(mx, my));
+        placed++;
+      }
+    }
     this.castleHp = 10000; this.money = 100; this.score = 0;
     this.gameOver = false; this.levelComplete = false;
     this.flashMsg = ''; this.flashTimer = 0;
