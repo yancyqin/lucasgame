@@ -1,4 +1,4 @@
-import { TRAPS } from './constants.js?v=8';
+import { TRAPS } from './constants.js?v=12';
 
 // Trap is placed on the road (spike/tar/barricade) or beside it (wall).
 // Composition: Game has-many Traps, just like it has-many Towers.
@@ -154,6 +154,11 @@ export class Trap {
       ctx.arc(this.x, this.y, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p);
       ctx.stroke();
     }
+    // HP bar
+    const hf = this.hp / this.maxHp;
+    ctx.fillStyle = '#111'; ctx.fillRect(this.x - 18, this.y + 12, 36, 4);
+    ctx.fillStyle = hf > 0.5 ? '#0f0' : hf > 0.25 ? '#f80' : '#f00';
+    ctx.fillRect(this.x - 18, this.y + 12, 36 * hf, 4);
   }
 
   _drawTar(ctx) {
@@ -176,6 +181,11 @@ export class Trap {
     // Label
     ctx.fillStyle = 'rgba(180,180,50,0.6)'; ctx.font = '8px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('TAR', this.x, this.y - 14); ctx.textAlign = 'left';
+    // HP bar
+    const hf = this.hp / this.maxHp;
+    ctx.fillStyle = '#111'; ctx.fillRect(this.x - 18, this.y + 10, 36, 4);
+    ctx.fillStyle = hf > 0.5 ? '#0f0' : hf > 0.25 ? '#f80' : '#f00';
+    ctx.fillRect(this.x - 18, this.y + 10, 36 * hf, 4);
   }
 
   _drawWall(ctx) {

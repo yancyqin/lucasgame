@@ -43,10 +43,10 @@ export function makePath(W, H, variant = 0) {
 }
 
 export const TRAPS = {
-  spike:     { label: '5 Spikes $30',     color: '#7a8a9a', cost: 30, damage: 6,  radius: 20, cooldown: 90, onPath: true  },
-  tar:       { label: '6 Tar $25',        color: '#3a4a22', cost: 25,             radius: 24, cooldown: 0,  onPath: true, slows: true },
-  barricade: { label: '7 Barricade $35',  color: '#8b6030', cost: 35, hp: 30, maxHp: 30, radius: 26, onPath: true  },
-  wall:      { label: '8 Wall $45',       color: '#7a5a30', cost: 45, hp: 25, maxHp: 25, radius: 45, onPath: false },
+  spike:     { label: '5 Spikes $30',     color: '#7a8a9a', cost: 30, damage: 6,  radius: 20, cooldown: 90, onPath: true,  hp: 25,  maxHp: 25  },
+  tar:       { label: '6 Tar $25',        color: '#3a4a22', cost: 25,             radius: 24, cooldown: 0,  onPath: true,  hp: 18,  maxHp: 18, slows: true },
+  barricade: { label: '7 Barricade $35',  color: '#8b6030', cost: 35,             radius: 26, onPath: true,  hp: 80,  maxHp: 80  },
+  wall:      { label: '8 Wall $45',       color: '#7a5a30', cost: 45,             radius: 45, onPath: false, hp: 60,  maxHp: 60  },
 };
 
 export const MINE = { label: '9 Mine $80', color: '#a07830', cost: 80, income: 2, period: 240 };

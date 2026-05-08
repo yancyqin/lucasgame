@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=8';
-import { Projectile } from './Projectile.js?v=8';
+import { ENEMIES, distance } from './constants.js?v=12';
+import { Projectile } from './Projectile.js?v=12';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -22,6 +22,7 @@ export class Enemy {
     // Attack swing animation state
     this.attackTimer = 0;
     this.attackAngle = 0;
+    this.barrTimer = 0;     // cooldown between barricade hits
     // Off-path tower aggro
     this.offPathTarget = null;
     // Gate siege state
@@ -81,7 +82,8 @@ export class Enemy {
       }
     }
 
-    // Barricade blocking the path — stop and pound it
+    // Barricade blocking the path — ALL enemies stop and pound it until it breaks
+    if (this.barrTimer > 0) this.barrTimer--;
     if (target) {
       const fdx = target.x - this.x, fdy = target.y - this.y;
       const blocker = traps.find(t => {
@@ -91,6 +93,12 @@ export class Enemy {
       });
       if (blocker) {
         this.triggerAttack(blocker.x, blocker.y);
+        if (this.barrTimer <= 0) {
+          // Damage scales with enemy strength; barricade has 80 HP so goblins take ~40s alone
+          const dmg = { goblin:2, runner:1, saboteur:8, ogre:6, dragon:10, dragonRider:12 }[this.kind] ?? 2;
+          blocker.takeDamage(dmg);
+          this.barrTimer = 50; // hit once every ~0.8 seconds
+        }
         this._runnerShoot(towers, projectiles);
         return;
       }
