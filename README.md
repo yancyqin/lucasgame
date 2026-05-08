@@ -1,6 +1,69 @@
 # Lucas Game 🎮
 
-**[玩游戏 →](https://yancyqin.github.io/lucasgame/)**
+**[中文版本 →](https://github.com/yancyqin/lucasgame/blob/main/README.zh.md)**
+
+**[Play Online →](https://yancyqin.github.io/lucasgame/)**
+
+---
+
+## 📖 English Version
+
+### What is This?
+
+**Lucas Game** is a tower defense game built by a 12-year-old learning AI-assisted programming with his dad. It's not just a game—it's a **complete learning journey** in modern web development.
+
+This project demonstrates how children can leverage AI as a programming mentor, transforming ideas into reality through a progression from simple HTML/JavaScript to professional object-oriented architecture.
+
+### 🎯 Learning Journey
+
+#### **Phase 1: Foundation (Single File)**
+- Start with `index.html` containing HTML, CSS, and JavaScript
+- Learn game loops and DOM manipulation
+- Understand coordinates, movement, collision detection
+- **Skills:** Variables, functions, event listeners
+
+#### **Phase 2: Data & Balance**
+- Read and analyze existing code (constants, tower properties, enemy waves)
+- Modify game data: tower prices, damage, health, enemy rewards
+- Understand how data flows through the entire game
+- **Skills:** Code reading, debugging, game balance design
+- **Practice Tasks:**
+  - "Change sniper tower cost to 200 and damage to 50"
+  - "Make wave 5 spawn 10 enemies instead of 5"
+  - "Increase player starting money to 600"
+
+#### **Phase 3: Modules & OOP**
+- Refactor: single file → ES6 modules (one class per file)
+- Learn Object-Oriented Programming:
+  - **Encapsulation** — `tower.isDead()` hides the internal `hp <= 0` logic
+  - **Single Responsibility** — `Enemy.js` only manages enemies, not towers
+  - **Constructor Pattern** — `new Tower(x, y, 'sniper')` creates ready-to-use objects
+  - **Composition** — `Game` contains `GameMap`, `WaveManager`, towers, and enemies
+  - **Private Methods** — Prefix `_` indicates internal details
+
+#### **Phase 4: Advanced Patterns** (Future)
+- Learn programming logic through game mechanics:
+  - **Loops** — How enemy waves are generated in patterns
+  - **Conditionals** — Pathfinding logic
+  - **Arrays & Objects** — Storing towers, enemies, projectiles
+  - **Callbacks** — Event handling and frame animation
+
+### 🚀 Quick Start
+
+**Play Online:**
+- [Lucas Game](https://yancyqin.github.io/lucasgame/)
+
+**Local Development:**
+```bash
+cd lucasgame
+python3 -m http.server 8080
+```
+
+### 📚 Learning Resources
+
+- **[LESSONS.md](LESSONS.md)** — 10 Complete Lessons (English-first with Chinese)
+- **[COMMON_MISTAKES.md](COMMON_MISTAKES.md)** — Common Errors & Solutions
+- **[CLAUDE.md](CLAUDE.md)** — AI Assistant Guide
 
 ---
 
@@ -59,55 +122,9 @@ python3 -m http.server 8080
 
 ### 📚 学习资源
 
-- **[LESSONS.md](LESSONS.md)** — 10 堂完整课程（中文优先）
+- **[LESSONS.md](LESSONS.md)** — 10 堂完整课程（英文优先，中文版本见下方）
 - **[COMMON_MISTAKES.md](COMMON_MISTAKES.md)** — 常见错误与解决方案
 - **[CLAUDE.md](CLAUDE.md)** — AI 助手指南
-
----
-
-## 📖 English Version
-
-### What is This?
-
-**Lucas Game** is a tower defense game built by a 12-year-old learning AI-assisted programming with his dad. It's not just a game—it's a **complete learning journey** in modern web development.
-
-### 🎯 Learning Journey
-
-#### **Phase 1: Foundation**
-- Start with HTML, CSS, and JavaScript
-- Learn game loops and DOM manipulation
-- **Skills:** Variables, functions, event listeners
-
-#### **Phase 2: Data & Balance**
-- Read and analyze code
-- Modify game data: prices, damage, health
-- **Skills:** Code reading, debugging, game balance
-
-#### **Phase 3: Modules & OOP**
-- Refactor to ES6 modules
-- Learn Object-Oriented Programming concepts
-- **Skills:** Encapsulation, composition, inheritance
-
-#### **Phase 4: Advanced Patterns** (Future)
-- Learn through real game mechanics
-- **Skills:** Loops, conditionals, arrays, callbacks
-
-### 🚀 Quick Start
-
-**Play Online:**
-- [Lucas Game](https://yancyqin.github.io/lucasgame/)
-
-**Local Development:**
-```bash
-cd lucasgame
-python3 -m http.server 8080
-```
-
-### 📚 Learning Resources
-
-- **[LESSONS.md](LESSONS.md)** — 10 Complete Lessons
-- **[COMMON_MISTAKES.md](COMMON_MISTAKES.md)** — Common Errors & Solutions
-- **[CLAUDE.md](CLAUDE.md)** — AI Assistant Guide
 
 ---
 
