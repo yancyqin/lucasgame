@@ -1,8 +1,6 @@
 # Lucas Game 🎮
 
-**[中文版本 →](https://github.com/yancyqin/lucasgame/blob/main/README.zh.md)**
-
-**[Play Online →](https://yancyqin.github.io/lucasgame/)**
+**[中文版本 ↓](#-中文版本)** | **[Play Online →](https://yancyqin.github.io/lucasgame/)**
 
 ---
 
@@ -122,7 +120,7 @@ python3 -m http.server 8080
 
 ### 📚 学习资源
 
-- **[LESSONS.md](LESSONS.md)** — 10 堂完整课程（英文优先，中文版本见下方）
+- **[LESSONS.md](LESSONS.md)** — 10 堂完整课程（英文优先，中文版本见文档内）
 - **[COMMON_MISTAKES.md](COMMON_MISTAKES.md)** — 常见错误与解决方案
 - **[CLAUDE.md](CLAUDE.md)** — AI 助手指南
 
