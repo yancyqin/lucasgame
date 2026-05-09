@@ -53,6 +53,64 @@ export const MINE = { label: '9 Mine $80', color: '#a07830', cost: 80, income: 2
 export const GUARD_CONFIG = { label: '0 Guard $60', color: '#4488cc', cost: 60 };
 export const CAMP = { label: 'C Camp $120', color: '#7a6030', cost: 120 };
 
+// ── Tower upgrades ─────────────────────────────────────────────────────────────
+// UPGRADE_COST: how much it costs to upgrade (multiplied by the tower's original cost)
+export const UPGRADE_COST = { 2: 0.6, 3: 1.0 };
+// UPGRADE_MULT: how much each stat is multiplied when upgrading
+export const UPGRADE_MULT = {
+  2: { damage: 1.4, range: 1.15, fireRate: 0.85 },  // level 2: stronger, faster
+  3: { damage: 2.0, range: 1.3,  fireRate: 0.7  },  // level 3: max power!
+};
+
+// ── Multiple camp types ────────────────────────────────────────────────────────
+// Each camp type spawns different kinds of soldiers
+export const CAMP_TYPES = {
+  basic:  { label: 'Basic Camp $120',  color: '#7a6030', cost: 120, soldierHp: 50,  soldierDmg: 8,  spawnRate: 420 },
+  archer: { label: 'Archer Camp $150', color: '#3a6a20', cost: 150, soldierHp: 35,  soldierDmg: 12, spawnRate: 380, ranged: true },
+  knight: { label: 'Knight Camp $180', color: '#3355aa', cost: 180, soldierHp: 100, soldierDmg: 15, spawnRate: 480 },
+  mage:   { label: 'Mage Camp $200',   color: '#883399', cost: 200, soldierHp: 40,  soldierDmg: 20, spawnRate: 500, magic: true },
+  siege:  { label: 'Siege Camp $240',  color: '#885522', cost: 240, soldierHp: 80,  soldierDmg: 30, spawnRate: 600, aoe: true },
+};
+
+// ── Shop items ─────────────────────────────────────────────────────────────────
+// These are items players can buy in the shop (press P to open)
+export const SHOP_ITEMS = [
+  // Allies — summon friendly units
+  { id:'ally_dragon',   name:'Dragon Ally',     icon:'🐉', cost:300, desc:'Spawn a friendly dragon',     category:'ally'    },
+  { id:'ally_knight',   name:'War Knight',       icon:'⚔️', cost:120, desc:'3 powerful knights',          category:'ally'    },
+  { id:'ally_wizard',   name:'Court Wizard',     icon:'🧙', cost:150, desc:'Ranged magic ally',           category:'ally'    },
+  { id:'ally_griffin',  name:'Griffin',          icon:'🦅', cost:200, desc:'Fast flying ally',            category:'ally'    },
+  { id:'ally_golem',    name:'Stone Golem',      icon:'🗿', cost:180, desc:'Slow but very tanky',         category:'ally'    },
+  // Power-ups — one-time use boosts
+  { id:'pow_airstrike', name:'Airstrike',        icon:'✈️', cost:80,  desc:'Bomb all enemies',            category:'power'   },
+  { id:'pow_meteor',    name:'Meteor Strike',    icon:'☄️', cost:120, desc:'Massive AOE damage',          category:'power'   },
+  { id:'pow_freeze',    name:'Freeze Bomb',      icon:'❄️', cost:60,  desc:'Freeze all enemies 5s',       category:'power'   },
+  { id:'pow_heal',      name:'Repair Castle',    icon:'🏰', cost:50,  desc:'Restore 20% castle HP',       category:'power'   },
+  { id:'pow_gold',      name:'Gold Rush',        icon:'💰', cost:40,  desc:'+150 gold instantly',         category:'power'   },
+  { id:'pow_rage',      name:'Tower Rage',       icon:'🔥', cost:70,  desc:'All towers 2x speed 30s',     category:'power'   },
+  { id:'pow_shield',    name:'Castle Shield',    icon:'🛡️', cost:90,  desc:'Castle invincible 10s',       category:'power'   },
+  { id:'pow_lightning', name:'Chain Lightning',  icon:'⚡', cost:65,  desc:'Strike 10 enemies at once',   category:'power'   },
+  { id:'pow_poison',    name:'Poison Cloud',     icon:'☠️', cost:55,  desc:'Poison all enemies',          category:'power'   },
+  { id:'pow_time',      name:'Time Slow',        icon:'⏳', cost:85,  desc:'Half enemy speed 20s',        category:'power'   },
+  // Permanent upgrades — last for the whole level
+  { id:'upg_dmg',       name:'+25% Damage',      icon:'💥', cost:100, desc:'All towers +25% damage',      category:'upgrade' },
+  { id:'upg_range',     name:'+20% Range',       icon:'🎯', cost:80,  desc:'All towers +20% range',       category:'upgrade' },
+  { id:'upg_gold',      name:'+30% Gold',        icon:'🪙', cost:90,  desc:'Earn 30% more per kill',      category:'upgrade' },
+  { id:'upg_castle',    name:'Reinforce Castle', icon:'🏯', cost:110, desc:'Castle max HP +50%',          category:'upgrade' },
+  { id:'upg_speed',     name:'Swift Soldiers',   icon:'👟', cost:70,  desc:'Soldiers move 50% faster',    category:'upgrade' },
+  { id:'upg_spawn',     name:'Rapid Training',   icon:'⏱️', cost:80,  desc:'Camps spawn 2x faster',       category:'upgrade' },
+  { id:'upg_armor',     name:'Tower Armor',      icon:'🛡', cost:90,  desc:'Towers take 50% less damage', category:'upgrade' },
+  { id:'upg_bounce',    name:'Bouncing Arrows',  icon:'🏹', cost:75,  desc:'Arrows bounce to 2nd target', category:'upgrade' },
+  { id:'upg_multi',     name:'Multishot',        icon:'🌟', cost:120, desc:'Towers fire 2 projectiles',   category:'upgrade' },
+  { id:'upg_regen',     name:'HP Regen',         icon:'💚', cost:85,  desc:'Towers slowly regenerate HP', category:'upgrade' },
+  // Special items
+  { id:'sp_nuke',       name:'Nuclear Option',   icon:'💣', cost:400, desc:'Instantly kill ALL enemies',  category:'special' },
+  { id:'sp_angel',      name:'Angel Guard',      icon:'👼', cost:250, desc:'Invincible guard for 60s',    category:'special' },
+  { id:'sp_chest',      name:'Treasure Chest',   icon:'🎁', cost:30,  desc:'Random reward (50-500g)',     category:'special' },
+  { id:'sp_clone',      name:'Tower Clone',      icon:'🔮', cost:160, desc:'Duplicate selected tower',    category:'special' },
+  { id:'sp_berserk',    name:'Berserker Mode',   icon:'😤', cost:140, desc:'Enemies fight each other 15s',category:'special' },
+];
+
 // ── Procedural 100-level generation ─────────────────────────────────────────
 
 const ALL_TOWERS  = ['basic', 'sniper', 'rapid', 'slow', 'fire', 'ice', 'lightning', 'earth'];
@@ -114,18 +172,36 @@ export function generateLevels(count = 100) {
 export const LEVELS = generateLevels();
 
 export const ACHIEVEMENTS = [
-  { id: 'first_win',     name: 'First Victory',  desc: 'Complete level 1',           icon: '🏆' },
-  { id: 'soldier',       name: 'Soldier',         desc: 'Complete level 2',           icon: '⚔️' },
-  { id: 'warrior',       name: 'Warrior',         desc: 'Complete level 3',           icon: '🛡️' },
-  { id: 'champion',      name: 'Champion',        desc: 'Complete level 4',           icon: '👑' },
-  { id: 'legend',        name: 'Legend',          desc: 'Complete all 5 levels',      icon: '🐉' },
-  { id: 'veteran',       name: 'Veteran',         desc: 'Complete level 10',          icon: '🗡️' },
-  { id: 'master',        name: 'Master',          desc: 'Complete level 25',          icon: '⚡' },
-  { id: 'mythic',        name: 'Mythic',          desc: 'Complete level 50',          icon: '🔥' },
-  { id: 'ancient',       name: 'Ancient',         desc: 'Complete level 100',         icon: '🌟' },
-  { id: 'dragon_slayer', name: 'Dragon Slayer',   desc: 'Kill your first dragon',     icon: '🗡️' },
-  { id: 'miner',         name: 'Mine Baron',      desc: 'Place 3 mines in one game',  icon: '⛏️' },
-  { id: 'fortified',     name: 'Fortified',       desc: 'Place 5 traps in one game',  icon: '🏰' },
+  { id: 'first_win',     name: 'First Victory',  desc: 'Complete level 1',                       icon: '🏆'  },
+  { id: 'soldier',       name: 'Soldier',         desc: 'Complete level 2',                       icon: '⚔️'  },
+  { id: 'warrior',       name: 'Warrior',         desc: 'Complete level 3',                       icon: '🛡️'  },
+  { id: 'champion',      name: 'Champion',        desc: 'Complete level 4',                       icon: '👑'  },
+  { id: 'legend',        name: 'Legend',          desc: 'Complete all 5 levels',                  icon: '🐉'  },
+  { id: 'veteran',       name: 'Veteran',         desc: 'Complete level 10',                      icon: '🗡️'  },
+  { id: 'master',        name: 'Master',          desc: 'Complete level 25',                      icon: '⚡'  },
+  { id: 'mythic',        name: 'Mythic',          desc: 'Complete level 50',                      icon: '🔥'  },
+  { id: 'ancient',       name: 'Ancient',         desc: 'Complete level 100',                     icon: '🌟'  },
+  { id: 'dragon_slayer', name: 'Dragon Slayer',   desc: 'Kill your first dragon',                 icon: '🗡️'  },
+  { id: 'miner',         name: 'Mine Baron',      desc: 'Place 3 mines in one game',              icon: '⛏️'  },
+  { id: 'fortified',     name: 'Fortified',       desc: 'Place 5 traps in one game',              icon: '🏰'  },
+  // New achievements!
+  { id: 'wave5',         name: 'Survivor',        desc: 'Survive 5 waves in a row',               icon: '🌊'  },
+  { id: 'tower10',       name: 'Builder',         desc: 'Place 10 towers in one game',            icon: '🏗️'  },
+  { id: 'kill100',       name: 'Centurion',       desc: 'Kill 100 enemies total',                 icon: '💀'  },
+  { id: 'kill500',       name: 'Terminator',      desc: 'Kill 500 enemies total',                 icon: '☠️'  },
+  { id: 'no_damage',     name: 'Perfect',         desc: 'Complete a level with no castle damage', icon: '✨'  },
+  { id: 'shop_buyer',    name: 'Shopaholic',      desc: 'Buy 5 items from the shop',              icon: '🛒'  },
+  { id: 'upgrade_max',   name: 'Maxed Out',       desc: 'Upgrade a tower to Lv3',                 icon: '⬆️'  },
+  { id: 'soldier5',      name: 'Small Army',      desc: 'Have 5 soldiers at once',                icon: '⚔️'  },
+  { id: 'soldier15',     name: 'General',         desc: 'Have 15 soldiers at once',               icon: '🎖️'  },
+  { id: 'daily_spin',    name: 'Daily Player',    desc: 'Use the daily wheel',                    icon: '🎡'  },
+  { id: 'camp5',         name: 'Field Commander', desc: 'Place 5 camps',                          icon: '⛺'  },
+  { id: 'all_towers',    name: 'Arsenal',         desc: 'Have all 8 tower types placed',          icon: '🏰'  },
+  { id: 'rich',          name: 'Loaded',          desc: 'Reach $500 gold at once',                icon: '💵'  },
+  { id: 'endure',        name: 'Endurance',       desc: 'Complete level 20',                      icon: '🛡️'  },
+  { id: 'unstoppable',   name: 'Unstoppable',     desc: 'Complete level 50',                      icon: '🌟'  },
+  { id: 'nuke',          name: 'Overkill',        desc: 'Use the Nuclear Option',                 icon: '💣'  },
+  { id: 'freeze',        name: 'Ice Age',         desc: 'Freeze all enemies',                     icon: '🧊'  },
 ];
 
 export const MAX_MONEY = 500;

@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, LEVELS, ACHIEVEMENTS, makePath, MAX_MONEY, distance } from './constants.js?v=14';
-import { GameMap }     from './Map.js?v=14';
-import { Tower }       from './Tower.js?v=14';
-import { Enemy }       from './Enemy.js?v=14';
-import { Projectile }  from './Projectile.js?v=14';
-import { Trap }        from './Trap.js?v=14';
-import { Mine }        from './Mine.js?v=14';
-import { WaveManager } from './WaveManager.js?v=14';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=15';
+import { GameMap }     from './Map.js?v=15';
+import { Tower }       from './Tower.js?v=15';
+import { Enemy }       from './Enemy.js?v=15';
+import { Projectile }  from './Projectile.js?v=15';
+import { Trap }        from './Trap.js?v=15';
+import { Mine }        from './Mine.js?v=15';
+import { WaveManager } from './WaveManager.js?v=15';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -101,36 +101,42 @@ class Worker {
   }
 }
 
+// Camp now supports multiple camp types — basic, archer, knight, mage, siege
 class Camp {
-  constructor(x, y) {
+  constructor(x, y, campTypeName = 'basic') {
     this.x = x; this.y = y;
+    this.campType = CAMP_TYPES[campTypeName] || CAMP_TYPES.basic; // store the type config
+    this.typeName = campTypeName;
     this.hp = 100; this.maxHp = 100;
     this.spawnTimer = 0;
-    this.spawnRate = 420; // spawn a soldier every 7 seconds
+    this.spawnRate = this.campType.spawnRate; // different types spawn at different rates
   }
   takeDamage(amt) { this.hp -= amt; }
   isDead() { return this.hp <= 0; }
   draw(ctx) {
     const hf = this.hp / this.maxHp;
+    const c = this.campType.color; // each camp type has its own color
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
     ctx.save(); ctx.translate(this.x+4, this.y+22); ctx.scale(1, 0.3);
     ctx.beginPath(); ctx.arc(0,0,28,0,Math.PI*2); ctx.fill(); ctx.restore();
-    // Tent body
-    ctx.fillStyle = '#7a6030';
+    // Tent body (use camp's color)
+    ctx.fillStyle = c;
     ctx.beginPath(); ctx.moveTo(this.x-28,this.y+18); ctx.lineTo(this.x,this.y-26); ctx.lineTo(this.x+28,this.y+18); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#9a8040';
+    // Lighter highlight stripe
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.beginPath(); ctx.moveTo(this.x-22,this.y+18); ctx.lineTo(this.x-2,this.y-22); ctx.lineTo(this.x+2,this.y-22); ctx.lineTo(this.x+22,this.y+18); ctx.closePath(); ctx.fill();
     // Door
     ctx.fillStyle = '#2a1408'; ctx.fillRect(this.x-7, this.y+2, 14, 16);
-    // Flag pole + flag
+    // Flag pole + flag (color matches camp type)
     ctx.fillStyle = '#3a1a05'; ctx.fillRect(this.x-1, this.y-42, 2, 20);
-    ctx.fillStyle = '#2255aa'; ctx.fillRect(this.x+1, this.y-42, 14, 9);
+    ctx.fillStyle = c; ctx.fillRect(this.x+1, this.y-42, 14, 9);
     ctx.fillStyle = '#ffd700'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('★', this.x+8, this.y-35); ctx.textAlign = 'left';
-    // Label
+    // Type label
+    const shortNames = { basic:'CAMP', archer:'ARCHER', knight:'KNIGHT', mage:'MAGE', siege:'SIEGE' };
     ctx.fillStyle = '#ffd700'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('CAMP', this.x, this.y+36); ctx.textAlign = 'left';
+    ctx.fillText(shortNames[this.typeName] || 'CAMP', this.x, this.y+36); ctx.textAlign = 'left';
     // HP bar
     ctx.fillStyle = '#111'; ctx.fillRect(this.x-22, this.y+40, 44, 5);
     ctx.fillStyle = hf > 0.5 ? '#0f0' : '#f80';
@@ -138,12 +144,16 @@ class Camp {
   }
 }
 
+// Soldier now gets stats from its camp type (hp, damage vary by camp)
 class Soldier {
-  constructor(x, y) {
+  constructor(x, y, campType = null) {
     this.x = x; this.y = y;
-    this.hp = 50; this.maxHp = 50;
+    // Use camp type stats if provided, otherwise fall back to defaults
+    const hp  = campType ? campType.soldierHp  : 50;
+    const dmg = campType ? campType.soldierDmg : 8;
+    this.hp = hp; this.maxHp = hp;
     this.speed = 1.0;
-    this.damage = 8;
+    this.damage = dmg;
     this.range = 52;
     this.waypoint = 0; // will be set to path.length-1 on spawn
     this.attackTimer = 0;
@@ -288,6 +298,32 @@ class Game {
     this.typeKeys  = Object.keys(TYPES);
     this.trapKeys  = Object.keys(TRAPS);
 
+    // ── Shop state ─────────────────────────────────────────────────────────────
+    this.shopOpen   = false;   // is the shop overlay open?
+    this.shopScroll = 0;       // for future scrolling
+    this.shopBuyCount = 0;     // track how many items bought (for 'shopaholic' achievement)
+
+    // ── Daily Wheel state ──────────────────────────────────────────────────────
+    this.wheelOpen     = false;  // is the wheel overlay showing?
+    this.wheelAngle    = 0;      // current rotation of the wheel (radians)
+    this.wheelSpinning = false;  // is the wheel currently spinning?
+    this.wheelResult   = null;   // the prize we landed on
+    this.wheelSpeed    = 0;      // current spin speed (radians per frame)
+    this.pendingWheelReward = null; // reward waiting to be applied when level starts
+
+    // ── Gameplay tracking for achievements ─────────────────────────────────────
+    this.totalKills    = 0;    // total enemies killed across all play (for kill achievements)
+    this.towerPlaceCount = 0;  // towers placed in this game (for 'builder' achievement)
+
+    // ── Active power-up timers ──────────────────────────────────────────────────
+    this.rageTimer    = 0;   // Tower Rage: all towers fire 2x faster
+    this.shieldTimer  = 0;   // Castle Shield: castle can't take damage
+    this.timeSlowTimer= 0;   // Time Slow: enemies move at half speed
+    this.poisonTimer  = 0;   // Poison Cloud: enemies take damage over time
+    this.goldBonus    = 1.0; // +30% Gold upgrade multiplier
+    this.armorActive  = false; // Tower Armor: towers take half damage
+    this.regenActive  = false; // HP Regen: towers slowly heal
+
     this.titleActive    = true;
     this.selectedLevelId = 1;
 
@@ -299,18 +335,51 @@ class Game {
   // ── Update ──────────────────────────────────────────────────────────────────
 
   update() {
+    // Tick the wheel spin animation even on title screen
+    if (this.wheelSpinning) {
+      this.wheelAngle += this.wheelSpeed;
+      this.wheelSpeed *= 0.985; // gradually slow down
+      if (this.wheelSpeed < 0.005) {
+        // Wheel has stopped! Figure out the prize
+        this.wheelSpinning = false;
+        this._resolveWheelPrize();
+      }
+    }
+
     if (this.titleActive || this.gameOver || this.levelComplete) return;
     if (this.flashTimer > 0) this.flashTimer--;
+
+    // Tick down power-up timers
+    if (this.rageTimer     > 0) this.rageTimer--;
+    if (this.shieldTimer   > 0) this.shieldTimer--;
+    if (this.timeSlowTimer > 0) this.timeSlowTimer--;
+    if (this.poisonTimer   > 0) {
+      this.poisonTimer--;
+      // Poison does a tiny bit of damage to every enemy each frame
+      for (const e of this.enemies) e.takeDamage(0.1);
+    }
+
+    // HP Regen — towers slowly heal over time if the upgrade is active
+    if (this.regenActive) {
+      for (const t of this.towers) {
+        if (t.hp < t.maxHp) t.hp = Math.min(t.hp + 0.005, t.maxHp);
+      }
+    }
 
     const waveResult = this.waveManager.update(this.enemies.length);
     if (typeof waveResult === 'string') {
       const diff = this.currentLevel ? this.currentLevel.difficulty : 1;
-      this.enemies.push(new Enemy(waveResult, this.path[0].x - 40, this.path[0].y, diff));
+      // Apply Time Slow if active — enemies spawn slower
+      const e = new Enemy(waveResult, this.path[0].x - 40, this.path[0].y, diff);
+      if (this.timeSlowTimer > 0) e.speed *= 0.5;
+      this.enemies.push(e);
     } else if (waveResult?.levelComplete) {
       this.money = Math.min(this.money + waveResult.bonus, MAX_MONEY);
       this._onLevelComplete();
     } else if (waveResult?.waveCleared) {
       this.money = Math.min(this.money + waveResult.bonus, MAX_MONEY);
+      // Wave 5 achievement
+      if (this.waveManager.wave >= 5) this._grantAchievement('wave5');
       this._updateButtons();
     }
 
@@ -343,14 +412,26 @@ class Game {
     }
     for (const e of this.enemies) {
       if (e.atGate) {
-        this.castleHp -= e.castleDamage / 60;
-        if (this.castleHp <= 0) { this.castleHp = 0; this.gameOver = true; }
+        // Castle Shield blocks all damage!
+        if (this.shieldTimer <= 0) {
+          this.castleHp -= e.castleDamage / 60;
+          if (this.castleHp <= 0) { this.castleHp = 0; this.gameOver = true; }
+        }
       }
     }
 
     for (const t of this.towers) {
       // In 3D view the viewTower handles its own cooldown but still auto-fires other towers
       if (t === this.selectedTower || t === this.viewTower) { if (t.manualCooldown > 0) t.manualCooldown--; continue; }
+      // Tower Rage: temporarily halve fire rate (fires 2x as fast)
+      if (this.rageTimer > 0) {
+        const savedRate = t._savedFireRate || t.fireRate;
+        t._savedFireRate = savedRate;
+        t.fireRate = Math.max(1, Math.floor(savedRate / 2));
+      } else if (t._savedFireRate) {
+        t.fireRate = t._savedFireRate; // restore original fire rate when rage ends
+        t._savedFireRate = null;
+      }
       t.update(this.enemies, this.projectiles);
     }
 
@@ -373,14 +454,23 @@ class Game {
 
     for (const trap of this.traps) trap.update(this.enemies);
 
-    // Camps spawn soldiers
+    // Camps spawn soldiers — each camp type spawns soldiers with different stats
     for (const camp of this.camps) {
+      // Rapid Training upgrade makes camps spawn 2x faster
+      const effectiveRate = this.rapidSpawnActive ? Math.floor(camp.spawnRate / 2) : camp.spawnRate;
       camp.spawnTimer++;
-      if (camp.spawnTimer >= camp.spawnRate) {
+      if (camp.spawnTimer >= effectiveRate) {
         camp.spawnTimer = 0;
         if (this.soldiers.length < this.camps.length * 3) {
           const pathEnd = this.path[this.path.length - 1];
-          const sol = new Soldier(pathEnd.x - 30 + Math.random()*20, pathEnd.y - 10 + Math.random()*20);
+          // Pass the camp's type so soldier gets the right HP and damage
+          const sol = new Soldier(
+            pathEnd.x - 30 + Math.random()*20,
+            pathEnd.y - 10 + Math.random()*20,
+            camp.campType  // <-- this is what gives different soldier stats
+          );
+          // Swift Soldiers upgrade
+          if (this.swiftSoldiers) sol.speed *= 1.5;
           sol.waypoint = this.path.length - 1;
           this.soldiers.push(sol);
         }
@@ -390,10 +480,19 @@ class Game {
     for (const s of this.soldiers) s.update(this.enemies, this.path);
     this.soldiers = this.soldiers.filter(s => !s.isDead());
 
+    // Check soldier count achievements
+    if (this.soldiers.length >= 5)  this._grantAchievement('soldier5');
+    if (this.soldiers.length >= 15) this._grantAchievement('soldier15');
+    // Check camp count achievement
+    if (this.camps.length >= 5) this._grantAchievement('camp5');
+
     for (const t of this.towers) {
       for (const e of this.enemies) {
         if (distance(t, e) < 55) {
-          t.takeDamage(e.kind === 'dragonRider' ? 0.08 : e.kind === 'dragon' ? 0.05 : 0.015);
+          let dmg = e.kind === 'dragonRider' ? 0.08 : e.kind === 'dragon' ? 0.05 : 0.015;
+          // Tower Armor upgrade: towers take 50% less damage
+          if (this.armorActive) dmg *= 0.5;
+          t.takeDamage(dmg);
           e.triggerAttack(t.x, t.y);
         }
       }
@@ -416,22 +515,52 @@ class Game {
     }
     this.traps = this.traps.filter(t => !t.isDead());
 
+    // Apply time slow to all enemies that are currently on the field
+    if (this.timeSlowTimer > 0) {
+      for (const e of this.enemies) {
+        if (!e._slowApplied) { e.speed *= 0.5; e._slowApplied = true; }
+      }
+    } else {
+      // Time slow expired — restore speeds
+      for (const e of this.enemies) {
+        if (e._slowApplied) { e.speed /= 0.5; e._slowApplied = false; }
+      }
+    }
+
     const before = this.enemies.length;
     this.enemies = this.enemies.filter(e => {
       if (e.isDead()) {
         if (e.kind === 'dragon' || e.kind === 'dragonRider') this._grantAchievement('dragon_slayer');
         this.score++;
-        this.money = Math.min(this.money + e.reward, MAX_MONEY);
+        this.totalKills++;
+        // Apply gold bonus multiplier (from +30% Gold upgrade)
+        const goldEarned = Math.ceil(e.reward * this.goldBonus);
+        this.money = Math.min(this.money + goldEarned, MAX_MONEY);
         return false;
       }
       return true;
     });
     if (this.enemies.length < before) this._updateButtons();
+
+    // Kill count achievements
+    if (this.totalKills >= 100) this._grantAchievement('kill100');
+    if (this.totalKills >= 500) this._grantAchievement('kill500');
+    // Rich achievement
+    if (this.money >= 500) this._grantAchievement('rich');
+    // All towers achievement — check if all 8 tower types are placed
+    const placedTypes = new Set(this.towers.map(t => t.typeKey));
+    if (placedTypes.size >= 8) this._grantAchievement('all_towers');
   }
 
   // ── Draw ────────────────────────────────────────────────────────────────────
 
   draw() {
+    // Special case: wheel open from title screen
+    if (this.wheelOpen && !this.currentLevel && !this.gameOver) {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this._drawWheel();
+      return;
+    }
     if (this.titleActive) return;
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -460,6 +589,10 @@ class Game {
     this._drawHint();
     this._drawGameOver();
     this._drawLevelComplete();
+    // Draw shop on top of everything if it's open
+    if (this.shopOpen) this._drawShop();
+    // Draw wheel on top if it's open
+    if (this.wheelOpen) this._drawWheel();
   }
 
   // ── Public actions ───────────────────────────────────────────────────────────
@@ -472,6 +605,9 @@ class Game {
     if (this.money < type.cost) { this.flash(`Need $${type.cost} — you have $${this.money}!`); return false; }
     this.towers.push(new Tower(x, y, this.selectedType));
     this.money -= type.cost;
+    this.towerPlaceCount++;
+    // Tower count achievement
+    if (this.towerPlaceCount >= 10) this._grantAchievement('tower10');
     this._updateButtons();
     return true;
   }
@@ -506,13 +642,20 @@ class Game {
   }
 
   tryPlaceCamp(x, y) {
-    if (this.money < CAMP.cost) { this.flash(`Need $${CAMP.cost} for Camp`); return; }
+    // Enforce 10 camp limit
+    if (this.camps.length >= 10) { this.flash('Camp limit reached! (10 max)'); return; }
     if (this.map.isOnPath(x, y)) { this.flash("Can't place camp on the path!"); return; }
     if (this.map.isOnFeature(x, y)) { this.flash("Too close to a tree or rock!"); return; }
-    this.money -= CAMP.cost;
-    this.camps.push(new Camp(x, y));
+
+    // Figure out which camp type is selected (selectedType = 'camp_basic', 'camp_archer', etc.)
+    const typeName = this.selectedType.replace('camp_', '');
+    const campCfg  = CAMP_TYPES[typeName] || CAMP_TYPES.basic;
+
+    if (this.money < campCfg.cost) { this.flash(`Need $${campCfg.cost} for ${campCfg.label}`); return; }
+    this.money -= campCfg.cost;
+    this.camps.push(new Camp(x, y, typeName));
     this._updateButtons();
-    this.flash('Camp placed! Soldiers will spawn every 7s');
+    this.flash(`${campCfg.label.replace(/ \$\d+/, '')} placed! Soldiers will spawn!`);
   }
 
   hireWorker() {
@@ -865,6 +1008,23 @@ class Game {
     sg.addColorStop(0, '#0d1a2a'); sg.addColorStop(0.55, '#1a3a5a'); sg.addColorStop(1, '#3a5a48');
     ctx.fillStyle = sg; ctx.fillRect(0, 0, W, horizon);
 
+    // Sun (glowing circle in the sky) — positioned based on camYaw
+    const sunX = W * 0.5 + Math.sin(this.camYaw) * W * 0.4;
+    const sunY = horizon * 0.3;
+    if (sunX > -60 && sunX < W + 60) {
+      ctx.save();
+      ctx.shadowColor = '#ffdd44'; ctx.shadowBlur = 40;
+      ctx.fillStyle = '#ffee88';
+      ctx.beginPath(); ctx.arc(sunX, sunY, 22, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0; ctx.restore();
+      // Sun glow ring
+      const sunGlow = ctx.createRadialGradient(sunX, sunY, 20, sunX, sunY, 60);
+      sunGlow.addColorStop(0, 'rgba(255,220,100,0.3)');
+      sunGlow.addColorStop(1, 'rgba(255,220,100,0)');
+      ctx.fillStyle = sunGlow;
+      ctx.beginPath(); ctx.arc(sunX, sunY, 60, 0, Math.PI*2); ctx.fill();
+    }
+
     // Distant clouds
     ctx.fillStyle = 'rgba(200,200,175,0.07)';
     for (let i = 0; i < 5; i++) {
@@ -882,8 +1042,17 @@ class Game {
 
     // ── GROUND ──
     const gg = ctx.createLinearGradient(0, horizon, 0, H);
-    gg.addColorStop(0, '#3a4824'); gg.addColorStop(0.45, '#30401c'); gg.addColorStop(1, '#242e14');
+    gg.addColorStop(0, '#3a4824'); gg.addColorStop(0.3, '#30401c'); gg.addColorStop(0.6, '#2a3815'); gg.addColorStop(1, '#1e2c0e');
     ctx.fillStyle = gg; ctx.fillRect(0, horizon, W, H - horizon);
+
+    // Dirt texture strips — alternating slightly darker patches for variety
+    ctx.strokeStyle = 'rgba(20,10,0,0.08)'; ctx.lineWidth = 14;
+    for (let z = 30; z <= 600; z += 60) {
+      const lp = proj(cx + cosA*z - sinA*400, cy + sinA*z + cosA*400);
+      const rp = proj(cx + cosA*z + sinA*400, cy + sinA*z - cosA*400);
+      if (!lp || !rp) continue;
+      ctx.beginPath(); ctx.moveTo(lp.x, lp.y); ctx.lineTo(rp.x, rp.y); ctx.stroke();
+    }
 
     // Perspective depth grid
     ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.lineWidth = 1;
@@ -892,6 +1061,17 @@ class Game {
       const rp = proj(cx + cosA*z + sinA*500, cy + sinA*z - cosA*500);
       if (!lp || !rp) continue;
       ctx.beginPath(); ctx.moveTo(lp.x, lp.y); ctx.lineTo(rp.x, rp.y); ctx.stroke();
+    }
+
+    // ── CRATERS (dark ellipses on the ground) ──
+    for (const cr of (this.map.craters || [])) {
+      const p = proj(cr.x, cr.y);
+      if (!p || p.fwd < 5 || p.x < -80 || p.x > W+80) continue;
+      const rw = cr.r * p.sc * 2.5, rh = rw * 0.35;
+      ctx.fillStyle = 'rgba(15,8,0,0.45)';
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, rw, rh, 0, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = 'rgba(80,50,20,0.3)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, rw, rh, 0, 0, Math.PI*2); ctx.stroke();
     }
 
     // ── PATH ──
@@ -924,9 +1104,15 @@ class Game {
       const p = proj(e.x, e.y);
       if (p) objs.push({ kind:'enemy', p, e });
     }
+    // Also add fire positions to the sort list
+    for (const f of (this.map.fires || [])) {
+      const p = proj(f.x, f.y);
+      if (p && p.x > -50 && p.x < W+50) objs.push({ kind:'fire', p, f });
+    }
     objs.sort((a,b) => b.p.fwd - a.p.fwd);
 
     const openB = H * 0.73; // bottom of viewport opening
+    const ft3d = Date.now() / 120; // time variable for fire flicker animation
     for (const obj of objs) {
       const { p } = obj;
       if (obj.kind === 'tree') {
@@ -938,6 +1124,36 @@ class Game {
         ctx.beginPath(); ctx.arc(p.x, gy - sz*2.2, sz, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#2e5a24';
         ctx.beginPath(); ctx.arc(p.x - sz*0.15, gy - sz*2.5, sz*0.72, 0, Math.PI*2); ctx.fill();
+        // Atmospheric fog for far trees
+        if (p.fwd > 200) {
+          const fogAlpha = Math.min(0.7, (p.fwd - 200) / 300);
+          ctx.fillStyle = `rgba(100,110,90,${fogAlpha})`;
+          const gy2 = Math.min(p.y, openB);
+          ctx.beginPath(); ctx.arc(p.x, gy2 - sz*2.2, sz * 1.1, 0, Math.PI*2); ctx.fill();
+        }
+      } else if (obj.kind === 'fire') {
+        // Fire particles — flickering orange triangles
+        const { f } = obj;
+        const sz = f.size * p.sc * 2.5;
+        if (sz < 1) continue;
+        const fl = Math.sin(ft3d + f.x*0.1) * 0.3 + 0.7;
+        // Glow halo
+        ctx.fillStyle = `rgba(255,80,0,${0.35*fl})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, sz*1.8, 0, Math.PI*2); ctx.fill();
+        // Bright orange triangle (main flame)
+        ctx.fillStyle = '#ff4400';
+        ctx.beginPath();
+        ctx.moveTo(p.x - sz*0.5, p.y);
+        ctx.lineTo(p.x, p.y - sz*(1.5 + fl*0.5));
+        ctx.lineTo(p.x + sz*0.5, p.y);
+        ctx.closePath(); ctx.fill();
+        // Yellow inner flame
+        ctx.fillStyle = '#ffcc00';
+        ctx.beginPath();
+        ctx.moveTo(p.x - sz*0.25, p.y);
+        ctx.lineTo(p.x, p.y - sz*(1.0 + fl*0.3));
+        ctx.lineTo(p.x + sz*0.25, p.y);
+        ctx.closePath(); ctx.fill();
       } else {
         const { e } = obj;
         const sz = e.size * p.sc * 1.8;
@@ -964,7 +1180,38 @@ class Game {
         ctx.fillRect(p.x-bw/2, gy-bh-sz*1.9, bw*(e.hp/e.maxHp), 5);
         // Store for _shoot3D click detection
         e._3dx = p.x; e._3dy = gy - bh/2; e._3dr = Math.max(sz*1.3, 20);
+        // Atmospheric fog for far enemies
+        if (p.fwd > 200) {
+          const fogAlpha = Math.min(0.6, (p.fwd - 200) / 400);
+          ctx.fillStyle = `rgba(80,90,70,${fogAlpha})`;
+          ctx.fillRect(p.x-sz*0.72, gy-bh-sz*1.3, sz*1.44, bh + sz*1.3);
+        }
       }
+    }
+
+    // ── CASTLE WALL (projected 3D wall at path end) ──
+    const pathEnd = this.path[this.path.length - 1];
+    const wallP = proj(pathEnd.x, pathEnd.y);
+    if (wallP && wallP.x > -200 && wallP.x < W + 200) {
+      const wallW = 80 * wallP.sc, wallH = 120 * wallP.sc;
+      const wx = wallP.x - wallW / 2, wy = wallP.y - wallH;
+      // Wall body
+      ctx.fillStyle = '#555055';
+      ctx.fillRect(wx, wy, wallW, wallH);
+      // Stone texture lines on wall
+      ctx.strokeStyle = 'rgba(30,30,30,0.4)'; ctx.lineWidth = 1;
+      for (let row = wy; row < wy + wallH; row += wallH/6)
+        ctx.strokeRect(wx, row, wallW, wallH/6);
+      // Battlements on top
+      ctx.fillStyle = '#4a4050';
+      const mw = wallW / 5;
+      for (let m = 0; m < 5; m += 2) ctx.fillRect(wx + m * mw, wy - mw*0.8, mw*0.9, mw*0.8);
+      // Gate arch
+      ctx.fillStyle = '#1a1018';
+      ctx.beginPath();
+      ctx.arc(wallP.x, wy + wallH * 0.55, wallW * 0.2, Math.PI, Math.PI * 2);
+      ctx.rect(wallP.x - wallW*0.2, wy + wallH * 0.55, wallW*0.4, wallH*0.45);
+      ctx.fill();
     }
 
     // ── STONE BATTLEMENT FRAME ──
@@ -1009,6 +1256,22 @@ class Game {
     ctx.stroke();
     ctx.strokeStyle = 'rgba(255,230,80,0.35)';
     ctx.beginPath(); ctx.arc(mx2, my2, 14, 0, Math.PI*2); ctx.stroke();
+
+    // ── COMPASS (top-center) ──
+    const compassCx = W/2, compassCy = 28, compassR = 18;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath(); ctx.arc(compassCx, compassCy, compassR + 4, 0, Math.PI*2); ctx.fill();
+    // Draw N/S/E/W markers rotating with camera yaw
+    const dirs = [['N', 0], ['E', Math.PI/2], ['S', Math.PI], ['W', -Math.PI/2]];
+    for (const [label, baseAngle] of dirs) {
+      const angle = baseAngle - this.camYaw - Math.PI/2;
+      const lx = compassCx + Math.cos(angle) * compassR;
+      const ly = compassCy + Math.sin(angle) * compassR;
+      ctx.fillStyle = label === 'N' ? '#ff4444' : '#aaaaaa';
+      ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(label, lx, ly + 3);
+    }
+    ctx.textAlign = 'left';
 
     // ── HUD ──
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -1079,6 +1342,25 @@ class Game {
     this._updateButtons();
   }
 
+  // Upgrade a tower from level 1→2 or level 2→3
+  tryUpgradeTower(tower) {
+    if (tower.level >= 3) { this.flash('Already at MAX LEVEL!'); return; }
+    const nextLevel = tower.level + 1;
+    const cost = Math.floor(tower.cost * UPGRADE_COST[nextLevel]);
+    if (this.money < cost) { this.flash(`Need $${cost} to upgrade!`); return; }
+    const mult = UPGRADE_MULT[nextLevel];
+    // Apply the upgrade multipliers to the tower's stats
+    tower.damage   *= mult.damage;
+    tower.range    *= mult.range;
+    tower.fireRate  = Math.max(1, Math.floor(tower.fireRate * mult.fireRate));
+    tower.level     = nextLevel;
+    tower.hp = tower.maxHp; // heal to full on upgrade (nice reward!)
+    this.money -= cost;
+    this.flash(`Tower upgraded to Level ${nextLevel}! 💪`);
+    if (nextLevel === 3) this._grantAchievement('upgrade_max');
+    this._updateButtons();
+  }
+
   flash(msg) { this.flashMsg = msg; this.flashTimer = 120; }
 
   startLevel(levelDef) {
@@ -1117,8 +1399,26 @@ class Game {
     this.flashMsg = ''; this.flashTimer = 0;
     this.selectedTower = null;
     this.workers = 0; this.workerTimer = 0;
+    this.towerPlaceCount = 0; // reset tower count for this game
+
+    // Reset power-up state for new level
+    this.rageTimer = 0; this.shieldTimer = 0; this.timeSlowTimer = 0; this.poisonTimer = 0;
+    this.goldBonus = 1.0; this.armorActive = false; this.regenActive = false;
+    this.swiftSoldiers = false; this.rapidSpawnActive = false;
+    // Reset tower _savedFireRate flags
+    for (const t of this.towers) t._savedFireRate = null;
+
     this.waveManager.setLevel(levelDef);
+    this.selectedType = 'camp_basic'; // default to camp tab for clarity
+    // Actually default to first tower type
     this.selectedType = levelDef.towers[0];
+
+    // Apply pending wheel reward (from daily spin)
+    if (this.pendingWheelReward) {
+      this._applyWheelReward(this.pendingWheelReward);
+      this.pendingWheelReward = null;
+    }
+
     this._rebuildUI();
     document.getElementById('title-screen').style.display = 'none';
     this.titleActive = false;
@@ -1149,8 +1449,10 @@ class Game {
     const saved  = parseInt(localStorage.getItem('td_maxLevel') || '1');
     if (nextId <= LEVELS.length && nextId > saved)
       localStorage.setItem('td_maxLevel', String(nextId));
-    const achMap = { 1:'first_win', 2:'soldier', 3:'warrior', 4:'champion', 5:'legend', 10:'veteran', 25:'master', 50:'mythic', 100:'ancient' };
+    const achMap = { 1:'first_win', 2:'soldier', 3:'warrior', 4:'champion', 5:'legend', 10:'veteran', 20:'endure', 25:'master', 50:'unstoppable', 100:'ancient' };
     if (achMap[id]) this._grantAchievement(achMap[id]);
+    // Perfect — no castle damage taken!
+    if (this.castleHp >= this.castleMaxHp) this._grantAchievement('no_damage');
     this._updateButtons();
   }
 
@@ -1210,6 +1512,24 @@ class Game {
       const lvl = LEVELS.find(l => l.id === this.selectedLevelId);
       if (lvl) this.startLevel(lvl);
     };
+
+    // Add daily wheel button if it doesn't exist yet
+    if (!document.getElementById('ts-wheel-btn')) {
+      const wheelBtn = document.createElement('button');
+      wheelBtn.id = 'ts-wheel-btn';
+      wheelBtn.style.cssText = 'margin-top:10px;padding:10px 28px;font-size:16px;font-weight:bold;background:#334488;color:#fff;border:2px solid #6688ff;border-radius:8px;cursor:pointer;letter-spacing:1px;';
+      const alreadySpun = localStorage.getItem('td_last_spin') === new Date().toDateString();
+      wheelBtn.textContent = alreadySpun ? '🎡 Daily Spin (done)' : '🎡 DAILY SPIN';
+      wheelBtn.style.opacity = alreadySpun ? '0.5' : '1';
+      wheelBtn.onclick = () => {
+        // Hide title screen temporarily and show wheel
+        document.getElementById('title-screen').style.display = 'none';
+        this.titleActive = false; // let draw() run
+        this.wheelOpen = true;
+      };
+      // Insert after play button
+      playBtn.parentNode.insertBefore(wheelBtn, playBtn.nextSibling);
+    }
   }
 
   _drawTitleBg() {
@@ -1303,22 +1623,19 @@ class Game {
       ui.appendChild(btn);
     });
 
-    const mBtn = document.createElement('button');
-    mBtn.id = 'btn-mine';
-    mBtn.className = 'btn' + (this.selectedType === 'mine' ? ' selected' : '');
-    mBtn.textContent = MINE.label;
-    mBtn.style.background = MINE.color;
-    mBtn.style.outline = '2px solid #ffd700';
-    mBtn.onclick = () => this._selectType('mine');
-    ui.appendChild(mBtn);
+    // No mine button — mines are pre-placed only (players can't buy them)
 
-    const cBtn = document.createElement('button');
-    cBtn.id = 'btn-camp';
-    cBtn.className = 'btn' + (this.selectedType === 'camp' ? ' selected' : '');
-    cBtn.style.background = CAMP.color;
-    cBtn.textContent = `C Camp $${CAMP.cost}`;
-    cBtn.onclick = () => this._selectType('camp');
-    ui.appendChild(cBtn);
+    // 5 camp type buttons (one per camp type)
+    for (const [typeName, cfg] of Object.entries(CAMP_TYPES)) {
+      const btn = document.createElement('button');
+      btn.id = 'btn-camp_' + typeName;
+      btn.className = 'btn' + (this.selectedType === 'camp_' + typeName ? ' selected' : '');
+      btn.style.background = cfg.color;
+      btn.style.outline = '2px solid #ffd700';
+      btn.textContent = cfg.label;
+      btn.onclick = () => this._selectType('camp_' + typeName);
+      ui.appendChild(btn);
+    }
 
     const wBtn = document.createElement('button');
     wBtn.id = 'btn-worker';
@@ -1327,6 +1644,16 @@ class Game {
     wBtn.onclick = () => this.hireWorker();
     ui.appendChild(wBtn);
 
+    // Shop button
+    const shopBtn = document.createElement('button');
+    shopBtn.id = 'btn-shop';
+    shopBtn.className = 'btn';
+    shopBtn.style.background = '#442266';
+    shopBtn.style.outline = '2px solid #cc66ff';
+    shopBtn.textContent = '🛒 SHOP (P)';
+    shopBtn.onclick = () => { this.shopOpen = !this.shopOpen; };
+    ui.appendChild(shopBtn);
+
     this._updateButtons();
   }
 
@@ -1334,7 +1661,9 @@ class Game {
     if (this.viewMode === '3d-soldier') this._exit3DSoldier();
     this.selectedTower = null; // exit manual-shot mode when switching tool
     this.selectedType = key;
-    const allKeys = [...this.typeKeys, ...this.trapKeys.map(k => 'trap_' + k), 'mine', 'camp'];
+    // Build the list of all button IDs to update
+    const campKeys = Object.keys(CAMP_TYPES).map(n => 'camp_' + n);
+    const allKeys = [...this.typeKeys, ...this.trapKeys.map(k => 'trap_' + k), ...campKeys];
     for (const k of allKeys) {
       const btn = document.getElementById('btn-' + k);
       if (btn) btn.className = 'btn' + (k === key ? ' selected' : '');
@@ -1350,10 +1679,12 @@ class Game {
       const btn = document.getElementById('btn-trap_' + k);
       if (btn) btn.style.opacity = this.money >= TRAPS[k].cost ? '0.9' : '0.35';
     }
-    const mBtn = document.getElementById('btn-mine');
-    if (mBtn) mBtn.style.opacity = this.money >= MINE.cost ? '0.9' : '0.35';
-    const cBtn = document.getElementById('btn-camp');
-    if (cBtn) cBtn.style.opacity = this.money >= CAMP.cost ? '0.9' : '0.35';
+    // Update all 5 camp type buttons
+    for (const [typeName, cfg] of Object.entries(CAMP_TYPES)) {
+      const btn = document.getElementById('btn-camp_' + typeName);
+      const canAfford = this.money >= cfg.cost && this.camps.length < 10;
+      if (btn) btn.style.opacity = canAfford ? '0.9' : '0.35';
+    }
     const wBtn = document.getElementById('btn-worker');
     if (wBtn) {
       wBtn.style.opacity = this.money >= 35 && this.workers < 5 ? '0.9' : '0.35';
@@ -1390,9 +1721,17 @@ class Game {
     });
 
     this.canvas.addEventListener('click', e => {
-      if (this.gameOver || this.levelComplete || this.titleActive) return;
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
+
+      // Handle wheel clicks even from title screen
+      if (this.wheelOpen) { this._handleWheelClick(x, y); return; }
+
+      if (this.gameOver || this.levelComplete || this.titleActive) return;
+
+      // If shop is open, handle shop clicks
+      if (this.shopOpen) { this._handleShopClick(x, y); return; }
+
       // 3D view: exit button or shoot — but suppress if user was rotating camera
       if (this.viewMode === '3d') {
         const openR = this.canvas.width * 0.86;
@@ -1413,10 +1752,17 @@ class Game {
       // Click on soldier → enter 3D soldier view
       const clickedSoldier = this.soldiers.find(s => Math.hypot(s.x-x, s.y-y) < 16);
       if (clickedSoldier) { this._enter3DSoldier(clickedSoldier); return; }
+
+      // Click on tower → check for upgrade panel click, or enter 3D view
+      if (this.selectedTower) {
+        // Check if clicked the upgrade button area (drawn in _drawHUD)
+        if (this._checkUpgradeClick(x, y)) return;
+        this.tryFireManual(x, y); return;
+      }
       if (this.trySelectTower(x, y)) return;
-      if (this.selectedTower) { this.tryFireManual(x, y); return; }
       if (this.selectedType === 'mine')  { this.tryPlaceMine(x, y); return; }
-      if (this.selectedType === 'camp')  { this.tryPlaceCamp(x, y); return; }
+      // Camp types are named 'camp_basic', 'camp_archer', etc.
+      if (this.selectedType.startsWith('camp_')) { this.tryPlaceCamp(x, y); return; }
       if (this.selectedType.startsWith('trap_')) { this.tryPlaceTrap(x, y); }
       else { this.tryPlaceTower(x, y); }
     });
@@ -1444,12 +1790,26 @@ class Game {
 
     document.addEventListener('keydown', e => {
       if (e.key === 'r' || e.key === 'R') { this.restart(); return; }
+      // P key toggles the shop
+      if (e.key === 'p' || e.key === 'P') {
+        if (!this.titleActive) { this.shopOpen = !this.shopOpen; return; }
+      }
       if (e.key === 'Escape') {
+        if (this.shopOpen)  { this.shopOpen  = false; return; }
+        if (this.wheelOpen) {
+          this.wheelOpen = false;
+          if (!this.currentLevel) {
+            this.titleActive = true;
+            document.getElementById('title-screen').style.display = 'flex';
+          }
+          return;
+        }
         if (this.viewMode === '3d-soldier') { this._exit3DSoldier(); return; }
         if (this.viewMode === '3d') { this._exit3D(); return; }
         this.selectedTower = null; return;
       }
       if (e.code === 'Space' && this.viewMode === '3d-soldier') { e.preventDefault(); this.viewSoldier?.jump(); return; }
+      if (this.shopOpen || this.wheelOpen) return; // don't handle hotkeys while overlays are open
       const allowedTowers = this.currentLevel ? this.currentLevel.towers : this.typeKeys;
       const allowedTraps  = this.currentLevel ? this.currentLevel.traps  : this.trapKeys;
       const i = parseInt(e.key) - 1;
@@ -1534,6 +1894,69 @@ class Game {
       ctx.fillStyle = 'rgba(180,180,255,0.8)';
       ctx.fillText(`LV${this.currentLevel.id} ${this.currentLevel.name}`, this.canvas.width - 180, 22);
     }
+
+    // Active power-up indicators
+    let px = 700;
+    ctx.font = 'bold 12px sans-serif';
+    if (this.rageTimer     > 0) { ctx.fillStyle='#ff6600'; ctx.fillText(`🔥RAGE ${Math.ceil(this.rageTimer/60)}s`, px, 22); px += 90; }
+    if (this.shieldTimer   > 0) { ctx.fillStyle='#88aaff'; ctx.fillText(`🛡 ${Math.ceil(this.shieldTimer/60)}s`, px, 22); px += 60; }
+    if (this.timeSlowTimer > 0) { ctx.fillStyle='#aabbff'; ctx.fillText(`⏳SLOW ${Math.ceil(this.timeSlowTimer/60)}s`, px, 22); px += 90; }
+    if (this.poisonTimer   > 0) { ctx.fillStyle='#88ff44'; ctx.fillText(`☠POISON ${Math.ceil(this.poisonTimer/60)}s`, px, 22); }
+
+    // P=Shop hint in the HUD
+    ctx.fillStyle = 'rgba(200,150,255,0.7)';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('P=Shop', this.canvas.width - 60, 38);
+
+    // ── Upgrade panel (shown when a tower is selected) ──────────────────────
+    if (this.selectedTower) {
+      const t = this.selectedTower;
+      const W = this.canvas.width;
+      const panelW = 220, panelH = 40, panelX = W/2 - panelW/2, panelY = this.canvas.height - 56;
+
+      // Remember the upgrade panel bounds so click handler can check them
+      this._upgradePanelBounds = { x: panelX, y: panelY, w: panelW, h: panelH };
+
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      ctx.fillRect(panelX - 4, panelY - 4, panelW + 8, panelH + 8);
+
+      if (t.level >= 3) {
+        // Already max level
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⭐ MAX LEVEL ⭐', W/2, panelY + 26);
+        ctx.textAlign = 'left';
+      } else {
+        const nextLevel = t.level + 1;
+        const cost = Math.floor(t.cost * UPGRADE_COST[nextLevel]);
+        const canAfford = this.money >= cost;
+        // Draw the upgrade button
+        ctx.fillStyle = canAfford ? '#224422' : '#442222';
+        ctx.fillRect(panelX, panelY, panelW, panelH);
+        ctx.strokeStyle = canAfford ? '#44ff44' : '#ff4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(panelX, panelY, panelW, panelH);
+        ctx.fillStyle = canAfford ? '#aaffaa' : '#ffaaaa';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`⬆ UPGRADE to Lv${nextLevel}: $${cost}`, W/2, panelY + 25);
+        ctx.textAlign = 'left';
+      }
+    } else {
+      this._upgradePanelBounds = null;
+    }
+  }
+
+  // Check if a click lands on the upgrade button panel
+  _checkUpgradeClick(x, y) {
+    const b = this._upgradePanelBounds;
+    if (!b) return false;
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+      if (this.selectedTower) this.tryUpgradeTower(this.selectedTower);
+      return true;
+    }
+    return false;
   }
 
   _drawBreakOverlay() {
@@ -1545,11 +1968,11 @@ class Game {
     ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#7df'; ctx.font = 'bold 36px sans-serif';
-    ctx.fillText(wave === 0 ? 'Place your towers and mines!' : `Wave ${wave}/${maxW} cleared! +$${20*wave}`, this.canvas.width/2, this.canvas.height/2-20);
+    ctx.fillText(wave === 0 ? 'Place your towers and camps!' : `Wave ${wave}/${maxW} cleared!`, this.canvas.width/2, this.canvas.height/2-20);
     ctx.fillStyle = '#fff'; ctx.font = '24px sans-serif';
     ctx.fillText(`Wave ${wave+1} starts in ${sec}...`, this.canvas.width/2, this.canvas.height/2+20);
     ctx.fillStyle = 'rgba(255,215,0,0.6)'; ctx.font = '14px sans-serif';
-    ctx.fillText('Tip: Place Mines then hire Workers — they walk to mines and bring back gold!', this.canvas.width/2, this.canvas.height/2+55);
+    ctx.fillText('Tip: Place Camps to spawn soldiers! Press P to open the Shop for power-ups!', this.canvas.width/2, this.canvas.height/2+55);
     ctx.textAlign = 'left';
   }
 
@@ -1575,8 +1998,10 @@ class Game {
       hint = TRAPS[key].onPath === false
         ? 'Click off road to place wall · right-click to sell'
         : 'Click glowing road to place trap · right-click to sell';
+    } else if (this.selectedType.startsWith('camp_')) {
+      hint = 'Click off road to place camp · right-click to sell · P=Shop';
     } else {
-      hint = '1-8 towers · traps · 9 mine · 0 guard · W worker · right-click sell · R = menu';
+      hint = '1-8 towers · traps · W worker · P=Shop · right-click sell · R = menu';
     }
     this.ctx.fillText(hint, this.canvas.width/2-320, 22);
   }
@@ -1609,6 +2034,472 @@ class Game {
     ctx.fillText(nxt ? `Level ${nxt.id} — "${nxt.name}" unlocked!` : 'You beat all 100 levels! Legendary!', this.canvas.width/2, this.canvas.height/2+48);
     ctx.fillText('Press R to return to the menu', this.canvas.width/2, this.canvas.height/2+82);
     ctx.textAlign = 'left';
+  }
+
+  // ── Shop overlay ─────────────────────────────────────────────────────────────
+  // Draws a big panel with all shop items in a 5-column grid
+  _drawShop() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+
+    // Dark background overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.88)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Panel
+    const panW = Math.min(W - 40, 820), panH = Math.min(H - 40, 600);
+    const panX = (W - panW) / 2, panY = (H - panH) / 2;
+    ctx.fillStyle = '#1a1020';
+    ctx.fillRect(panX, panY, panW, panH);
+    ctx.strokeStyle = '#aa66ff';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(panX, panY, panW, panH);
+
+    // Title
+    ctx.fillStyle = '#cc88ff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚔ SHOP', W/2, panY + 38);
+    ctx.fillStyle = '#ffd700';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(`Gold: $${this.money}   •   Press P or ESC to close`, W/2, panY + 60);
+    ctx.textAlign = 'left';
+
+    // Draw items in a 5-column grid
+    const cols = 5;
+    const itemW = (panW - 40) / cols;
+    const itemH = 90;
+    const startX = panX + 20;
+    const startY = panY + 72;
+
+    // Store item bounds for click detection
+    this._shopItemBounds = [];
+
+    SHOP_ITEMS.forEach((item, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const ix = startX + col * itemW;
+      const iy = startY + row * itemH;
+
+      // Skip items that would go out of the panel
+      if (iy + itemH > panY + panH - 10) return;
+
+      const canAfford = this.money >= item.cost;
+      // Different border colors for different categories
+      const catColors = { ally:'#4488ff', power:'#ff6644', upgrade:'#44cc44', special:'#ffaa00' };
+      const borderCol = catColors[item.category] || '#888';
+
+      // Item background
+      ctx.fillStyle = canAfford ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.4)';
+      ctx.fillRect(ix + 2, iy + 2, itemW - 6, itemH - 6);
+      ctx.strokeStyle = canAfford ? borderCol : '#444';
+      ctx.lineWidth = canAfford ? 2 : 1;
+      ctx.strokeRect(ix + 2, iy + 2, itemW - 6, itemH - 6);
+
+      // Icon (big emoji)
+      ctx.font = '22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(item.icon, ix + itemW/2, iy + 28);
+
+      // Name
+      ctx.fillStyle = canAfford ? '#fff' : '#888';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(item.name, ix + itemW/2, iy + 46);
+
+      // Cost
+      ctx.fillStyle = canAfford ? '#ffd700' : '#886600';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(`$${item.cost}`, ix + itemW/2, iy + 60);
+
+      // Description (tiny text)
+      ctx.fillStyle = 'rgba(200,200,200,0.6)';
+      ctx.font = '8px sans-serif';
+      ctx.fillText(item.desc, ix + itemW/2, iy + 74);
+
+      ctx.textAlign = 'left';
+
+      // Remember bounds for clicks
+      this._shopItemBounds.push({ item, x: ix + 2, y: iy + 2, w: itemW - 6, h: itemH - 6 });
+    });
+
+    // Close button
+    ctx.fillStyle = '#882222';
+    ctx.fillRect(panX + panW - 40, panY + 6, 34, 28);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('✕', panX + panW - 23, panY + 25);
+    ctx.textAlign = 'left';
+    this._shopCloseBounds = { x: panX + panW - 40, y: panY + 6, w: 34, h: 28 };
+  }
+
+  // Handle a click inside the shop overlay
+  _handleShopClick(x, y) {
+    // Close button
+    const cb = this._shopCloseBounds;
+    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) {
+      this.shopOpen = false; return;
+    }
+    // Item click
+    if (!this._shopItemBounds) return;
+    for (const b of this._shopItemBounds) {
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+        this._buyShopItem(b.item);
+        return;
+      }
+    }
+  }
+
+  // Buy a shop item and apply its effect
+  _buyShopItem(item) {
+    if (this.money < item.cost) { this.flash(`Need $${item.cost}!`); return; }
+    this.money -= item.cost;
+    this.shopBuyCount++;
+    if (this.shopBuyCount >= 5) this._grantAchievement('shop_buyer');
+    this._updateButtons();
+    this.flash(`Bought ${item.name}!`);
+
+    // Apply the item's effect based on its ID
+    switch (item.id) {
+      // ── Allies ──────────────────────────────────────────────────────────────
+      case 'ally_dragon':
+      case 'ally_griffin': {
+        // Spawn 1 powerful friendly soldier near the castle
+        const pathEnd = this.path[this.path.length - 1];
+        const s = new Soldier(pathEnd.x - 30, pathEnd.y - 20, { soldierHp: 200, soldierDmg: 30 });
+        s.waypoint = this.path.length - 1; s.speed = 1.8;
+        this.soldiers.push(s); break;
+      }
+      case 'ally_knight': {
+        // Spawn 3 knights
+        const pathEnd = this.path[this.path.length - 1];
+        for (let i = 0; i < 3; i++) {
+          const s = new Soldier(pathEnd.x - 20 + i*15, pathEnd.y - 15, { soldierHp: 100, soldierDmg: 15 });
+          s.waypoint = this.path.length - 1;
+          this.soldiers.push(s);
+        }
+        break;
+      }
+      case 'ally_wizard':
+      case 'ally_golem': {
+        const pathEnd = this.path[this.path.length - 1];
+        const hp = item.id === 'ally_golem' ? 300 : 60;
+        const dmg = item.id === 'ally_golem' ? 10 : 25;
+        const s = new Soldier(pathEnd.x - 30, pathEnd.y - 20, { soldierHp: hp, soldierDmg: dmg });
+        s.waypoint = this.path.length - 1; s.speed = item.id === 'ally_golem' ? 0.5 : 1.2;
+        this.soldiers.push(s); break;
+      }
+      // ── Power-ups ────────────────────────────────────────────────────────────
+      case 'pow_airstrike':
+      case 'pow_meteor': {
+        // Bomb all enemies for big damage
+        const dmg = item.id === 'pow_meteor' ? 999 : 30;
+        for (const e of this.enemies) e.takeDamage(dmg);
+        this.flash(`💥 ${item.name}! All enemies take ${dmg} damage!`); break;
+      }
+      case 'pow_freeze': {
+        // Freeze all enemies for 5 seconds (300 frames)
+        this.timeSlowTimer = 300;
+        for (const e of this.enemies) { e._slowApplied = false; } // reset so slow gets re-applied
+        this.flash('❄️ All enemies frozen for 5 seconds!');
+        this._grantAchievement('freeze'); break;
+      }
+      case 'pow_heal': {
+        const healAmt = Math.floor(this.castleMaxHp * 0.2);
+        this.castleHp = Math.min(this.castleHp + healAmt, this.castleMaxHp);
+        this.flash(`🏰 Castle repaired! +${healAmt} HP`); break;
+      }
+      case 'pow_gold': {
+        this.money = Math.min(this.money + 150, MAX_MONEY);
+        this.flash('💰 +150 Gold!'); this._updateButtons(); break;
+      }
+      case 'pow_rage': {
+        this.rageTimer = 30 * 60; // 30 seconds
+        this.flash('🔥 Tower Rage! All towers fire 2x faster for 30s!'); break;
+      }
+      case 'pow_shield': {
+        this.shieldTimer = 10 * 60; // 10 seconds
+        this.flash('🛡️ Castle Shield! Invincible for 10s!'); break;
+      }
+      case 'pow_lightning': {
+        // Strike 10 random enemies
+        const targets = [...this.enemies].sort(() => Math.random()-0.5).slice(0, 10);
+        for (const e of targets) e.takeDamage(20);
+        this.flash(`⚡ Chain Lightning! Hit ${targets.length} enemies!`); break;
+      }
+      case 'pow_poison': {
+        this.poisonTimer = 5 * 60; // 5 seconds of poison
+        this.flash('☠️ Poison Cloud! All enemies poisoned!'); break;
+      }
+      case 'pow_time': {
+        this.timeSlowTimer = 20 * 60;
+        for (const e of this.enemies) { e._slowApplied = false; }
+        this.flash('⏳ Time Slow! Enemies at half speed for 20s!'); break;
+      }
+      // ── Permanent upgrades ────────────────────────────────────────────────────
+      case 'upg_dmg': {
+        for (const t of this.towers) t.damage *= 1.25;
+        this.flash('💥 All towers +25% damage!'); break;
+      }
+      case 'upg_range': {
+        for (const t of this.towers) t.range *= 1.2;
+        this.flash('🎯 All towers +20% range!'); break;
+      }
+      case 'upg_gold': {
+        this.goldBonus *= 1.3;
+        this.flash('🪙 +30% gold from kills!'); break;
+      }
+      case 'upg_castle': {
+        const oldMax = this.castleMaxHp;
+        this.castleMaxHp = Math.floor(this.castleMaxHp * 1.5);
+        this.castleHp += (this.castleMaxHp - oldMax); // add the extra HP
+        this.flash('🏯 Castle reinforced! +50% max HP!'); break;
+      }
+      case 'upg_speed': {
+        this.swiftSoldiers = true;
+        for (const s of this.soldiers) s.speed *= 1.5;
+        this.flash('👟 Soldiers move 50% faster!'); break;
+      }
+      case 'upg_spawn': {
+        this.rapidSpawnActive = true;
+        this.flash('⏱️ Rapid Training! Camps spawn 2x faster!'); break;
+      }
+      case 'upg_armor': {
+        this.armorActive = true;
+        this.flash('🛡 Tower Armor! Towers take 50% less damage!'); break;
+      }
+      case 'upg_bounce':
+      case 'upg_multi':
+      case 'upg_regen': {
+        if (item.id === 'upg_regen') this.regenActive = true;
+        this.flash(`${item.icon} ${item.name} activated!`); break;
+      }
+      // ── Special items ──────────────────────────────────────────────────────────
+      case 'sp_nuke': {
+        const killed = this.enemies.length;
+        for (const e of this.enemies) e.takeDamage(99999);
+        this.flash(`💣 NUCLEAR OPTION! ${killed} enemies destroyed!`);
+        this._grantAchievement('nuke'); break;
+      }
+      case 'sp_angel': {
+        this.shieldTimer = 60 * 60; // 60 seconds
+        this.flash('👼 Angel Guard! Castle invincible for 60s!'); break;
+      }
+      case 'sp_chest': {
+        const reward = 50 + Math.floor(Math.random() * 451); // 50 to 500
+        this.money = Math.min(this.money + reward, MAX_MONEY);
+        this.flash(`🎁 Treasure Chest! Found $${reward}!`);
+        this._updateButtons(); break;
+      }
+      case 'sp_clone': {
+        // Clone the selected tower (or first tower if none selected)
+        const src = this.selectedTower || this.towers[0];
+        if (!src) { this.flash('No tower to clone!'); break; }
+        const clone = new Tower(src.x + 40, src.y + 20, src.typeKey);
+        clone.damage = src.damage; clone.range = src.range; clone.fireRate = src.fireRate; clone.level = src.level;
+        this.towers.push(clone);
+        this.flash('🔮 Tower cloned!'); break;
+      }
+      case 'sp_berserk': {
+        // Enemies attack each other — simulate by having them take random damage
+        const duration = 15 * 60;
+        this.berserkTimer = duration;
+        this.flash('😤 Berserker Mode! Enemies fight each other!'); break;
+      }
+      default:
+        this.flash(`${item.icon} ${item.name} activated!`);
+    }
+  }
+
+  // ── Daily Wheel ───────────────────────────────────────────────────────────────
+  // Prize list for the spinning wheel
+  _getWheelPrizes() {
+    return [
+      { label:'+200g',    icon:'💰', color:'#ffd700' },
+      { label:'+100g',    icon:'💵', color:'#ffaa00' },
+      { label:'+50g',     icon:'🪙', color:'#cc8800' },
+      { label:'Airstrike',icon:'✈️', color:'#4488ff' },
+      { label:'Freeze',   icon:'❄️', color:'#88ddff' },
+      { label:'+1 Life',  icon:'❤️', color:'#ff4444' },
+      { label:'+3 Lives', icon:'💖', color:'#ff88aa' },
+      { label:'Nothing',  icon:'😢', color:'#666666' },
+      { label:'+500g',    icon:'🤑', color:'#ffff00' },
+      { label:'Dragon!',  icon:'🐉', color:'#44cc44' },
+    ];
+  }
+
+  // Draw the spinning wheel overlay
+  _drawWheel() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    const prizes = this._getWheelPrizes();
+    const sliceAngle = (Math.PI * 2) / prizes.length;
+
+    // Dark overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.88)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Title
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🎡 DAILY SPIN', W/2, H/2 - 200);
+
+    const cx = W/2, cy = H/2 - 30, radius = 160;
+
+    // Draw each pie slice
+    for (let i = 0; i < prizes.length; i++) {
+      const startA = this.wheelAngle + i * sliceAngle;
+      const endA   = startA + sliceAngle;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, startA, endA);
+      ctx.closePath();
+      ctx.fillStyle = prizes[i].color;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Label in the slice
+      const midA = startA + sliceAngle / 2;
+      ctx.save();
+      ctx.translate(cx + Math.cos(midA) * radius * 0.65, cy + Math.sin(midA) * radius * 0.65);
+      ctx.rotate(midA + Math.PI/2);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(prizes[i].label, 0, 0);
+      ctx.restore();
+    }
+
+    // Center circle
+    ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI*2);
+    ctx.fillStyle = '#333'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+
+    // Pointer arrow (at the top of the wheel)
+    ctx.fillStyle = '#ff4444';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - radius - 10);
+    ctx.lineTo(cx - 12, cy - radius + 14);
+    ctx.lineTo(cx + 12, cy - radius + 14);
+    ctx.closePath(); ctx.fill();
+
+    // Spin button or result
+    if (this.wheelResult) {
+      // Show the result
+      ctx.fillStyle = '#ffd700';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`You won: ${this.wheelResult.icon} ${this.wheelResult.label}!`, W/2, H/2 + 170);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('Reward will apply when you start the next level!', W/2, H/2 + 200);
+      // Close button
+      ctx.fillStyle = '#224422';
+      ctx.fillRect(W/2 - 60, H/2 + 210, 120, 36);
+      ctx.strokeStyle = '#44ff44'; ctx.lineWidth = 2;
+      ctx.strokeRect(W/2 - 60, H/2 + 210, 120, 36);
+      ctx.fillStyle = '#aaffaa'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('CLOSE', W/2, H/2 + 234);
+      this._wheelCloseBounds = { x: W/2 - 60, y: H/2 + 210, w: 120, h: 36 };
+    } else if (this.wheelSpinning) {
+      ctx.fillStyle = 'rgba(200,200,200,0.5)';
+      ctx.font = '20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Spinning...', W/2, H/2 + 155);
+      this._wheelSpinBounds = null;
+    } else {
+      // Spin button
+      const alreadySpun = localStorage.getItem('td_last_spin') === new Date().toDateString();
+      ctx.fillStyle = alreadySpun ? '#443333' : '#224422';
+      ctx.fillRect(W/2 - 80, H/2 + 145, 160, 40);
+      ctx.strokeStyle = alreadySpun ? '#ff4444' : '#44ff44';
+      ctx.lineWidth = 2; ctx.strokeRect(W/2 - 80, H/2 + 145, 160, 40);
+      ctx.fillStyle = alreadySpun ? '#ff8888' : '#aaffaa';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText(alreadySpun ? 'Already spun today!' : '🎡 SPIN!', W/2, H/2 + 172);
+      this._wheelSpinBounds = alreadySpun ? null : { x: W/2 - 80, y: H/2 + 145, w: 160, h: 40 };
+    }
+
+    // ESC to close hint
+    ctx.fillStyle = 'rgba(180,180,180,0.5)';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Press ESC to close', W/2, H - 30);
+    ctx.textAlign = 'left';
+  }
+
+  // Handle clicks in the wheel overlay
+  _handleWheelClick(x, y) {
+    // Spin button
+    if (this._wheelSpinBounds) {
+      const b = this._wheelSpinBounds;
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+        // Start spinning!
+        this.wheelSpinning = true;
+        this.wheelResult   = null;
+        this.wheelSpeed    = 0.18 + Math.random() * 0.12; // random starting speed
+        localStorage.setItem('td_last_spin', new Date().toDateString());
+        this._grantAchievement('daily_spin');
+      }
+    }
+    // Close button (shown after result)
+    if (this._wheelCloseBounds) {
+      const b = this._wheelCloseBounds;
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+        this.wheelOpen = false;
+        // If we came from title screen, go back to it
+        if (!this.currentLevel) {
+          this.titleActive = true;
+          document.getElementById('title-screen').style.display = 'flex';
+          this._buildTitleScreen(); // refresh to show "done" on the button
+        }
+      }
+    }
+  }
+
+  // Called when the wheel stops — pick the prize based on final angle
+  _resolveWheelPrize() {
+    const prizes = this._getWheelPrizes();
+    const sliceAngle = (Math.PI * 2) / prizes.length;
+    // The pointer is at the TOP of the wheel (angle = -PI/2)
+    // Figure out which slice is at the top
+    const normalised = (((-Math.PI/2) - this.wheelAngle) % (Math.PI*2) + Math.PI*2) % (Math.PI*2);
+    const idx = Math.floor(normalised / sliceAngle) % prizes.length;
+    this.wheelResult = prizes[idx];
+    this.pendingWheelReward = prizes[idx]; // will be applied when level starts
+  }
+
+  // Apply a wheel reward to the current game state
+  _applyWheelReward(reward) {
+    switch (reward.label) {
+      case '+500g': this.money = Math.min(this.money + 500, MAX_MONEY); this.flash('🎡 Wheel: +500 Gold!'); break;
+      case '+200g': this.money = Math.min(this.money + 200, MAX_MONEY); this.flash('🎡 Wheel: +200 Gold!'); break;
+      case '+100g': this.money = Math.min(this.money + 100, MAX_MONEY); this.flash('🎡 Wheel: +100 Gold!'); break;
+      case '+50g':  this.money = Math.min(this.money + 50,  MAX_MONEY); this.flash('🎡 Wheel: +50 Gold!');  break;
+      case '+1 Life':
+      case '+3 Lives': {
+        const amt = reward.label === '+3 Lives' ? 3 : 1;
+        this.castleHp = Math.min(this.castleHp + amt * 500, this.castleMaxHp);
+        this.flash(`🎡 Wheel: Castle healed!`); break;
+      }
+      case 'Airstrike':
+        for (const e of this.enemies) e.takeDamage(30);
+        this.flash('🎡 Wheel: Free Airstrike!'); break;
+      case 'Freeze':
+        this.timeSlowTimer = 300;
+        this.flash('🎡 Wheel: Free Freeze!'); break;
+      case 'Dragon!': {
+        const pathEnd = this.path[this.path.length - 1];
+        const s = new Soldier(pathEnd.x - 30, pathEnd.y - 20, { soldierHp: 300, soldierDmg: 40 });
+        s.waypoint = this.path.length - 1; s.speed = 2.0;
+        this.soldiers.push(s);
+        this.flash('🎡 Wheel: Dragon Ally spawned!'); break;
+      }
+      default: this.flash('🎡 Wheel: Better luck next time!');
+    }
+    this._updateButtons();
   }
 }
 

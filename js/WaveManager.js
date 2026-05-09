@@ -35,13 +35,13 @@ export class WaveManager {
     }
 
     if (enemyCount === 0) {
-      const bonus = 20 * this.wave;
+      // No end-of-wave gold bonus — players earn gold only from kills!
       if (this.levelDef && this.wave >= this.levelDef.waves) {
-        return { levelComplete: true, bonus };
+        return { levelComplete: true, bonus: 0 };
       }
       this.inBreak = true;
       this.breakTimer = 300;
-      return { waveCleared: true, bonus };
+      return { waveCleared: true, bonus: 0 };
     }
 
     return null;

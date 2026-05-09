@@ -1,4 +1,4 @@
-import { TRAPS } from './constants.js?v=14';
+import { TRAPS } from './constants.js?v=15';
 
 // Trap is placed on the road (spike/tar/barricade) or beside it (wall).
 // Composition: Game has-many Traps, just like it has-many Towers.

@@ -1,5 +1,5 @@
-import { TYPES, distance } from './constants.js?v=14';
-import { Projectile } from './Projectile.js?v=14';
+import { TYPES, distance } from './constants.js?v=15';
+import { Projectile } from './Projectile.js?v=15';
 
 export class Tower {
   constructor(x, y, typeKey) {
@@ -8,6 +8,7 @@ export class Tower {
     this.x = x; this.y = y; this.typeKey = typeKey;
     this.cooldown = 0; this.hp = 8; this.maxHp = 8;
     this.angle = 0; this.manualCooldown = 0; this.fireTimer = 0;
+    this.level = 1; // towers start at level 1, can be upgraded to 2 then 3
   }
 
   update(enemies, projectiles) {
@@ -108,6 +109,18 @@ export class Tower {
       ctx.beginPath(); ctx.arc(this.x, this.y, 28, 0, Math.PI*2); ctx.stroke();
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(this.x, this.y, 28, 0, Math.PI*2); ctx.stroke();
+    }
+
+    // Level badge — show Lv2 or Lv3 on the tower so you know it's upgraded
+    if (this.level >= 2) {
+      const badgeColor = this.level === 3 ? '#ffd700' : '#88eeff';
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillRect(this.x + 12, ty - 4, 22, 12);
+      ctx.fillStyle = badgeColor;
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`Lv${this.level}`, this.x + 23, ty + 5);
+      ctx.textAlign = 'left';
     }
   }
 
