@@ -1,21 +1,25 @@
+// DPS = damage / fireRate * 60  (at 60 fps)
+// Target: roughly 0.04–0.05 DPS per dollar spent, scaling up with unlock cost
 export const TYPES = {
-  basic:     { label: '1 Archer $50',      color: '#3bd17a', range: 150, fireRate: 60,  damage: 2.5,  cost: 50  },
-  sniper:    { label: '2 Catapult $70',    color: '#4ab4ff', range: 380, fireRate: 120, damage: 6,    cost: 70  },
-  rapid:     { label: '3 Crossbow $75',    color: '#ffaa22', range: 100, fireRate: 40,  damage: 1,    cost: 75  },
-  slow:      { label: '4 Mage $80',        color: '#cc66ff', range: 140, fireRate: 80,  damage: 0.5,  cost: 80, slows: true },
-  fire:      { label: 'F Fire $90',        color: '#ff5500', range: 130, fireRate: 50,  damage: 3,    cost: 90,  elementalType: 'fire'      },
-  ice:       { label: 'I Ice $85',         color: '#88ddff', range: 200, fireRate: 70,  damage: 1.5,  cost: 85,  elementalType: 'ice'       },
-  lightning: { label: 'L Lightning $110',  color: '#ffdd00', range: 180, fireRate: 80,  damage: 5,    cost: 110, elementalType: 'lightning' },
-  earth:     { label: 'E Earth $95',       color: '#886644', range: 240, fireRate: 150, damage: 15,   cost: 95,  elementalType: 'earth'     },
+  basic:     { label: '1 Archer $50',      color: '#3bd17a', range: 150, fireRate: 60,  damage: 2.5,  cost: 50  }, // 2.5 DPS
+  sniper:    { label: '2 Catapult $70',    color: '#4ab4ff', range: 380, fireRate: 100, damage: 6,    cost: 70  }, // 3.6 DPS, huge range
+  rapid:     { label: '3 Crossbow $60',    color: '#ffaa22', range: 110, fireRate: 35,  damage: 1.8,  cost: 60  }, // 3.1 DPS, short range — cheaper now
+  slow:      { label: '4 Mage $80',        color: '#cc66ff', range: 150, fireRate: 75,  damage: 1.5,  cost: 80,  slows: true }, // 1.2 DPS + slow
+  fire:      { label: 'F Fire $90',        color: '#ff5500', range: 135, fireRate: 48,  damage: 3.5,  cost: 90,  elementalType: 'fire'      }, // 4.4 DPS
+  ice:       { label: 'I Ice $85',         color: '#88ddff', range: 200, fireRate: 65,  damage: 2.5,  cost: 85,  elementalType: 'ice'       }, // 2.3 DPS + freeze
+  lightning: { label: 'L Lightning $100',  color: '#ffdd00', range: 190, fireRate: 75,  damage: 5.5,  cost: 100, elementalType: 'lightning' }, // 4.4 DPS, chain
+  earth:     { label: 'E Earth $120',      color: '#886644', range: 240, fireRate: 130, damage: 10,   cost: 120, elementalType: 'earth'     }, // 4.6 DPS, slow shot
 };
 
+// Reward/HP ratio: harder enemies pay out more per HP point
+// Castle HP is 10 000; castleDamage controls how many enemies it takes to lose
 export const ENEMIES = {
-  goblin:      { kind: 'goblin',      color: '#7799bb', speed: 1,   hp: 8,   size: 10, reward: 3,  castleDamage: 4   },
-  runner:      { kind: 'runner',      color: '#c09030', speed: 2.5, hp: 4,   size: 8,  reward: 3,  castleDamage: 3   },
-  saboteur:    { kind: 'saboteur',    color: '#4a2268', speed: 2.0, hp: 15,  size: 9,  reward: 5,  castleDamage: 6   },
-  ogre:        { kind: 'ogre',        color: '#445566', speed: 0.9, hp: 50,  size: 18, reward: 8,  castleDamage: 20  },
-  dragon:      { kind: 'dragon',      color: '#2ea84a', speed: 1.5, hp: 150, size: 24, reward: 15, castleDamage: 100 },
-  dragonRider: { kind: 'dragonRider', color: '#8b0000', speed: 1.0, hp: 300, size: 28, reward: 25, castleDamage: 240 },
+  goblin:      { kind: 'goblin',      color: '#7799bb', speed: 1.0, hp: 8,   size: 10, reward: 4,  castleDamage: 5   },
+  runner:      { kind: 'runner',      color: '#c09030', speed: 2.5, hp: 5,   size: 8,  reward: 5,  castleDamage: 4   },
+  saboteur:    { kind: 'saboteur',    color: '#4a2268', speed: 1.8, hp: 18,  size: 9,  reward: 7,  castleDamage: 8   },
+  ogre:        { kind: 'ogre',        color: '#445566', speed: 0.8, hp: 55,  size: 18, reward: 12, castleDamage: 25  },
+  dragon:      { kind: 'dragon',      color: '#2ea84a', speed: 1.4, hp: 160, size: 24, reward: 20, castleDamage: 120 },
+  dragonRider: { kind: 'dragonRider', color: '#8b0000', speed: 0.9, hp: 320, size: 28, reward: 35, castleDamage: 280 },
 };
 
 // 8 distinct path shapes. All start at x=0, end at x=W.

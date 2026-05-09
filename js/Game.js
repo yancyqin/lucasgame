@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=21';
-import { GameMap }     from './Map.js?v=21';
-import { Tower }       from './Tower.js?v=21';
-import { Enemy }       from './Enemy.js?v=21';
-import { Projectile }  from './Projectile.js?v=21';
-import { Trap }        from './Trap.js?v=21';
-import { Mine }        from './Mine.js?v=21';
-import { WaveManager } from './WaveManager.js?v=21';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=22';
+import { GameMap }     from './Map.js?v=22';
+import { Tower }       from './Tower.js?v=22';
+import { Enemy }       from './Enemy.js?v=22';
+import { Projectile }  from './Projectile.js?v=22';
+import { Trap }        from './Trap.js?v=22';
+import { Mine }        from './Mine.js?v=22';
+import { WaveManager } from './WaveManager.js?v=22';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {

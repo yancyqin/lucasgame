@@ -30,7 +30,7 @@ export class WaveManager {
     if (this.spawnDelay > 0) { this.spawnDelay--; return null; }
 
     if (this.spawnQueue.length > 0) {
-      this.spawnDelay = 60;
+      this.spawnDelay = 45; // was 60 — enemies arrive a bit faster now
       return this.spawnQueue.shift();
     }
 
