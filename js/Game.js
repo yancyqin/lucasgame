@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=16';
-import { GameMap }     from './Map.js?v=16';
-import { Tower }       from './Tower.js?v=16';
-import { Enemy }       from './Enemy.js?v=16';
-import { Projectile }  from './Projectile.js?v=16';
-import { Trap }        from './Trap.js?v=16';
-import { Mine }        from './Mine.js?v=16';
-import { WaveManager } from './WaveManager.js?v=16';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=17';
+import { GameMap }     from './Map.js?v=17';
+import { Tower }       from './Tower.js?v=17';
+import { Enemy }       from './Enemy.js?v=17';
+import { Projectile }  from './Projectile.js?v=17';
+import { Trap }        from './Trap.js?v=17';
+import { Mine }        from './Mine.js?v=17';
+import { WaveManager } from './WaveManager.js?v=17';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -329,6 +329,13 @@ class Game {
 
     this.titleActive    = true;
     this.selectedLevelId = 1;
+    this.campLimit = 10; // raised to 15 by gem_camps upgrade
+    this.gemFastFire = false; this.gemHeadStart = false;
+    this.gemMinerDouble = false; this.gemSoldierDmg = false;
+
+    // ── Gem currency ───────────────────────────────────────────────────────────
+    // Gems are rare — earned from level completions, achievements, and daily wheel
+    this.gems = parseInt(localStorage.getItem('td_gems') || '0');
 
     this._buildTitleScreen();
     this._setupInput();
@@ -404,7 +411,12 @@ class Game {
     // Animated workers walk to mines and bring back gold
     for (const w of this.workerUnits) {
       const delivered = w.update();
-      if (delivered > 0) { this.money = Math.min(this.money + delivered, MAX_MONEY); this._updateButtons(); }
+      if (delivered > 0) {
+        // Gem upgrade: Expert Miners doubles worker gold income
+        const amount = (this.gemMinerDouble ? delivered * 2 : delivered);
+        this.money = Math.min(this.money + amount, MAX_MONEY);
+        this._updateButtons();
+      }
     }
 
     // Achievement checks
@@ -483,6 +495,8 @@ class Game {
           );
           // Swift Soldiers upgrade
           if (this.swiftSoldiers) sol.speed *= 1.5;
+          // Gem upgrade: Elite Army — soldiers deal 2x damage
+          if (this.gemSoldierDmg) sol.damage *= 2;
           sol.waypoint = this.path.length - 1;
           this.soldiers.push(sol);
         }
@@ -615,7 +629,19 @@ class Game {
     if (this.map.isOnFeature(x, y)) { this.flash("Can't place on a tree or rock!"); return false; }
     const type = TYPES[this.selectedType];
     if (this.money < type.cost) { this.flash(`Need $${type.cost} — you have $${this.money}!`); return false; }
-    this.towers.push(new Tower(x, y, this.selectedType));
+    const newTower = new Tower(x, y, this.selectedType);
+    // Gem upgrade: Head Start — all placed towers begin at Level 2
+    if (this.gemHeadStart && newTower.level < 2) {
+      const m2 = UPGRADE_MULT[2];
+      newTower.damage   *= m2.damage;
+      newTower.range    *= m2.range;
+      newTower.fireRate  = Math.floor(newTower.fireRate * m2.fireRate);
+      newTower.hp = newTower.maxHp;
+      newTower.level = 2;
+    }
+    // Gem upgrade: Rapid Reload — towers fire 30% faster
+    if (this.gemFastFire) newTower.fireRate = Math.floor(newTower.fireRate * 0.7);
+    this.towers.push(newTower);
     this.money -= type.cost;
     this.towerPlaceCount++;
     // Tower count achievement
@@ -654,8 +680,8 @@ class Game {
   }
 
   tryPlaceCamp(x, y) {
-    // Enforce 10 camp limit
-    if (this.camps.length >= 10) { this.flash('Camp limit reached! (10 max)'); return; }
+    // Enforce camp limit (default 10, raised to 15 by gem_camps upgrade)
+    if (this.camps.length >= this.campLimit) { this.flash(`Camp limit reached! (${this.campLimit} max)`); return; }
     if (this.map.isOnPath(x, y)) { this.flash("Can't place camp on the path!"); return; }
     if (this.map.isOnFeature(x, y)) { this.flash("Too close to a tree or rock!"); return; }
 
@@ -1425,6 +1451,10 @@ class Game {
     this.goldBonus = 1.0; this.armorActive = false; this.regenActive = false;
     this.multiShotActive = false; this.bounceActive = false;
     this.swiftSoldiers = false; this.rapidSpawnActive = false;
+    // Reset gem upgrade flags (re-applied by _applyGemUpgrades below)
+    this.gemFastFire = false; this.gemHeadStart = false;
+    this.gemMinerDouble = false; this.gemSoldierDmg = false;
+    this.campLimit = 10; // default camp limit
     // Reset tower _savedFireRate flags
     for (const t of this.towers) t._savedFireRate = null;
 
@@ -1432,6 +1462,9 @@ class Game {
     this.selectedType = 'camp_basic'; // default to camp tab for clarity
     // Actually default to first tower type
     this.selectedType = levelDef.towers[0];
+
+    // Apply gem shop permanent upgrades (happens before wheel reward so both stack)
+    this._applyGemUpgrades();
 
     // Apply pending wheel reward (from daily spin)
     if (this.pendingWheelReward) {
@@ -1473,6 +1506,13 @@ class Game {
     if (achMap[id]) this._grantAchievement(achMap[id]);
     // Perfect — no castle damage taken!
     if (this.castleHp >= this.castleMaxHp) this._grantAchievement('no_damage');
+
+    // Gem reward for completing a level — higher levels = more gems!
+    // Levels 1-5: 1 gem  |  6-20: 2 gems  |  21-50: 3 gems  |  51+: 5 gems
+    const gemAmt = id >= 51 ? 5 : id >= 21 ? 3 : id >= 6 ? 2 : 1;
+    this._grantGems(gemAmt);
+    this.flash(`Level complete! 💎 +${gemAmt} gem${gemAmt > 1 ? 's' : ''}!`);
+
     this._updateButtons();
   }
 
@@ -1481,7 +1521,16 @@ class Game {
     if (!ach.includes(id)) {
       ach.push(id);
       localStorage.setItem('td_achievements', JSON.stringify(ach));
+      // Every new achievement earns 1 gem — gems are rare, celebrate!
+      this._grantGems(1);
+      this.flash('🏆 Achievement + 💎 1 Gem!');
     }
+  }
+
+  // Add gems to the player's balance and save to localStorage
+  _grantGems(n) {
+    this.gems += n;
+    localStorage.setItem('td_gems', String(this.gems));
   }
 
   // ── UI building ─────────────────────────────────────────────────────────────
@@ -1532,6 +1581,36 @@ class Game {
       const lvl = LEVELS.find(l => l.id === this.selectedLevelId);
       if (lvl) this.startLevel(lvl);
     };
+
+    // Show gem balance and legend title
+    const gemBal = document.getElementById('gem-balance');
+    if (gemBal) gemBal.textContent = `💎 ${this.gems} Gem${this.gems !== 1 ? 's' : ''}`;
+
+    // Show ✦LEGEND✦ badge if purchased
+    const purchases = JSON.parse(localStorage.getItem('td_gem_purchases') || '[]');
+    let legendEl = document.getElementById('ts-legend-badge');
+    if (purchases.includes('gem_legend')) {
+      if (!legendEl) {
+        legendEl = document.createElement('div');
+        legendEl.id = 'ts-legend-badge';
+        legendEl.style.cssText = 'font-size:14px;font-weight:bold;color:#ffd700;letter-spacing:2px;margin-bottom:6px;text-shadow:0 0 10px rgba(255,215,0,0.7);';
+        legendEl.textContent = '✦ LEGEND ✦';
+        document.querySelector('.ts-title').after(legendEl);
+      }
+    }
+
+    // Gem shop button toggle
+    const gemBtn = document.getElementById('ts-gem-btn');
+    if (gemBtn) {
+      gemBtn.onclick = () => {
+        const panel = document.getElementById('gem-shop-panel');
+        if (!panel) return;
+        const showing = panel.style.display !== 'none';
+        panel.style.display = showing ? 'none' : 'block';
+        gemBtn.textContent = showing ? '💎 GEM SHOP' : '💎 GEM SHOP ▲';
+        if (!showing) this._buildGemShop();
+      };
+    }
 
     // Add or update the daily wheel button
     let wheelBtn = document.getElementById('ts-wheel-btn');
@@ -1923,10 +2002,15 @@ class Game {
     if (this.timeSlowTimer > 0) { ctx.fillStyle='#aabbff'; ctx.fillText(`⏳SLOW ${Math.ceil(this.timeSlowTimer/60)}s`, px, 22); px += 90; }
     if (this.poisonTimer   > 0) { ctx.fillStyle='#88ff44'; ctx.fillText(`☠POISON ${Math.ceil(this.poisonTimer/60)}s`, px, 22); }
 
+    // Gem balance shown in-game so players know what they've earned
+    ctx.fillStyle = '#88eeff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`💎 ${this.gems}`, this.canvas.width - 80, 38);
+
     // P=Shop hint in the HUD
     ctx.fillStyle = 'rgba(200,150,255,0.7)';
     ctx.font = '11px sans-serif';
-    ctx.fillText('P=Shop', this.canvas.width - 60, 38);
+    ctx.fillText('P=Shop', this.canvas.width - 60, 52);
 
     // ── Upgrade panel (shown when a tower is selected) ──────────────────────
     if (this.selectedTower) {
@@ -2355,6 +2439,9 @@ class Game {
       { label:'Nothing',  icon:'😢', color:'#666666' },
       { label:'+500g',    icon:'🤑', color:'#ffff00' },
       { label:'Dragon!',  icon:'🐉', color:'#44cc44' },
+      // Rare gem prizes — only 2 slots out of 12 so they're hard to land on!
+      { label:'+1 Gem',   icon:'💎', color:'#2288cc' },
+      { label:'+3 Gems',  icon:'💎', color:'#0044aa' },
     ];
   }
 
@@ -2527,9 +2614,114 @@ class Game {
         this.soldiers.push(s);
         this.flash('🎡 Wheel: Dragon Ally spawned!'); break;
       }
+      case '+1 Gem':
+        this._grantGems(1);
+        this.flash('🎡 Wheel: 💎 +1 Gem! So rare!'); break;
+      case '+3 Gems':
+        this._grantGems(3);
+        this.flash('🎡 Wheel: 💎💎💎 +3 Gems! Amazing!'); break;
       default: this.flash('🎡 Wheel: Better luck next time!');
     }
     this._updateButtons();
+  }
+
+  // ── Gem Shop ─────────────────────────────────────────────────────────────────
+
+  // Build the HTML gem shop items inside #gem-shop-items
+  _buildGemShop() {
+    const purchases = JSON.parse(localStorage.getItem('td_gem_purchases') || '[]');
+    const container = document.getElementById('gem-shop-items');
+    if (!container) return;
+    container.innerHTML = '';
+
+    for (const item of GEM_SHOP_ITEMS) {
+      const owned = purchases.includes(item.id);
+      const canAfford = this.gems >= item.cost;
+      const div = document.createElement('div');
+      div.className = 'gem-item' + (owned ? ' owned' : canAfford ? '' : ' cant-afford');
+      div.innerHTML = `
+        <div class="gi-icon">${item.icon}</div>
+        <div class="gi-name">${item.name}</div>
+        <div class="gi-cost">${owned ? '✓ OWNED' : '💎 ' + item.cost}</div>
+        <div class="gi-desc">${item.desc}</div>
+      `;
+      div.title = item.desc;
+      if (!owned) {
+        div.onclick = () => this._buyGemItem(item);
+      }
+      container.appendChild(div);
+    }
+
+    // Update gem balance display
+    const bal = document.getElementById('gem-balance');
+    if (bal) bal.textContent = `💎 ${this.gems} Gem${this.gems !== 1 ? 's' : ''}`;
+  }
+
+  // Buy a gem shop item — deduct gems and save purchase
+  _buyGemItem(item) {
+    if (this.gems < item.cost) {
+      // Shake feedback — no alert needed
+      this.flash(`Need 💎 ${item.cost} gems!`);
+      return;
+    }
+    const purchases = JSON.parse(localStorage.getItem('td_gem_purchases') || '[]');
+    if (purchases.includes(item.id)) return; // already owned
+    this.gems -= item.cost;
+    localStorage.setItem('td_gems', String(this.gems));
+    purchases.push(item.id);
+    localStorage.setItem('td_gem_purchases', JSON.stringify(purchases));
+    this._buildGemShop(); // refresh to show ownership
+    const bal = document.getElementById('gem-balance');
+    if (bal) bal.textContent = `💎 ${this.gems} Gem${this.gems !== 1 ? 's' : ''}`;
+  }
+
+  // Apply all active gem purchases at the start of a level.
+  // This is called right after startLevel() resets everything.
+  _applyGemUpgrades() {
+    const purchases = JSON.parse(localStorage.getItem('td_gem_purchases') || '[]');
+    if (purchases.length === 0) return;
+
+    if (purchases.includes('gem_gold')) {
+      // Start with extra gold
+      this.money = Math.min(this.money + 150, MAX_MONEY);
+    }
+    if (purchases.includes('gem_castle')) {
+      // Double the castle HP
+      this.castleMaxHp *= 2;
+      this.castleHp = this.castleMaxHp;
+    }
+    if (purchases.includes('gem_goldbonus')) {
+      // +50% gold from kills — stacks with in-game shop bonus
+      this.goldBonus *= 1.5;
+    }
+    if (purchases.includes('gem_fastfire')) {
+      // Towers placed during this level will fire 30% faster (applied in tryPlaceTower)
+      this.gemFastFire = true;
+    }
+    if (purchases.includes('gem_headstart')) {
+      // New towers placed start at Level 2 (applied in tryPlaceTower)
+      this.gemHeadStart = true;
+    }
+    if (purchases.includes('gem_miners')) {
+      // Mine income doubled (applied in Worker.update via flag)
+      this.gemMinerDouble = true;
+    }
+    if (purchases.includes('gem_soldiers')) {
+      // Soldiers deal 2x damage (applied at soldier spawn time)
+      this.gemSoldierDmg = true;
+    }
+    if (purchases.includes('gem_camps')) {
+      // Raise the camp limit from 10 to 15
+      this.campLimit = 15;
+    }
+    if (purchases.includes('gem_dragon')) {
+      // Spawn a dragon ally at the start of the level
+      const pathEnd = this.path[this.path.length - 1];
+      const s = new Soldier(pathEnd.x - 30, pathEnd.y - 20, { soldierHp: 300, soldierDmg: 40 });
+      s.waypoint = this.path.length - 1; s.speed = 2.0;
+      this.soldiers.push(s);
+    }
+    // gem_legend is purely cosmetic — handled in _buildTitleScreen
   }
 }
 

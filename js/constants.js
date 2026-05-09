@@ -207,3 +207,19 @@ export const ACHIEVEMENTS = [
 export const MAX_MONEY = 500;
 
 export function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+// ── Gem Shop ───────────────────────────────────────────────────────────────────
+// Permanent upgrades bought with gems. Each item can only be purchased once.
+// Effects are applied by _applyGemUpgrades() at the start of every level.
+export const GEM_SHOP_ITEMS = [
+  { id:'gem_gold',      name:'Gold Stash',     icon:'💰', cost:3,  desc:'Start each level with +150 extra gold'             },
+  { id:'gem_castle',    name:'Iron Fortress',  icon:'🏰', cost:5,  desc:'Castle starts with double HP every level'          },
+  { id:'gem_miners',    name:'Expert Miners',  icon:'⛏️', cost:4,  desc:'Workers collect 2× gold from mines'               },
+  { id:'gem_soldiers',  name:'Elite Army',     icon:'⚔️', cost:6,  desc:'All soldiers deal 2× damage permanently'          },
+  { id:'gem_headstart', name:'Head Start',     icon:'⬆️', cost:10, desc:'Towers you place start at Level 2 automatically'  },
+  { id:'gem_fastfire',  name:'Rapid Reload',   icon:'⚡', cost:7,  desc:'All towers fire 30% faster every level'           },
+  { id:'gem_dragon',    name:'Dragon Bond',    icon:'🐉', cost:15, desc:'A dragon ally joins you at the start of each level'},
+  { id:'gem_goldbonus', name:'Merchant Guild', icon:'🪙', cost:8,  desc:'+50% gold earned from every enemy kill'           },
+  { id:'gem_camps',     name:'Camp Mastery',   icon:'⛺', cost:6,  desc:'Camp limit raised from 10 to 15'                  },
+  { id:'gem_legend',    name:'Legend Title',   icon:'🌟', cost:20, desc:'Unlocks the ✦LEGEND✦ badge on the title screen'   },
+];

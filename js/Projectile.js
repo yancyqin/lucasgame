@@ -1,4 +1,4 @@
-import { distance } from './constants.js?v=16';
+import { distance } from './constants.js?v=17';
 
 export class Projectile {
   constructor({ x, y, target, speed, vx, vy, damage, slows, fromEnemy, fire, manual, boulder, arrow, magic,
