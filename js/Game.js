@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=15';
-import { GameMap }     from './Map.js?v=15';
-import { Tower }       from './Tower.js?v=15';
-import { Enemy }       from './Enemy.js?v=15';
-import { Projectile }  from './Projectile.js?v=15';
-import { Trap }        from './Trap.js?v=15';
-import { Mine }        from './Mine.js?v=15';
-import { WaveManager } from './WaveManager.js?v=15';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=16';
+import { GameMap }     from './Map.js?v=16';
+import { Tower }       from './Tower.js?v=16';
+import { Enemy }       from './Enemy.js?v=16';
+import { Projectile }  from './Projectile.js?v=16';
+import { Trap }        from './Trap.js?v=16';
+import { Mine }        from './Mine.js?v=16';
+import { WaveManager } from './WaveManager.js?v=16';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -320,9 +320,12 @@ class Game {
     this.shieldTimer  = 0;   // Castle Shield: castle can't take damage
     this.timeSlowTimer= 0;   // Time Slow: enemies move at half speed
     this.poisonTimer  = 0;   // Poison Cloud: enemies take damage over time
-    this.goldBonus    = 1.0; // +30% Gold upgrade multiplier
-    this.armorActive  = false; // Tower Armor: towers take half damage
-    this.regenActive  = false; // HP Regen: towers slowly heal
+    this.berserkTimer = 0;   // Berserk: enemies deal friendly-fire damage
+    this.goldBonus      = 1.0;  // +30% Gold upgrade multiplier
+    this.armorActive    = false; // Tower Armor: towers take half damage
+    this.regenActive    = false; // HP Regen: towers slowly heal
+    this.multiShotActive = false; // Multishot: towers fire 2 projectiles
+    this.bounceActive   = false; // Bouncing Arrows: arrows bounce to a second target
 
     this.titleActive    = true;
     this.selectedLevelId = 1;
@@ -357,6 +360,15 @@ class Game {
       this.poisonTimer--;
       // Poison does a tiny bit of damage to every enemy each frame
       for (const e of this.enemies) e.takeDamage(0.1);
+    }
+    // Berserk mode — enemies take random friendly-fire damage while active
+    if (this.berserkTimer > 0) {
+      this.berserkTimer--;
+      if (this.berserkTimer % 30 === 0) { // every 0.5s
+        for (const e of this.enemies) {
+          if (Math.random() < 0.4) e.takeDamage(3 + Math.random() * 5);
+        }
+      }
     }
 
     // HP Regen — towers slowly heal over time if the upgrade is active
@@ -683,7 +695,14 @@ class Game {
   trySelectTower(x, y) {
     const clicked = this.towers.find(t => distance(t, { x, y }) < 20);
     if (!clicked) return false;
-    this._enter3D(clicked);   // click a tower → first-person archer view
+    if (this.selectedTower === clicked) {
+      // Second click on the same tower → enter first-person 3D view
+      this._enter3D(clicked);
+    } else {
+      // First click → select it (shows upgrade panel at bottom, aim line, range ring)
+      this.selectedTower = clicked;
+      this.flash('Tower selected! Click again for 3D view • Upgrade panel below • Right-click=Sell');
+    }
     return true;
   }
 
@@ -951,7 +970,7 @@ class Game {
     // Enemies/wave
     ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(openL+6,openB-26,200,22);
     ctx.fillStyle='#fff'; ctx.font='12px sans-serif';
-    ctx.fillText(`Enemies: ${this.enemies.length}   Wave: ${this.waveManager.wave}/${this.waveManager.totalWaves}`, openL+12, openB-10);
+    ctx.fillText(`Enemies: ${this.enemies.length}   Wave: ${this.waveManager.wave}/${this.waveManager.levelDef?.waves ?? '?'}`, openL+12, openB-10);
 
     // Flash
     if (this.flashTimer > 0) {
@@ -1296,7 +1315,7 @@ class Game {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(openL+6, openB-26, 180, 22);
     ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif';
-    ctx.fillText(`Enemies: ${this.enemies.length}   Wave: ${this.waveManager.wave}/${this.waveManager.totalWaves}`, openL+12, openB-10);
+    ctx.fillText(`Enemies: ${this.enemies.length}   Wave: ${this.waveManager.wave}/${this.waveManager.levelDef?.waves ?? '?'}`, openL+12, openB-10);
 
     // Flash message
     if (this.flashTimer > 0) {
@@ -1402,8 +1421,9 @@ class Game {
     this.towerPlaceCount = 0; // reset tower count for this game
 
     // Reset power-up state for new level
-    this.rageTimer = 0; this.shieldTimer = 0; this.timeSlowTimer = 0; this.poisonTimer = 0;
+    this.rageTimer = 0; this.shieldTimer = 0; this.timeSlowTimer = 0; this.poisonTimer = 0; this.berserkTimer = 0;
     this.goldBonus = 1.0; this.armorActive = false; this.regenActive = false;
+    this.multiShotActive = false; this.bounceActive = false;
     this.swiftSoldiers = false; this.rapidSpawnActive = false;
     // Reset tower _savedFireRate flags
     for (const t of this.towers) t._savedFireRate = null;
@@ -1513,23 +1533,23 @@ class Game {
       if (lvl) this.startLevel(lvl);
     };
 
-    // Add daily wheel button if it doesn't exist yet
-    if (!document.getElementById('ts-wheel-btn')) {
-      const wheelBtn = document.createElement('button');
+    // Add or update the daily wheel button
+    let wheelBtn = document.getElementById('ts-wheel-btn');
+    if (!wheelBtn) {
+      wheelBtn = document.createElement('button');
       wheelBtn.id = 'ts-wheel-btn';
       wheelBtn.style.cssText = 'margin-top:10px;padding:10px 28px;font-size:16px;font-weight:bold;background:#334488;color:#fff;border:2px solid #6688ff;border-radius:8px;cursor:pointer;letter-spacing:1px;';
-      const alreadySpun = localStorage.getItem('td_last_spin') === new Date().toDateString();
-      wheelBtn.textContent = alreadySpun ? '🎡 Daily Spin (done)' : '🎡 DAILY SPIN';
-      wheelBtn.style.opacity = alreadySpun ? '0.5' : '1';
       wheelBtn.onclick = () => {
-        // Hide title screen temporarily and show wheel
         document.getElementById('title-screen').style.display = 'none';
-        this.titleActive = false; // let draw() run
+        this.titleActive = false;
         this.wheelOpen = true;
       };
-      // Insert after play button
       playBtn.parentNode.insertBefore(wheelBtn, playBtn.nextSibling);
     }
+    // Always refresh text so "done" state is current (even after returning from a spin)
+    const alreadySpun = localStorage.getItem('td_last_spin') === new Date().toDateString();
+    wheelBtn.textContent = alreadySpun ? '🎡 Daily Spin (done today)' : '🎡 DAILY SPIN';
+    wheelBtn.style.opacity = alreadySpun ? '0.5' : '1';
   }
 
   _drawTitleBg() {
@@ -1991,8 +2011,6 @@ class Game {
       hint = 'Click to shoot · Esc to release · right-click to sell';
     } else if (this.selectedType === 'mine') {
       hint = 'Click grass to place mine · hire Workers to collect gold automatically';
-    } else if (this.selectedType === 'guard') {
-      hint = 'Click off road to place guard · auto-attacks enemies';
     } else if (this.selectedType.startsWith('trap_')) {
       const key = this.selectedType.replace('trap_', '');
       hint = TRAPS[key].onPath === false
@@ -2268,11 +2286,21 @@ class Game {
         this.armorActive = true;
         this.flash('🛡 Tower Armor! Towers take 50% less damage!'); break;
       }
-      case 'upg_bounce':
-      case 'upg_multi':
+      case 'upg_bounce': {
+        this.bounceActive = true;
+        // Mark all current towers so their projectiles bounce to a second enemy
+        for (const t of this.towers) t.bounceShot = true;
+        this.flash('🏹 Bouncing Arrows! Projectiles now bounce to a second target!'); break;
+      }
+      case 'upg_multi': {
+        this.multiShotActive = true;
+        // Mark all current towers so they fire 2 projectiles each shot
+        for (const t of this.towers) t.multiShot = true;
+        this.flash('🌟 Multishot! All towers now fire 2 projectiles!'); break;
+      }
       case 'upg_regen': {
-        if (item.id === 'upg_regen') this.regenActive = true;
-        this.flash(`${item.icon} ${item.name} activated!`); break;
+        this.regenActive = true;
+        this.flash('💚 HP Regen! Towers slowly heal over time!'); break;
       }
       // ── Special items ──────────────────────────────────────────────────────────
       case 'sp_nuke': {
@@ -2295,7 +2323,9 @@ class Game {
         // Clone the selected tower (or first tower if none selected)
         const src = this.selectedTower || this.towers[0];
         if (!src) { this.flash('No tower to clone!'); break; }
-        const clone = new Tower(src.x + 40, src.y + 20, src.typeKey);
+        // Place clone at a random offset so it doesn't overlap the original
+        const angle = Math.random() * Math.PI * 2;
+        const clone = new Tower(src.x + Math.cos(angle)*55, src.y + Math.sin(angle)*55, src.typeKey);
         clone.damage = src.damage; clone.range = src.range; clone.fireRate = src.fireRate; clone.level = src.level;
         this.towers.push(clone);
         this.flash('🔮 Tower cloned!'); break;

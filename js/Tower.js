@@ -1,5 +1,5 @@
-import { TYPES, distance } from './constants.js?v=15';
-import { Projectile } from './Projectile.js?v=15';
+import { TYPES, distance } from './constants.js?v=16';
+import { Projectile } from './Projectile.js?v=16';
 
 export class Tower {
   constructor(x, y, typeKey) {
@@ -8,7 +8,9 @@ export class Tower {
     this.x = x; this.y = y; this.typeKey = typeKey;
     this.cooldown = 0; this.hp = 8; this.maxHp = 8;
     this.angle = 0; this.manualCooldown = 0; this.fireTimer = 0;
-    this.level = 1; // towers start at level 1, can be upgraded to 2 then 3
+    this.level = 1;    // towers start at level 1, can be upgraded to 2 then 3
+    this.multiShot  = false; // set true by upg_multi shop item → fires 2 projectiles
+    this.bounceShot = false; // set true by upg_bounce shop item → projectile bounces
   }
 
   update(enemies, projectiles) {
@@ -38,6 +40,18 @@ export class Tower {
       projectiles.push(new Projectile({ x: this.x, y: this.y, target, speed: 6, damage: this.damage, slows: this.slows, boulder: this.typeKey === 'sniper', arrow: this.typeKey === 'basic' }));
     }
     this.cooldown = this.fireRate;
+
+    // Multishot upgrade — fire a second projectile at a small spread angle
+    if (this.multiShot && this.typeKey !== 'rapid') {
+      const spread = 0.18; // radians — about 10 degrees offset
+      const a2 = this.angle + spread;
+      projectiles.push(new Projectile({
+        x: this.x, y: this.y,
+        vx: Math.cos(a2)*8, vy: Math.sin(a2)*8,
+        damage: this.damage * 0.6, // slightly weaker second shot
+        arrow: true, manual: true,
+      }));
+    }
   }
 
   takeDamage(amt) { this.hp -= amt; }

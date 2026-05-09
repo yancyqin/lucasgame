@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=15';
-import { Projectile } from './Projectile.js?v=15';
+import { ENEMIES, distance } from './constants.js?v=16';
+import { Projectile } from './Projectile.js?v=16';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
