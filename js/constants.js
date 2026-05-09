@@ -72,41 +72,9 @@ export const CAMP_TYPES = {
   siege:  { label: 'Siege Camp $240',  color: '#885522', cost: 240, soldierHp: 80,  soldierDmg: 30, spawnRate: 600, aoe: true },
 };
 
-// ── Shop items ─────────────────────────────────────────────────────────────────
-// These are items players can buy in the shop (press P to open)
-export const SHOP_ITEMS = [
-  // Allies — summon friendly units
-  { id:'ally_dragon',   name:'Dragon Ally',     icon:'🐉', cost:300, desc:'Spawn a powerful dragon ally',  category:'ally'    },
-  { id:'ally_knight',   name:'War Knight',       icon:'⚔️', cost:120, desc:'3 powerful knights',           category:'ally'    },
-  { id:'ally_wizard',   name:'Court Wizard',     icon:'🧙', cost:150, desc:'Ranged magic ally',            category:'ally'    },
-  { id:'ally_golem',    name:'Stone Golem',      icon:'🗿', cost:180, desc:'Slow but very tanky',          category:'ally'    },
-  // Power-ups — one-time use boosts
-  { id:'pow_airstrike', name:'Airstrike',        icon:'✈️', cost:80,  desc:'Bomb all enemies for 30 dmg',  category:'power'   },
-  { id:'pow_meteor',    name:'Meteor Strike',    icon:'☄️', cost:120, desc:'Massive AOE — kills most foes',category:'power'   },
-  { id:'pow_freeze',    name:'Freeze Bomb',      icon:'❄️', cost:60,  desc:'Freeze all enemies for 5s',    category:'power'   },
-  { id:'pow_heal',      name:'Repair Castle',    icon:'🏰', cost:50,  desc:'Restore 20% castle HP',        category:'power'   },
-  { id:'pow_rage',      name:'Tower Rage',       icon:'🔥', cost:70,  desc:'All towers 2× speed for 30s',  category:'power'   },
-  { id:'pow_shield',    name:'Castle Shield',    icon:'🛡️', cost:90,  desc:'Castle invincible for 10s',    category:'power'   },
-  { id:'pow_lightning', name:'Chain Lightning',  icon:'⚡', cost:65,  desc:'Strike 10 enemies at once',    category:'power'   },
-  { id:'pow_poison',    name:'Poison Cloud',     icon:'☠️', cost:55,  desc:'Poison all enemies',           category:'power'   },
-  { id:'pow_time',      name:'Time Slow',        icon:'⏳', cost:85,  desc:'Half enemy speed for 20s',     category:'power'   },
-  // Permanent upgrades — last for the whole level
-  { id:'upg_dmg',       name:'+25% Damage',      icon:'💥', cost:100, desc:'All towers +25% damage',       category:'upgrade' },
-  { id:'upg_range',     name:'+20% Range',       icon:'🎯', cost:80,  desc:'All towers +20% range',        category:'upgrade' },
-  { id:'upg_gold',      name:'+30% Gold',        icon:'🪙', cost:90,  desc:'Earn 30% more per kill',       category:'upgrade' },
-  { id:'upg_castle',    name:'Reinforce Castle', icon:'🏯', cost:110, desc:'Castle max HP +50%',           category:'upgrade' },
-  { id:'upg_speed',     name:'Swift Soldiers',   icon:'👟', cost:70,  desc:'Soldiers move 50% faster',     category:'upgrade' },
-  { id:'upg_spawn',     name:'Rapid Training',   icon:'⏱️', cost:80,  desc:'Camps spawn 2× faster',        category:'upgrade' },
-  { id:'upg_armor',     name:'Tower Armor',      icon:'🛡', cost:90,  desc:'Towers take 50% less damage',  category:'upgrade' },
-  { id:'upg_bounce',    name:'Bouncing Arrows',  icon:'🏹', cost:75,  desc:'Arrows bounce to 2nd target',  category:'upgrade' },
-  { id:'upg_multi',     name:'Multishot',        icon:'🌟', cost:120, desc:'Towers fire 2 projectiles',    category:'upgrade' },
-  { id:'upg_regen',     name:'HP Regen',         icon:'💚', cost:85,  desc:'Towers slowly regenerate HP',  category:'upgrade' },
-  // Special items
-  { id:'sp_nuke',       name:'Nuclear Option',   icon:'💣', cost:400, desc:'Instantly kill ALL enemies',   category:'special' },
-  { id:'sp_angel',      name:'Angel Guard',      icon:'👼', cost:250, desc:'Invincible guard for 60s',     category:'special' },
-  { id:'sp_clone',      name:'Tower Clone',      icon:'🔮', cost:160, desc:'Duplicate selected tower',     category:'special' },
-  { id:'sp_berserk',    name:'Berserker Mode',   icon:'😤', cost:140, desc:'Enemies fight each other 15s', category:'special' },
-];
+// ── Gem Shop items ─────────────────────────────────────────────────────────────
+// permanent: true  → buy once, keep forever (classic gem upgrades)
+// permanent: false → buy to queue for the NEXT level (consumables / level upgrades)
 
 // ── Procedural 100-level generation ─────────────────────────────────────────
 
@@ -205,18 +173,48 @@ export const MAX_MONEY = 500;
 
 export function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
-// ── Gem Shop ───────────────────────────────────────────────────────────────────
-// Permanent upgrades bought with gems. Each item can only be purchased once.
-// Effects are applied by _applyGemUpgrades() at the start of every level.
 export const GEM_SHOP_ITEMS = [
-  { id:'gem_gold',      name:'Gold Stash',     icon:'💰', cost:3,  desc:'Start each level with +150 extra gold'             },
-  { id:'gem_castle',    name:'Iron Fortress',  icon:'🏰', cost:5,  desc:'Castle starts with double HP every level'          },
-  { id:'gem_miners',    name:'Expert Miners',  icon:'⛏️', cost:4,  desc:'Workers collect 2× gold from mines'               },
-  { id:'gem_soldiers',  name:'Elite Army',     icon:'⚔️', cost:6,  desc:'All soldiers deal 2× damage permanently'          },
-  { id:'gem_headstart', name:'Head Start',     icon:'⬆️', cost:10, desc:'Towers you place start at Level 2 automatically'  },
-  { id:'gem_fastfire',  name:'Rapid Reload',   icon:'⚡', cost:7,  desc:'All towers fire 30% faster every level'           },
-  { id:'gem_dragon',    name:'Dragon Bond',    icon:'🐉', cost:15, desc:'A dragon ally joins you at the start of each level'},
-  { id:'gem_goldbonus', name:'Merchant Guild', icon:'🪙', cost:8,  desc:'+50% gold earned from every enemy kill'           },
-  { id:'gem_camps',     name:'Camp Mastery',   icon:'⛺', cost:6,  desc:'Camp limit raised from 10 to 15'                  },
-  { id:'gem_legend',    name:'Legend Title',   icon:'🌟', cost:20, desc:'Unlocks the ✦LEGEND✦ badge on the title screen'   },
+  // ── Permanent upgrades — buy once, keep forever ───────────────────────────────
+  { id:'gem_gold',      name:'Gold Stash',     icon:'💰', cost:3,  permanent:true, desc:'Start each level with +150 extra gold'             },
+  { id:'gem_castle',    name:'Iron Fortress',  icon:'🏰', cost:5,  permanent:true, desc:'Castle starts with double HP every level'          },
+  { id:'gem_miners',    name:'Expert Miners',  icon:'⛏️', cost:4,  permanent:true, desc:'Workers collect 2× gold from mines'               },
+  { id:'gem_soldiers',  name:'Elite Army',     icon:'⚔️', cost:6,  permanent:true, desc:'All soldiers deal 2× damage permanently'          },
+  { id:'gem_headstart', name:'Head Start',     icon:'⬆️', cost:10, permanent:true, desc:'Towers you place start at Level 2 automatically'  },
+  { id:'gem_fastfire',  name:'Rapid Reload',   icon:'⚡', cost:7,  permanent:true, desc:'All towers fire 30% faster every level'           },
+  { id:'gem_dragon',    name:'Dragon Bond',    icon:'🐉', cost:15, permanent:true, desc:'A dragon ally joins you at the start of each level'},
+  { id:'gem_goldbonus', name:'Merchant Guild', icon:'🪙', cost:8,  permanent:true, desc:'+50% gold earned from every enemy kill'           },
+  { id:'gem_camps',     name:'Camp Mastery',   icon:'⛺', cost:6,  permanent:true, desc:'Camp limit raised from 10 to 15'                  },
+  { id:'gem_legend',    name:'Legend Title',   icon:'🌟', cost:20, permanent:true, desc:'Unlocks the ✦LEGEND✦ badge on the title screen'   },
+  // ── Level loadout — buy to queue for next level (consumable, stackable) ───────
+  // Allies
+  { id:'ally_dragon',   name:'Dragon Ally',    icon:'🐉', cost:6,  permanent:false, desc:'Spawn a powerful dragon ally this level'          },
+  { id:'ally_knight',   name:'War Knights',    icon:'⚔️', cost:2,  permanent:false, desc:'Spawn 3 powerful knights this level'              },
+  { id:'ally_wizard',   name:'Court Wizard',   icon:'🧙', cost:3,  permanent:false, desc:'Spawn a ranged magic ally this level'             },
+  { id:'ally_golem',    name:'Stone Golem',    icon:'🗿', cost:3,  permanent:false, desc:'Spawn a slow but very tanky golem this level'     },
+  // Power-ups
+  { id:'pow_airstrike', name:'Airstrike',      icon:'✈️', cost:1,  permanent:false, desc:'Auto-bombs all enemies when wave 1 starts'        },
+  { id:'pow_meteor',    name:'Meteor Strike',  icon:'☄️', cost:2,  permanent:false, desc:'Auto-nukes enemies when wave 1 starts (huge dmg)' },
+  { id:'pow_freeze',    name:'Freeze Bomb',    icon:'❄️', cost:1,  permanent:false, desc:'Auto-freezes all enemies when wave 1 starts'      },
+  { id:'pow_heal',      name:'Repair Castle',  icon:'🏰', cost:1,  permanent:false, desc:'Restore 20% castle HP at level start'             },
+  { id:'pow_rage',      name:'Tower Rage',     icon:'🔥', cost:1,  permanent:false, desc:'All towers 2× fire speed for 30s this level'      },
+  { id:'pow_shield',    name:'Castle Shield',  icon:'🛡️', cost:2,  permanent:false, desc:'Castle invincible for 10s this level'             },
+  { id:'pow_lightning', name:'Chain Lightning',icon:'⚡', cost:1,  permanent:false, desc:'Auto-strikes 10 enemies when wave 1 starts'       },
+  { id:'pow_poison',    name:'Poison Cloud',   icon:'☠️', cost:1,  permanent:false, desc:'Auto-poisons all enemies when wave 1 starts'      },
+  { id:'pow_time',      name:'Time Slow',      icon:'⏳', cost:2,  permanent:false, desc:'Half enemy speed for 20s this level'              },
+  // Level upgrades
+  { id:'upg_dmg',       name:'+25% Damage',    icon:'💥', cost:2,  permanent:false, desc:'All towers +25% damage this level'                },
+  { id:'upg_range',     name:'+20% Range',     icon:'🎯', cost:1,  permanent:false, desc:'All towers +20% range this level'                 },
+  { id:'upg_gold',      name:'+30% Gold',      icon:'🪙', cost:2,  permanent:false, desc:'Earn 30% more gold per kill this level'           },
+  { id:'upg_castle',    name:'Reinforce Castle',icon:'🏯',cost:2,  permanent:false, desc:'Castle max HP +50% this level'                    },
+  { id:'upg_speed',     name:'Swift Soldiers', icon:'👟', cost:1,  permanent:false, desc:'Soldiers move 50% faster this level'              },
+  { id:'upg_spawn',     name:'Rapid Training', icon:'⏱️', cost:1,  permanent:false, desc:'Camps spawn 2× faster this level'                 },
+  { id:'upg_armor',     name:'Tower Armor',    icon:'🛡', cost:2,  permanent:false, desc:'Towers take 50% less damage this level'           },
+  { id:'upg_bounce',    name:'Bouncing Arrows',icon:'🏹', cost:1,  permanent:false, desc:'Arrows bounce to 2nd target this level'           },
+  { id:'upg_multi',     name:'Multishot',      icon:'🌟', cost:3,  permanent:false, desc:'Towers fire 2 projectiles this level'             },
+  { id:'upg_regen',     name:'HP Regen',       icon:'💚', cost:2,  permanent:false, desc:'Towers slowly regenerate HP this level'           },
+  // Special
+  { id:'sp_nuke',       name:'Nuclear Option', icon:'💣', cost:8,  permanent:false, desc:'Auto-destroys ALL enemies when wave 1 starts'     },
+  { id:'sp_angel',      name:'Angel Guard',    icon:'👼', cost:5,  permanent:false, desc:'Castle invincible for 60s this level'             },
+  { id:'sp_clone',      name:'Tower Clone',    icon:'🔮', cost:3,  permanent:false, desc:'Duplicate your first tower at level start'        },
+  { id:'sp_berserk',    name:'Berserker Mode', icon:'😤', cost:3,  permanent:false, desc:'Auto-triggers enemies fight each other when wave 1 starts' },
 ];

@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=19';
-import { GameMap }     from './Map.js?v=19';
-import { Tower }       from './Tower.js?v=19';
-import { Enemy }       from './Enemy.js?v=19';
-import { Projectile }  from './Projectile.js?v=19';
-import { Trap }        from './Trap.js?v=19';
-import { Mine }        from './Mine.js?v=19';
-import { WaveManager } from './WaveManager.js?v=19';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=20';
+import { GameMap }     from './Map.js?v=20';
+import { Tower }       from './Tower.js?v=20';
+import { Enemy }       from './Enemy.js?v=20';
+import { Projectile }  from './Projectile.js?v=20';
+import { Trap }        from './Trap.js?v=20';
+import { Mine }        from './Mine.js?v=20';
+import { WaveManager } from './WaveManager.js?v=20';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -477,10 +477,9 @@ class Game {
     this.typeKeys  = Object.keys(TYPES);
     this.trapKeys  = Object.keys(TRAPS);
 
-    // ── Shop state ─────────────────────────────────────────────────────────────
-    this.shopOpen   = false;   // is the shop overlay open?
-    this.shopScroll = 0;       // for future scrolling
-    this.shopBuyCount = 0;     // track how many items bought (for 'shopaholic' achievement)
+    // ── Loadout state ─────────────────────────────────────────────────────────
+    this.pendingConsumables = []; // item IDs queued from gem shop for next level
+    this._pendingTriggers   = []; // damage items waiting for first wave enemies
 
     // ── Daily Wheel state ──────────────────────────────────────────────────────
     this.wheelOpen     = false;  // is the wheel overlay showing?
@@ -567,6 +566,11 @@ class Game {
     const waveResult = this.waveManager.update(this.enemies.length);
     if (typeof waveResult === 'string') {
       const diff = this.currentLevel ? this.currentLevel.difficulty : 1;
+      // Fire pending trigger items on the very first enemy of wave 1
+      if (this.enemies.length === 0 && this._pendingTriggers.length > 0) {
+        for (const tid of this._pendingTriggers) this._fireTrigger(tid);
+        this._pendingTriggers = [];
+      }
       // Apply Time Slow if active — enemies spawn slower
       const e = new Enemy(waveResult, this.path[0].x - 40, this.path[0].y, diff);
       if (this.timeSlowTimer > 0) e.speed *= 0.5;
@@ -795,8 +799,6 @@ class Game {
     this._drawHint();
     this._drawGameOver();
     this._drawLevelComplete();
-    // Draw shop on top of everything if it's open
-    if (this.shopOpen) this._drawShop();
     // Draw wheel on top if it's open
     if (this.wheelOpen) this._drawWheel();
   }
@@ -1646,6 +1648,10 @@ class Game {
     // Apply gem shop permanent upgrades (happens before wheel reward so both stack)
     this._applyGemUpgrades();
 
+    // Apply consumable loadout queued from the gem shop
+    this._pendingTriggers = [];
+    this._applyConsumables();
+
     // Apply pending wheel reward (from daily spin)
     if (this.pendingWheelReward) {
       this._applyWheelReward(this.pendingWheelReward);
@@ -1923,16 +1929,6 @@ class Game {
     wBtn.onclick = () => this.hireWorker();
     ui.appendChild(wBtn);
 
-    // Shop button
-    const shopBtn = document.createElement('button');
-    shopBtn.id = 'btn-shop';
-    shopBtn.className = 'btn';
-    shopBtn.style.background = '#442266';
-    shopBtn.style.outline = '2px solid #cc66ff';
-    shopBtn.textContent = '🛒 SHOP (P)';
-    shopBtn.onclick = () => { this.shopOpen = !this.shopOpen; };
-    ui.appendChild(shopBtn);
-
     this._updateButtons();
   }
 
@@ -2008,9 +2004,6 @@ class Game {
 
       if (this.gameOver || this.levelComplete || this.titleActive) return;
 
-      // If shop is open, handle shop clicks
-      if (this.shopOpen) { this._handleShopClick(x, y); return; }
-
       // 3D view: exit button or shoot — but suppress if user was rotating camera
       if (this.viewMode === '3d') {
         const openR = this.canvas.width * 0.86;
@@ -2069,12 +2062,7 @@ class Game {
 
     document.addEventListener('keydown', e => {
       if (e.key === 'r' || e.key === 'R') { this.restart(); return; }
-      // P key toggles the shop
-      if (e.key === 'p' || e.key === 'P') {
-        if (!this.titleActive) { this.shopOpen = !this.shopOpen; return; }
-      }
       if (e.key === 'Escape') {
-        if (this.shopOpen)  { this.shopOpen  = false; return; }
         if (this.wheelOpen) {
           this.wheelOpen = false;
           if (!this.currentLevel) {
@@ -2088,7 +2076,7 @@ class Game {
         this.selectedTower = null; return;
       }
       if (e.code === 'Space' && this.viewMode === '3d-soldier') { e.preventDefault(); this.viewSoldier?.jump(); return; }
-      if (this.shopOpen || this.wheelOpen) return; // don't handle hotkeys while overlays are open
+      if (this.wheelOpen) return; // don't handle hotkeys while wheel overlay is open
       const allowedTowers = this.currentLevel ? this.currentLevel.towers : this.typeKeys;
       const allowedTraps  = this.currentLevel ? this.currentLevel.traps  : this.trapKeys;
       const i = parseInt(e.key) - 1;
@@ -2187,11 +2175,6 @@ class Game {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillText(`💎 ${this.gems}`, this.canvas.width - 80, 38);
 
-    // P=Shop hint in the HUD
-    ctx.fillStyle = 'rgba(200,150,255,0.7)';
-    ctx.font = '11px sans-serif';
-    ctx.fillText('P=Shop', this.canvas.width - 60, 52);
-
     // ── Upgrade panel (shown when a tower is selected) ──────────────────────
     if (this.selectedTower) {
       const t = this.selectedTower;
@@ -2281,9 +2264,9 @@ class Game {
         ? 'Click off road to place wall · right-click to sell'
         : 'Click glowing road to place trap · right-click to sell';
     } else if (this.selectedType.startsWith('camp_')) {
-      hint = 'Click off road to place camp · right-click to sell · P=Shop';
+      hint = 'Click off road to place camp · right-click to sell';
     } else {
-      hint = '1-8 towers · traps · W worker · P=Shop · right-click sell · R = menu';
+      hint = '1-8 towers · traps · W worker · right-click sell · R = menu';
     }
     this.ctx.fillText(hint, this.canvas.width/2-320, 22);
   }
@@ -2318,279 +2301,101 @@ class Game {
     ctx.textAlign = 'left';
   }
 
-  // ── Shop overlay ─────────────────────────────────────────────────────────────
-  // Draws a big panel with all shop items in a 5-column grid
-  _drawShop() {
-    const ctx = this.ctx;
-    const W = this.canvas.width, H = this.canvas.height;
-
-    // Dark background overlay
-    ctx.fillStyle = 'rgba(0,0,0,0.88)';
-    ctx.fillRect(0, 0, W, H);
-
-    // Panel
-    const panW = Math.min(W - 40, 820), panH = Math.min(H - 40, 600);
-    const panX = (W - panW) / 2, panY = (H - panH) / 2;
-    ctx.fillStyle = '#1a1020';
-    ctx.fillRect(panX, panY, panW, panH);
-    ctx.strokeStyle = '#aa66ff';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(panX, panY, panW, panH);
-
-    // Title
-    ctx.fillStyle = '#cc88ff';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('⚔ SHOP', W/2, panY + 38);
-    ctx.fillStyle = '#ffd700';
-    ctx.font = '16px sans-serif';
-    ctx.fillText(`Gold: $${this.money}   •   Press P or ESC to close`, W/2, panY + 60);
-    ctx.textAlign = 'left';
-
-    // Draw items in a 5-column grid
-    const cols = 5;
-    const itemW = (panW - 40) / cols;
-    const itemH = 90;
-    const startX = panX + 20;
-    const startY = panY + 72;
-
-    // Store item bounds for click detection
-    this._shopItemBounds = [];
-
-    SHOP_ITEMS.forEach((item, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const ix = startX + col * itemW;
-      const iy = startY + row * itemH;
-
-      // Skip items that would go out of the panel
-      if (iy + itemH > panY + panH - 10) return;
-
-      const canAfford = this.money >= item.cost;
-      // Different border colors for different categories
-      const catColors = { ally:'#4488ff', power:'#ff6644', upgrade:'#44cc44', special:'#ffaa00' };
-      const borderCol = catColors[item.category] || '#888';
-
-      // Item background
-      ctx.fillStyle = canAfford ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.4)';
-      ctx.fillRect(ix + 2, iy + 2, itemW - 6, itemH - 6);
-      ctx.strokeStyle = canAfford ? borderCol : '#444';
-      ctx.lineWidth = canAfford ? 2 : 1;
-      ctx.strokeRect(ix + 2, iy + 2, itemW - 6, itemH - 6);
-
-      // Icon (big emoji)
-      ctx.font = '22px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(item.icon, ix + itemW/2, iy + 28);
-
-      // Name
-      ctx.fillStyle = canAfford ? '#fff' : '#888';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.fillText(item.name, ix + itemW/2, iy + 46);
-
-      // Cost
-      ctx.fillStyle = canAfford ? '#ffd700' : '#886600';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.fillText(`$${item.cost}`, ix + itemW/2, iy + 60);
-
-      // Description (tiny text)
-      ctx.fillStyle = 'rgba(200,200,200,0.6)';
-      ctx.font = '8px sans-serif';
-      ctx.fillText(item.desc, ix + itemW/2, iy + 74);
-
-      ctx.textAlign = 'left';
-
-      // Remember bounds for clicks
-      this._shopItemBounds.push({ item, x: ix + 2, y: iy + 2, w: itemW - 6, h: itemH - 6 });
-    });
-
-    // Close button
-    ctx.fillStyle = '#882222';
-    ctx.fillRect(panX + panW - 40, panY + 6, 34, 28);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('✕', panX + panW - 23, panY + 25);
-    ctx.textAlign = 'left';
-    this._shopCloseBounds = { x: panX + panW - 40, y: panY + 6, w: 34, h: 28 };
-  }
-
-  // Handle a click inside the shop overlay
-  _handleShopClick(x, y) {
-    // Close button
-    const cb = this._shopCloseBounds;
-    if (cb && x >= cb.x && x <= cb.x + cb.w && y >= cb.y && y <= cb.y + cb.h) {
-      this.shopOpen = false; return;
-    }
-    // Item click
-    if (!this._shopItemBounds) return;
-    for (const b of this._shopItemBounds) {
-      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-        this._buyShopItem(b.item);
-        return;
-      }
-    }
-  }
-
-  // Buy a shop item and apply its effect
-  _buyShopItem(item) {
-    if (this.money < item.cost) { this.flash(`Need $${item.cost}!`); return; }
-    this.money -= item.cost;
-    this.shopBuyCount++;
-    if (this.shopBuyCount >= 5) this._grantAchievement('shop_buyer');
-    this._updateButtons();
-    this.flash(`Bought ${item.name}!`);
-
-    // Apply the item's effect based on its ID
-    switch (item.id) {
-      // ── Allies ──────────────────────────────────────────────────────────────
-      case 'ally_dragon': {
-        // Spawn 1 powerful friendly soldier near the castle
-        const pathEnd = this.path[this.path.length - 1];
-        const s = new Soldier(pathEnd.x - 30, pathEnd.y - 20, { soldierHp: 200, soldierDmg: 30 });
-        s.waypoint = this.path.length - 1; s.speed = 1.8;
-        this.soldiers.push(s); break;
-      }
-      case 'ally_knight': {
-        // Spawn 3 knights
-        const pathEnd = this.path[this.path.length - 1];
-        for (let i = 0; i < 3; i++) {
-          const s = new Soldier(pathEnd.x - 20 + i*15, pathEnd.y - 15, { soldierHp: 100, soldierDmg: 15 });
-          s.waypoint = this.path.length - 1;
-          this.soldiers.push(s);
+  // ── Loadout — apply consumables queued from the gem shop ─────────────────────
+  // Called at the start of each level. Immediate items apply now; trigger items
+  // wait in _pendingTriggers until the first wave enemy spawns.
+  _applyConsumables() {
+    for (const id of this.pendingConsumables) {
+      switch (id) {
+        // ── Allies (spawn immediately) ────────────────────────────────────────
+        case 'ally_dragon': {
+          const pe = this.path[this.path.length - 1];
+          const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 200, soldierDmg: 30 }, 'basic');
+          s.waypoint = this.path.length - 1; s.speed = 1.8;
+          this.soldiers.push(s); break;
         }
-        break;
+        case 'ally_knight': {
+          const pe = this.path[this.path.length - 1];
+          for (let i = 0; i < 3; i++) {
+            const s = new Soldier(pe.x - 20 + i * 15, pe.y - 15, { soldierHp: 100, soldierDmg: 15 }, 'knight');
+            s.waypoint = this.path.length - 1;
+            this.soldiers.push(s);
+          } break;
+        }
+        case 'ally_wizard': {
+          const pe = this.path[this.path.length - 1];
+          const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 60, soldierDmg: 25, magic: true }, 'mage');
+          s.waypoint = this.path.length - 1; s.speed = 1.2;
+          this.soldiers.push(s); break;
+        }
+        case 'ally_golem': {
+          const pe = this.path[this.path.length - 1];
+          const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 300, soldierDmg: 10 }, 'siege');
+          s.waypoint = this.path.length - 1; s.speed = 0.5;
+          this.soldiers.push(s); break;
+        }
+        // ── Immediate buffs ──────────────────────────────────────────────────
+        case 'pow_heal': {
+          const h = Math.floor(this.castleMaxHp * 0.2);
+          this.castleHp = Math.min(this.castleHp + h, this.castleMaxHp); break;
+        }
+        case 'pow_rage':   this.rageTimer    = 30 * 60; break;
+        case 'pow_shield': this.shieldTimer  = 10 * 60; break;
+        case 'pow_time':   this.timeSlowTimer = 20 * 60; break;
+        case 'sp_angel':   this.shieldTimer  = 60 * 60; break;
+        // ── Level-long upgrades ──────────────────────────────────────────────
+        case 'upg_dmg':    for (const t of this.towers) t.damage  *= 1.25; break;
+        case 'upg_range':  for (const t of this.towers) t.range   *= 1.2;  break;
+        case 'upg_gold':   this.goldBonus *= 1.3; break;
+        case 'upg_castle': {
+          const old = this.castleMaxHp;
+          this.castleMaxHp = Math.floor(old * 1.5);
+          this.castleHp += this.castleMaxHp - old; break;
+        }
+        case 'upg_speed':  this.swiftSoldiers = true;  for (const s of this.soldiers) s.speed *= 1.5; break;
+        case 'upg_spawn':  this.rapidSpawnActive = true; break;
+        case 'upg_armor':  this.armorActive = true; break;
+        case 'upg_bounce': this.bounceActive = true; for (const t of this.towers) t.bounceShot = true; break;
+        case 'upg_multi':  this.multiShotActive = true; for (const t of this.towers) t.multiShot = true; break;
+        case 'upg_regen':  this.regenActive = true; break;
+        // ── First-wave triggers (queue until wave 1 enemies appear) ──────────
+        case 'pow_airstrike':
+        case 'pow_meteor':
+        case 'pow_freeze':
+        case 'pow_lightning':
+        case 'pow_poison':
+        case 'sp_nuke':
+        case 'sp_berserk':
+          this._pendingTriggers.push(id); break;
+        // ── Clone: duplicate first tower ─────────────────────────────────────
+        case 'sp_clone': {
+          const src = this.towers[0];
+          if (src) {
+            const angle = Math.random() * Math.PI * 2;
+            const clone = new Tower(src.x + Math.cos(angle) * 55, src.y + Math.sin(angle) * 55, src.typeKey);
+            clone.damage = src.damage; clone.range = src.range;
+            clone.fireRate = src.fireRate; clone.level = src.level;
+            this.towers.push(clone);
+          } break;
+        }
       }
-      case 'ally_wizard':
-      case 'ally_golem': {
-        const pathEnd = this.path[this.path.length - 1];
-        const hp = item.id === 'ally_golem' ? 300 : 60;
-        const dmg = item.id === 'ally_golem' ? 10 : 25;
-        const s = new Soldier(pathEnd.x - 30, pathEnd.y - 20, { soldierHp: hp, soldierDmg: dmg });
-        s.waypoint = this.path.length - 1; s.speed = item.id === 'ally_golem' ? 0.5 : 1.2;
-        this.soldiers.push(s); break;
-      }
-      // ── Power-ups ────────────────────────────────────────────────────────────
-      case 'pow_airstrike':
-      case 'pow_meteor': {
-        // Bomb all enemies for big damage
-        const dmg = item.id === 'pow_meteor' ? 999 : 30;
-        for (const e of this.enemies) e.takeDamage(dmg);
-        this.flash(`💥 ${item.name}! All enemies take ${dmg} damage!`); break;
-      }
-      case 'pow_freeze': {
-        // Freeze all enemies for 5 seconds (300 frames)
-        this.timeSlowTimer = 300;
-        for (const e of this.enemies) { e._slowApplied = false; } // reset so slow gets re-applied
-        this.flash('❄️ All enemies frozen for 5 seconds!');
-        this._grantAchievement('freeze'); break;
-      }
-      case 'pow_heal': {
-        const healAmt = Math.floor(this.castleMaxHp * 0.2);
-        this.castleHp = Math.min(this.castleHp + healAmt, this.castleMaxHp);
-        this.flash(`🏰 Castle repaired! +${healAmt} HP`); break;
-      }
-      case 'pow_rage': {
-        this.rageTimer = 30 * 60; // 30 seconds
-        this.flash('🔥 Tower Rage! All towers fire 2x faster for 30s!'); break;
-      }
-      case 'pow_shield': {
-        this.shieldTimer = 10 * 60; // 10 seconds
-        this.flash('🛡️ Castle Shield! Invincible for 10s!'); break;
-      }
+    }
+    this.pendingConsumables = []; // clear after applying
+  }
+
+  // Fire a single trigger item when the first wave enemy appears
+  _fireTrigger(id) {
+    switch (id) {
+      case 'pow_airstrike': for (const e of this.enemies) e.takeDamage(30);  break;
+      case 'pow_meteor':    for (const e of this.enemies) e.takeDamage(999); break;
+      case 'pow_freeze':    this.timeSlowTimer = 300; this._grantAchievement('freeze'); break;
       case 'pow_lightning': {
-        // Strike 10 random enemies
-        const targets = [...this.enemies].sort(() => Math.random()-0.5).slice(0, 10);
-        for (const e of targets) e.takeDamage(20);
-        this.flash(`⚡ Chain Lightning! Hit ${targets.length} enemies!`); break;
+        const targets = [...this.enemies].sort(() => Math.random() - 0.5).slice(0, 10);
+        for (const e of targets) e.takeDamage(20); break;
       }
-      case 'pow_poison': {
-        this.poisonTimer = 5 * 60; // 5 seconds of poison
-        this.flash('☠️ Poison Cloud! All enemies poisoned!'); break;
-      }
-      case 'pow_time': {
-        this.timeSlowTimer = 20 * 60;
-        for (const e of this.enemies) { e._slowApplied = false; }
-        this.flash('⏳ Time Slow! Enemies at half speed for 20s!'); break;
-      }
-      // ── Permanent upgrades ────────────────────────────────────────────────────
-      case 'upg_dmg': {
-        for (const t of this.towers) t.damage *= 1.25;
-        this.flash('💥 All towers +25% damage!'); break;
-      }
-      case 'upg_range': {
-        for (const t of this.towers) t.range *= 1.2;
-        this.flash('🎯 All towers +20% range!'); break;
-      }
-      case 'upg_gold': {
-        this.goldBonus *= 1.3;
-        this.flash('🪙 +30% gold from kills!'); break;
-      }
-      case 'upg_castle': {
-        const oldMax = this.castleMaxHp;
-        this.castleMaxHp = Math.floor(this.castleMaxHp * 1.5);
-        this.castleHp += (this.castleMaxHp - oldMax); // add the extra HP
-        this.flash('🏯 Castle reinforced! +50% max HP!'); break;
-      }
-      case 'upg_speed': {
-        this.swiftSoldiers = true;
-        for (const s of this.soldiers) s.speed *= 1.5;
-        this.flash('👟 Soldiers move 50% faster!'); break;
-      }
-      case 'upg_spawn': {
-        this.rapidSpawnActive = true;
-        this.flash('⏱️ Rapid Training! Camps spawn 2x faster!'); break;
-      }
-      case 'upg_armor': {
-        this.armorActive = true;
-        this.flash('🛡 Tower Armor! Towers take 50% less damage!'); break;
-      }
-      case 'upg_bounce': {
-        this.bounceActive = true;
-        // Mark all current towers so their projectiles bounce to a second enemy
-        for (const t of this.towers) t.bounceShot = true;
-        this.flash('🏹 Bouncing Arrows! Projectiles now bounce to a second target!'); break;
-      }
-      case 'upg_multi': {
-        this.multiShotActive = true;
-        // Mark all current towers so they fire 2 projectiles each shot
-        for (const t of this.towers) t.multiShot = true;
-        this.flash('🌟 Multishot! All towers now fire 2 projectiles!'); break;
-      }
-      case 'upg_regen': {
-        this.regenActive = true;
-        this.flash('💚 HP Regen! Towers slowly heal over time!'); break;
-      }
-      // ── Special items ──────────────────────────────────────────────────────────
-      case 'sp_nuke': {
-        const killed = this.enemies.length;
-        for (const e of this.enemies) e.takeDamage(99999);
-        this.flash(`💣 NUCLEAR OPTION! ${killed} enemies destroyed!`);
-        this._grantAchievement('nuke'); break;
-      }
-      case 'sp_angel': {
-        this.shieldTimer = 60 * 60; // 60 seconds
-        this.flash('👼 Angel Guard! Castle invincible for 60s!'); break;
-      }
-      case 'sp_clone': {
-        // Clone the selected tower (or first tower if none selected)
-        const src = this.selectedTower || this.towers[0];
-        if (!src) { this.flash('No tower to clone!'); break; }
-        // Place clone at a random offset so it doesn't overlap the original
-        const angle = Math.random() * Math.PI * 2;
-        const clone = new Tower(src.x + Math.cos(angle)*55, src.y + Math.sin(angle)*55, src.typeKey);
-        clone.damage = src.damage; clone.range = src.range; clone.fireRate = src.fireRate; clone.level = src.level;
-        this.towers.push(clone);
-        this.flash('🔮 Tower cloned!'); break;
-      }
-      case 'sp_berserk': {
-        // Enemies attack each other — simulate by having them take random damage
-        const duration = 15 * 60;
-        this.berserkTimer = duration;
-        this.flash('😤 Berserker Mode! Enemies fight each other!'); break;
-      }
-      default:
-        this.flash(`${item.icon} ${item.name} activated!`);
+      case 'pow_poison':  this.poisonTimer  = 5 * 60;  break;
+      case 'sp_nuke':     for (const e of this.enemies) e.takeDamage(99999); this._grantAchievement('nuke'); break;
+      case 'sp_berserk':  this.berserkTimer = 15 * 60; break;
     }
   }
 
@@ -2796,28 +2601,43 @@ class Game {
 
   // ── Gem Shop ─────────────────────────────────────────────────────────────────
 
-  // Build the HTML gem shop items inside #gem-shop-items
+  // Build the HTML gem shop items inside #gem-shop-items, split into two sections
   _buildGemShop() {
     const purchases = JSON.parse(localStorage.getItem('td_gem_purchases') || '[]');
     const container = document.getElementById('gem-shop-items');
     if (!container) return;
     container.innerHTML = '';
 
-    for (const item of GEM_SHOP_ITEMS) {
+    // Section header helper
+    const addSection = (title) => {
+      const h = document.createElement('div');
+      h.style.cssText = 'width:100%;text-align:center;font-size:11px;font-weight:bold;letter-spacing:2px;color:rgba(255,255,255,0.4);text-transform:uppercase;margin:8px 0 4px;';
+      h.textContent = title;
+      container.appendChild(h);
+    };
+
+    addSection('⭐ Permanent Upgrades — buy once, keep forever');
+    for (const item of GEM_SHOP_ITEMS.filter(i => i.permanent)) {
       const owned = purchases.includes(item.id);
       const canAfford = this.gems >= item.cost;
       const div = document.createElement('div');
       div.className = 'gem-item' + (owned ? ' owned' : canAfford ? '' : ' cant-afford');
-      div.innerHTML = `
-        <div class="gi-icon">${item.icon}</div>
-        <div class="gi-name">${item.name}</div>
-        <div class="gi-cost">${owned ? '✓ OWNED' : '💎 ' + item.cost}</div>
-        <div class="gi-desc">${item.desc}</div>
-      `;
+      div.innerHTML = `<div class="gi-icon">${item.icon}</div><div class="gi-name">${item.name}</div><div class="gi-cost">${owned ? '✓ OWNED' : '💎 ' + item.cost}</div><div class="gi-desc">${item.desc}</div>`;
       div.title = item.desc;
-      if (!owned) {
-        div.onclick = () => this._buyGemItem(item);
-      }
+      if (!owned) div.onclick = () => this._buyGemItem(item);
+      container.appendChild(div);
+    }
+
+    addSection('📦 Level Loadout — buy to use next level (stackable)');
+    for (const item of GEM_SHOP_ITEMS.filter(i => !i.permanent)) {
+      const count = this.pendingConsumables.filter(id => id === item.id).length;
+      const canAfford = this.gems >= item.cost;
+      const div = document.createElement('div');
+      div.className = 'gem-item' + (canAfford ? '' : ' cant-afford');
+      if (count > 0) div.style.borderColor = '#ffd700';
+      div.innerHTML = `<div class="gi-icon">${item.icon}${count > 0 ? `<span style="font-size:10px;color:#ffd700;font-weight:bold"> ×${count}</span>` : ''}</div><div class="gi-name">${item.name}</div><div class="gi-cost">💎 ${item.cost}</div><div class="gi-desc">${item.desc}</div>`;
+      div.title = item.desc;
+      div.onclick = () => this._buyGemItem(item);
       container.appendChild(div);
     }
 
@@ -2826,20 +2646,26 @@ class Game {
     if (bal) bal.textContent = `💎 ${this.gems} Gem${this.gems !== 1 ? 's' : ''}`;
   }
 
-  // Buy a gem shop item — deduct gems and save purchase
+  // Buy a gem shop item — handles both permanent and consumable items
   _buyGemItem(item) {
-    if (this.gems < item.cost) {
-      // Shake feedback — no alert needed
-      this.flash(`Need 💎 ${item.cost} gems!`);
-      return;
+    if (this.gems < item.cost) { this.flash(`Need 💎 ${item.cost} gems!`); return; }
+
+    if (item.permanent) {
+      // One-time purchase saved to localStorage
+      const purchases = JSON.parse(localStorage.getItem('td_gem_purchases') || '[]');
+      if (purchases.includes(item.id)) return; // already owned
+      this.gems -= item.cost;
+      localStorage.setItem('td_gems', String(this.gems));
+      purchases.push(item.id);
+      localStorage.setItem('td_gem_purchases', JSON.stringify(purchases));
+    } else {
+      // Consumable: queue for next level (can buy multiple copies)
+      this.gems -= item.cost;
+      localStorage.setItem('td_gems', String(this.gems));
+      this.pendingConsumables.push(item.id);
     }
-    const purchases = JSON.parse(localStorage.getItem('td_gem_purchases') || '[]');
-    if (purchases.includes(item.id)) return; // already owned
-    this.gems -= item.cost;
-    localStorage.setItem('td_gems', String(this.gems));
-    purchases.push(item.id);
-    localStorage.setItem('td_gem_purchases', JSON.stringify(purchases));
-    this._buildGemShop(); // refresh to show ownership
+
+    this._buildGemShop(); // refresh UI
     const bal = document.getElementById('gem-balance');
     if (bal) bal.textContent = `💎 ${this.gems} Gem${this.gems !== 1 ? 's' : ''}`;
   }
