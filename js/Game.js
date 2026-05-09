@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=18';
-import { GameMap }     from './Map.js?v=18';
-import { Tower }       from './Tower.js?v=18';
-import { Enemy }       from './Enemy.js?v=18';
-import { Projectile }  from './Projectile.js?v=18';
-import { Trap }        from './Trap.js?v=18';
-import { Mine }        from './Mine.js?v=18';
-import { WaveManager } from './WaveManager.js?v=18';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=19';
+import { GameMap }     from './Map.js?v=19';
+import { Tower }       from './Tower.js?v=19';
+import { Enemy }       from './Enemy.js?v=19';
+import { Projectile }  from './Projectile.js?v=19';
+import { Trap }        from './Trap.js?v=19';
+import { Mine }        from './Mine.js?v=19';
+import { WaveManager } from './WaveManager.js?v=19';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -2444,8 +2444,7 @@ class Game {
     // Apply the item's effect based on its ID
     switch (item.id) {
       // ── Allies ──────────────────────────────────────────────────────────────
-      case 'ally_dragon':
-      case 'ally_griffin': {
+      case 'ally_dragon': {
         // Spawn 1 powerful friendly soldier near the castle
         const pathEnd = this.path[this.path.length - 1];
         const s = new Soldier(pathEnd.x - 30, pathEnd.y - 20, { soldierHp: 200, soldierDmg: 30 });
@@ -2490,10 +2489,6 @@ class Game {
         const healAmt = Math.floor(this.castleMaxHp * 0.2);
         this.castleHp = Math.min(this.castleHp + healAmt, this.castleMaxHp);
         this.flash(`🏰 Castle repaired! +${healAmt} HP`); break;
-      }
-      case 'pow_gold': {
-        this.money = Math.min(this.money + 150, MAX_MONEY);
-        this.flash('💰 +150 Gold!'); this._updateButtons(); break;
       }
       case 'pow_rage': {
         this.rageTimer = 30 * 60; // 30 seconds
@@ -2576,12 +2571,6 @@ class Game {
       case 'sp_angel': {
         this.shieldTimer = 60 * 60; // 60 seconds
         this.flash('👼 Angel Guard! Castle invincible for 60s!'); break;
-      }
-      case 'sp_chest': {
-        const reward = 50 + Math.floor(Math.random() * 451); // 50 to 500
-        this.money = Math.min(this.money + reward, MAX_MONEY);
-        this.flash(`🎁 Treasure Chest! Found $${reward}!`);
-        this._updateButtons(); break;
       }
       case 'sp_clone': {
         // Clone the selected tower (or first tower if none selected)
