@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=17';
-import { Projectile } from './Projectile.js?v=17';
+import { ENEMIES, distance } from './constants.js?v=18';
+import { Projectile } from './Projectile.js?v=18';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -27,13 +27,16 @@ export class Enemy {
     this.barrTimer = 0;     // cooldown between barricade hits
     // Off-path tower aggro
     this.offPathTarget = null;
+    // Soldier combat
+    this.soldierTarget    = null;
+    this.soldierAtkTimer  = 0;   // cooldown between hits on a soldier
     // Gate siege state
     this.atGate = false;
     this.gateAttackTimer = 30;
     this.comboPhase = 0;
   }
 
-  update(path, towers, projectiles, traps = []) {
+  update(path, towers, projectiles, traps = [], soldiers = []) {
     if (this.hitTimer   > 0) this.hitTimer--;
     if (this.attackTimer > 0) this.attackTimer--;
     if (this.slowTimer  > 0) this.slowTimer--;
@@ -106,6 +109,39 @@ export class Enemy {
         this._runnerShoot(towers, projectiles);
         return;
       }
+    }
+
+    // Soldier combat — enemies stop and fight any soldier that gets in their way
+    if (this.soldierAtkTimer > 0) this.soldierAtkTimer--;
+    // Drop stale soldier target (dead or too far away)
+    if (this.soldierTarget && (this.soldierTarget.isDead() ||
+        Math.hypot(this.soldierTarget.x - this.x, this.soldierTarget.y - this.y) > 110)) {
+      this.soldierTarget = null;
+    }
+    // Pick up a new nearby soldier target
+    if (!this.soldierTarget) {
+      this.soldierTarget = soldiers.find(s => !s.isDead() &&
+        Math.hypot(s.x - this.x, s.y - this.y) < 65) || null;
+    }
+    if (this.soldierTarget) {
+      const sx = this.soldierTarget.x, sy = this.soldierTarget.y;
+      const d = Math.hypot(sx - this.x, sy - this.y);
+      if (d > 28) {
+        // Chase the soldier
+        this.x += ((sx - this.x) / d) * spd;
+        this.y += ((sy - this.y) / d) * spd;
+      } else {
+        // In melee range — swing and deal damage
+        this.triggerAttack(sx, sy);
+        if (this.soldierAtkTimer <= 0) {
+          // Damage per enemy type — stronger enemies hit harder
+          const dmg = { goblin:4, runner:3, saboteur:10, ogre:18, dragon:30, dragonRider:50 }[this.kind] ?? 4;
+          this.soldierTarget.takeDamage(dmg);
+          this.soldierAtkTimer = 50;
+        }
+      }
+      this._runnerShoot(towers, projectiles);
+      return; // don't path-walk while fighting a soldier
     }
 
     // Off-path tower aggro

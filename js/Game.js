@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=17';
-import { GameMap }     from './Map.js?v=17';
-import { Tower }       from './Tower.js?v=17';
-import { Enemy }       from './Enemy.js?v=17';
-import { Projectile }  from './Projectile.js?v=17';
-import { Trap }        from './Trap.js?v=17';
-import { Mine }        from './Mine.js?v=17';
-import { WaveManager } from './WaveManager.js?v=17';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, SHOP_ITEMS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=18';
+import { GameMap }     from './Map.js?v=18';
+import { Tower }       from './Tower.js?v=18';
+import { Enemy }       from './Enemy.js?v=18';
+import { Projectile }  from './Projectile.js?v=18';
+import { Trap }        from './Trap.js?v=18';
+import { Mine }        from './Mine.js?v=18';
+import { WaveManager } from './WaveManager.js?v=18';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -144,18 +144,30 @@ class Camp {
   }
 }
 
-// Soldier now gets stats from its camp type (hp, damage vary by camp)
+// Soldier — each camp type spawns soldiers that look and fight differently
+// Teaching concept: one class, many behaviors — controlled by typeName flags
 class Soldier {
-  constructor(x, y, campType = null) {
+  constructor(x, y, campType = null, typeName = 'basic') {
     this.x = x; this.y = y;
-    // Use camp type stats if provided, otherwise fall back to defaults
+    this.typeName = typeName; // 'basic' | 'archer' | 'knight' | 'mage' | 'siege'
+
+    // Stats from camp config
     const hp  = campType ? campType.soldierHp  : 50;
     const dmg = campType ? campType.soldierDmg : 8;
     this.hp = hp; this.maxHp = hp;
     this.speed = 1.0;
     this.damage = dmg;
-    this.range = 52;
-    this.waypoint = 0; // will be set to path.length-1 on spawn
+
+    // Each type has different attack range and rate:
+    // archer = long range, slow fire  |  mage = very long range, aoe, very slow
+    // siege = wide melee aoe          |  knight/basic = normal melee
+    this.ranged = campType?.ranged || false;  // archer: don't close to melee
+    this.magic  = campType?.magic  || false;  // mage: aoe blast
+    this.aoe    = campType?.aoe    || false;  // siege: melee hits all nearby
+    this.range      = this.magic ? 140 : this.ranged ? 110 : 58;
+    this.attackRate = this.magic ? 110 : this.ranged ? 80  : 45;
+
+    this.waypoint = 0;
     this.attackTimer = 0;
     this.target = null;
     this.blocking = false;
@@ -166,6 +178,7 @@ class Soldier {
     this.hitTimer = 0;
     this._3dx = null; this._3dy = null; this._3dr = 0;
   }
+
   update(enemies, path) {
     if (this.hitTimer > 0) this.hitTimer--;
     if (this.attackTimer > 0) this.attackTimer--;
@@ -177,69 +190,235 @@ class Soldier {
       this.jumpVel -= 0.5;
       if (this.jumpHeight <= 0) { this.jumpHeight = 0; this.jumpVel = 0; }
     }
+
     // Find nearest enemy in range
     this.target = enemies
       .filter(e => Math.hypot(e.x-this.x, e.y-this.y) < this.range)
       .sort((a,b) => Math.hypot(a.x-this.x,a.y-this.y) - Math.hypot(b.x-this.x,b.y-this.y))[0] || null;
+
     if (this.target) {
       if (this.attackTimer <= 0) {
-        this.target.takeDamage(this.damage);
-        this.attackTimer = 45;
-        this.swingTimer = 14;
+        if (this.magic) {
+          // Mage: AOE blast — damages all enemies near the target
+          for (const e of enemies) {
+            if (Math.hypot(e.x-this.target.x, e.y-this.target.y) < 55)
+              e.takeDamage(this.damage * 0.6);
+          }
+          this.target.takeDamage(this.damage); // direct hit always full
+        } else if (this.aoe) {
+          // Siege: hits every enemy within melee reach
+          for (const e of enemies) {
+            if (Math.hypot(e.x-this.x, e.y-this.y) < 62)
+              e.takeDamage(this.damage);
+          }
+        } else {
+          // archer / basic / knight: single target
+          this.target.takeDamage(this.damage);
+        }
+        this.attackTimer = this.attackRate;
+        this.swingTimer  = 14;
+        // Knight: randomly start blocking after an attack
+        if (this.typeName === 'knight' && Math.random() < 0.3) {
+          this.blocking = true; this.blockTimer = 40;
+        }
+      }
+      // Ranged/magic soldiers hold their position; melee soldiers step in closer
+      if (!this.ranged && !this.magic) {
+        const dest = this.target;
+        const d = Math.hypot(dest.x-this.x, dest.y-this.y);
+        if (d > 30) { this.x += ((dest.x-this.x)/d)*this.speed; this.y += ((dest.y-this.y)/d)*this.speed; }
       }
     } else {
-      // Walk toward enemies (decreasing waypoint toward 0)
+      // No enemies in range — walk toward the front (decreasing waypoint toward 0)
       const dest = path[Math.max(0, this.waypoint - 1)];
       const d = Math.hypot(dest.x - this.x, dest.y - this.y);
       if (d < this.speed) { if (this.waypoint > 0) this.waypoint--; }
       else { this.x += ((dest.x-this.x)/d)*this.speed; this.y += ((dest.y-this.y)/d)*this.speed; }
     }
   }
+
   takeDamage(amt) {
     this.hp -= this.blocking ? amt * 0.3 : amt;
     this.hitTimer = 10;
   }
   isDead() { return this.hp <= 0; }
   jump() { if (this.jumpHeight === 0) this.jumpVel = 6; }
+
   draw(ctx) {
     const hit = this.hitTimer > 0;
     const jy = this.jumpHeight * 0.4;
-    // Shadow
+    // Shadow (same for all types)
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
     ctx.save(); ctx.translate(this.x+2,this.y+9); ctx.scale(1,0.3);
     ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill(); ctx.restore();
-    // Legs
+
+    // Dispatch to type-specific drawing
+    switch (this.typeName) {
+      case 'archer': this._drawArcher(ctx, hit, jy); break;
+      case 'knight': this._drawKnight(ctx, hit, jy); break;
+      case 'mage':   this._drawMage(ctx, hit, jy);   break;
+      case 'siege':  this._drawSiege(ctx, hit, jy);  break;
+      default:       this._drawBasic(ctx, hit, jy);  break;
+    }
+
+    // HP bar (same for all)
+    const bw = 20;
+    ctx.fillStyle = '#111'; ctx.fillRect(this.x-bw/2, this.y-26-jy, bw, 3);
+    const hf = this.hp / this.maxHp;
+    ctx.fillStyle = hf > 0.5 ? '#2f8' : hf > 0.25 ? '#fa0' : '#f44';
+    ctx.fillRect(this.x-bw/2, this.y-26-jy, bw*hf, 3);
+  }
+
+  // ── BASIC SOLDIER (blue armour, sword) ───────────────────────────────────────
+  _drawBasic(ctx, hit, jy) {
     ctx.fillStyle = hit ? '#fff' : '#334488';
     ctx.fillRect(this.x-5, this.y+2-jy, 4, 6); ctx.fillRect(this.x+1, this.y+2-jy, 4, 6);
-    // Body
     ctx.fillStyle = hit ? '#fff' : '#2255aa';
     ctx.fillRect(this.x-5, this.y-8-jy, 10, 10);
-    // Neck
     ctx.fillStyle = '#e8b890'; ctx.fillRect(this.x-1.5, this.y-11-jy, 3, 4);
-    // Head
-    ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 5, 0, Math.PI*2); ctx.fill();
-    // Helmet
-    ctx.fillStyle = '#999';
-    ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 5.5, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#999'; ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 5.5, Math.PI, 0); ctx.fill();
     ctx.fillRect(this.x-7, this.y-16-jy, 14, 3);
-    // Shield
-    if (this.blocking) {
-      ctx.fillStyle = '#cc8822'; ctx.fillRect(this.x-12, this.y-10-jy, 6, 14);
-      ctx.strokeStyle = '#885500'; ctx.lineWidth = 1; ctx.strokeRect(this.x-12, this.y-10-jy, 6, 14);
-    }
-    // Sword
     const sw = this.swingTimer > 0 ? Math.sin(this.swingTimer/14*Math.PI)*10 : 0;
     ctx.fillStyle = '#ccc';
     ctx.save(); ctx.translate(this.x+8, this.y-5-jy-sw);
     ctx.fillRect(-1,-13,2,14); ctx.fillStyle='#884400'; ctx.fillRect(-3,-1,7,2); ctx.restore();
-    // HP bar
-    const bw = 18;
-    ctx.fillStyle = '#111'; ctx.fillRect(this.x-bw/2, this.y-24-jy, bw, 3);
-    ctx.fillStyle = '#2f8'; ctx.fillRect(this.x-bw/2, this.y-24-jy, bw*(this.hp/this.maxHp), 3);
-    // Block indicator
+  }
+
+  // ── ARCHER (green cloak, bow) ─────────────────────────────────────────────────
+  _drawArcher(ctx, hit, jy) {
+    // Legs (brown leather)
+    ctx.fillStyle = hit ? '#fff' : '#5a3a1a';
+    ctx.fillRect(this.x-5, this.y+2-jy, 4, 6); ctx.fillRect(this.x+1, this.y+2-jy, 4, 6);
+    // Body (dark green tunic)
+    ctx.fillStyle = hit ? '#fff' : '#2a6020';
+    ctx.fillRect(this.x-5, this.y-8-jy, 10, 10);
+    // Hood
+    ctx.fillStyle = hit ? '#fff' : '#1a4a14';
+    ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#e8b890'; // face
+    ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 4, 0, Math.PI*2); ctx.fill();
+    // Bow (curved arc on left side)
+    const bowDraw = this.swingTimer > 0 ? 4 : 0; // pull back when attacking
+    ctx.strokeStyle = '#884400'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(this.x - 10 - bowDraw, this.y - 8 - jy, 10, -0.9, 0.9);
+    ctx.stroke();
+    // Bowstring
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(this.x - 10 - bowDraw, this.y - 17 - jy);
+    ctx.lineTo(this.x - 2 + bowDraw, this.y - 8 - jy); // pulled back when attacking
+    ctx.lineTo(this.x - 10 - bowDraw, this.y + 1 - jy);
+    ctx.stroke();
+    // Arrow on the string (only when not attacking)
+    if (this.swingTimer === 0) {
+      ctx.strokeStyle = '#cc8800'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(this.x-12-jy, this.y-8-jy); ctx.lineTo(this.x+4, this.y-8-jy); ctx.stroke();
+    }
+  }
+
+  // ── KNIGHT (silver plate armour, tower shield, big sword) ─────────────────────
+  _drawKnight(ctx, hit, jy) {
+    // Greaves (silver)
+    ctx.fillStyle = hit ? '#fff' : '#778899';
+    ctx.fillRect(this.x-6, this.y+2-jy, 5, 7); ctx.fillRect(this.x+1, this.y+2-jy, 5, 7);
+    // Plate body (slightly larger)
+    ctx.fillStyle = hit ? '#fff' : '#8899aa';
+    ctx.fillRect(this.x-6, this.y-9-jy, 12, 11);
+    // Neck
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(this.x-1.5, this.y-12-jy, 3, 4);
+    // Great helm (full face)
+    ctx.fillStyle = hit ? '#fff' : '#aabbcc';
+    ctx.beginPath(); ctx.arc(this.x, this.y-15-jy, 6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#334455'; // visor slit
+    ctx.fillRect(this.x-4, this.y-16-jy, 8, 3);
+    // Tower shield (large, gold trimmed)
+    ctx.fillStyle = hit ? '#fff' : '#cc8822';
+    ctx.fillRect(this.x-16, this.y-12-jy, 7, 18);
+    ctx.strokeStyle = '#886600'; ctx.lineWidth = 1;
+    ctx.strokeRect(this.x-16, this.y-12-jy, 7, 18);
+    ctx.fillStyle = '#ffdd44'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('✦', this.x-12, this.y-4-jy); ctx.textAlign = 'left';
+    // Great sword
+    const sw = this.swingTimer > 0 ? Math.sin(this.swingTimer/14*Math.PI)*12 : 0;
+    ctx.fillStyle = '#ddd';
+    ctx.save(); ctx.translate(this.x+9, this.y-6-jy-sw);
+    ctx.fillRect(-1.5,-16,3,18); ctx.fillStyle='#aa6600'; ctx.fillRect(-4,-2,9,3); ctx.restore();
+    // Block flash on shield
     if (this.blocking) {
-      ctx.fillStyle = 'rgba(200,180,50,0.7)'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('🛡', this.x, this.y-28-jy); ctx.textAlign = 'left';
+      ctx.fillStyle='rgba(200,230,255,0.45)'; ctx.fillRect(this.x-16, this.y-12-jy, 7, 18);
+    }
+  }
+
+  // ── MAGE (purple robes, glowing staff) ───────────────────────────────────────
+  _drawMage(ctx, hit, jy) {
+    // Robe (long, covers legs)
+    ctx.fillStyle = hit ? '#fff' : '#5a2299';
+    ctx.fillRect(this.x-5, this.y-2-jy, 10, 12);
+    // Robe bottom flare
+    ctx.fillStyle = hit ? '#fff' : '#7733bb';
+    ctx.beginPath(); ctx.moveTo(this.x-7, this.y+9-jy); ctx.lineTo(this.x+7, this.y+9-jy);
+    ctx.lineTo(this.x+9, this.y+14-jy); ctx.lineTo(this.x-9, this.y+14-jy); ctx.closePath(); ctx.fill();
+    // Body
+    ctx.fillStyle = hit ? '#fff' : '#6622aa';
+    ctx.fillRect(this.x-5, this.y-10-jy, 10, 8);
+    // Head + hat
+    ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(this.x, this.y-14-jy, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = hit ? '#ddd' : '#3a0066';
+    ctx.beginPath(); ctx.moveTo(this.x-7, this.y-12-jy); ctx.lineTo(this.x, this.y-26-jy); ctx.lineTo(this.x+7, this.y-12-jy); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#aa44ff'; ctx.beginPath(); ctx.arc(this.x, this.y-12-jy, 7, Math.PI, 0); ctx.fill(); // hat brim
+    // Glowing staff
+    const glow = this.swingTimer > 0 ? 1 : 0.4 + 0.3 * Math.sin(Date.now() / 300);
+    ctx.strokeStyle = '#884400'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(this.x+10, this.y+8-jy); ctx.lineTo(this.x+10, this.y-20-jy); ctx.stroke();
+    ctx.fillStyle = `rgba(170,80,255,${glow})`;
+    ctx.beginPath(); ctx.arc(this.x+10, this.y-22-jy, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = `rgba(220,150,255,${glow * 0.6})`;
+    ctx.beginPath(); ctx.arc(this.x+10, this.y-22-jy, 9, 0, Math.PI*2); ctx.fill();
+    // Magic AOE ring when attacking
+    if (this.swingTimer > 0 && this.target) {
+      const p = this.swingTimer / 14;
+      ctx.strokeStyle = `rgba(170,80,255,${p * 0.8})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(this.target.x, this.target.y, 55 * (1-p) + 5, 0, Math.PI*2); ctx.stroke();
+    }
+  }
+
+  // ── SIEGE WARRIOR (dark heavy armour, battle axe) ────────────────────────────
+  _drawSiege(ctx, hit, jy) {
+    // Heavy boots
+    ctx.fillStyle = hit ? '#fff' : '#443322';
+    ctx.fillRect(this.x-7, this.y+1-jy, 5, 8); ctx.fillRect(this.x+2, this.y+1-jy, 5, 8);
+    // Large armoured body
+    ctx.fillStyle = hit ? '#fff' : '#554433';
+    ctx.fillRect(this.x-7, this.y-10-jy, 14, 12);
+    // Shoulder pads
+    ctx.fillStyle = hit ? '#fff' : '#665544';
+    ctx.fillRect(this.x-10, this.y-10-jy, 5, 5); ctx.fillRect(this.x+5, this.y-10-jy, 5, 5);
+    // Neck
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(this.x-1.5, this.y-12-jy, 3, 3);
+    // Horned helmet
+    ctx.fillStyle = hit ? '#fff' : '#776655';
+    ctx.beginPath(); ctx.arc(this.x, this.y-16-jy, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = hit ? '#fff' : '#887766'; // horns
+    ctx.beginPath(); ctx.moveTo(this.x-5, this.y-22-jy); ctx.lineTo(this.x-9, this.y-30-jy); ctx.lineTo(this.x-2, this.y-22-jy); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(this.x+5, this.y-22-jy); ctx.lineTo(this.x+9, this.y-30-jy); ctx.lineTo(this.x+2, this.y-22-jy); ctx.fill();
+    // Battle axe (big swing)
+    const sw = this.swingTimer > 0 ? Math.sin(this.swingTimer/14*Math.PI)*14 : 0;
+    ctx.save(); ctx.translate(this.x+11, this.y-8-jy-sw);
+    ctx.fillStyle = '#888'; ctx.fillRect(-1.5, -18, 3, 22); // haft
+    ctx.fillStyle = '#aaa';
+    ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(8,-14); ctx.lineTo(8,-6); ctx.lineTo(0,-5); ctx.closePath(); ctx.fill(); // axe head
+    ctx.fillStyle = '#ccc';
+    ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(-5,-14); ctx.lineTo(-4,-9); ctx.lineTo(0,-8); ctx.closePath(); ctx.fill(); // back spike
+    ctx.restore();
+    // AOE ground ring when attacking
+    if (this.swingTimer > 0) {
+      const p = this.swingTimer / 14;
+      ctx.strokeStyle = `rgba(200,120,50,${p * 0.7})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(this.x, this.y, 62 * (1-p) + 10, 0, Math.PI*2); ctx.stroke();
     }
   }
 }
@@ -425,7 +604,7 @@ class Game {
 
     if (this.waveManager.inBreak) return;
 
-    for (const e of this.enemies) e.update(this.path, this.towers, this.projectiles, this.traps);
+    for (const e of this.enemies) e.update(this.path, this.towers, this.projectiles, this.traps, this.soldiers);
 
     for (const e of this.enemies) {
       if (!e.atGate && e.hasReachedEnd(this.path)) {
@@ -487,11 +666,12 @@ class Game {
         camp.spawnTimer = 0;
         if (this.soldiers.length < this.camps.length * 3) {
           const pathEnd = this.path[this.path.length - 1];
-          // Pass the camp's type so soldier gets the right HP and damage
+          // Pass the camp's config AND its name so the soldier looks right
           const sol = new Soldier(
             pathEnd.x - 30 + Math.random()*20,
             pathEnd.y - 10 + Math.random()*20,
-            camp.campType  // <-- this is what gives different soldier stats
+            camp.campType,  // stats (hp, dmg, ranged, magic, aoe flags)
+            camp.typeName   // name so draw() knows which style to use
           );
           // Swift Soldiers upgrade
           if (this.swiftSoldiers) sol.speed *= 1.5;
