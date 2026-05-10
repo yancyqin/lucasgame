@@ -1807,7 +1807,7 @@ class Game {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
     // Version badge — helps confirm the right code is loaded
-    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v26';
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v28';
 
     // Draw map background
     this._drawTitleBg();
