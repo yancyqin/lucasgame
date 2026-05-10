@@ -1232,6 +1232,15 @@ class Game {
         // 🪨 Earth: stun the enemy for ~1.7 seconds
         best.stunTimer = 100;
         this.flash(best.isDead() ? `KILL! 🪨 +$${best.reward}` : `HIT! 🪨 STUNNED!`);
+      } else if (tower.typeKey === 'rapid') {
+        // 🏹 Crossbow: burst — fires 3 arrows hitting the 3 closest enemies
+        const targets = [best, ...this.enemies
+          .filter(e => e !== best && e._3dx != null)
+          .sort((a, b) => Math.hypot(a._3dx - mx, a._3dy - my) - Math.hypot(b._3dx - mx, b._3dy - my))
+          .slice(0, 2)];
+        let kills = 0;
+        for (const t of targets) { t.takeDamage(dmg); if (t.isDead()) kills++; }
+        this.flash(kills > 0 ? `BURST! 🏹 ${kills} KILL${kills>1?'S':''}!` : `BURST! 🏹 ×${targets.length} arrows!`);
       } else {
         this.flash(best.isDead() ? `KILL! +$${best.reward}` : `HIT! −${dmg} dmg`);
       }

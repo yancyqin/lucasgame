@@ -69,11 +69,11 @@ export const UPGRADE_MULT = {
 // ── Multiple camp types ────────────────────────────────────────────────────────
 // Each camp type spawns different kinds of soldiers
 export const CAMP_TYPES = {
-  basic:  { label: 'Basic Camp $120',  color: '#7a6030', cost: 120, soldierHp: 20,  soldierDmg: 3,  spawnRate: 420 },
-  archer: { label: 'Archer Camp $150', color: '#3a6a20', cost: 150, soldierHp: 14,  soldierDmg: 4,  spawnRate: 380, ranged: true },
-  knight: { label: 'Knight Camp $180', color: '#3355aa', cost: 180, soldierHp: 35,  soldierDmg: 5,  spawnRate: 480 },
-  mage:   { label: 'Mage Camp $200',   color: '#883399', cost: 200, soldierHp: 16,  soldierDmg: 7,  spawnRate: 500, magic: true },
-  siege:  { label: 'Siege Camp $240',  color: '#885522', cost: 240, soldierHp: 30,  soldierDmg: 10, spawnRate: 600, aoe: true },
+  basic:  { label: 'Basic Camp $120',  color: '#7a6030', cost: 120, soldierHp: 10,  soldierDmg: 1,  spawnRate: 420 },
+  archer: { label: 'Archer Camp $150', color: '#3a6a20', cost: 150, soldierHp: 7,   soldierDmg: 2,  spawnRate: 380, ranged: true },
+  knight: { label: 'Knight Camp $180', color: '#3355aa', cost: 180, soldierHp: 18,  soldierDmg: 2,  spawnRate: 480 },
+  mage:   { label: 'Mage Camp $200',   color: '#883399', cost: 200, soldierHp: 8,   soldierDmg: 3,  spawnRate: 500, magic: true },
+  siege:  { label: 'Siege Camp $240',  color: '#885522', cost: 240, soldierHp: 15,  soldierDmg: 5,  spawnRate: 600, aoe: true },
 };
 
 // ── Gem Shop items ─────────────────────────────────────────────────────────────
