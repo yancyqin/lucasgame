@@ -1,5 +1,5 @@
-import { TYPES, distance } from './constants.js?v=29';
-import { Projectile } from './Projectile.js?v=29';
+import { TYPES, distance } from './constants.js?v=30';
+import { Projectile } from './Projectile.js?v=30';
 
 export class Tower {
   constructor(x, y, typeKey) {

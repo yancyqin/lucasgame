@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=29';
-import { GameMap }     from './Map.js?v=29';
-import { Tower }       from './Tower.js?v=29';
-import { Enemy }       from './Enemy.js?v=29';
-import { Projectile }  from './Projectile.js?v=29';
-import { Trap }        from './Trap.js?v=29';
-import { Mine }        from './Mine.js?v=29';
-import { WaveManager } from './WaveManager.js?v=29';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=30';
+import { GameMap }     from './Map.js?v=30';
+import { Tower }       from './Tower.js?v=30';
+import { Enemy }       from './Enemy.js?v=30';
+import { Projectile }  from './Projectile.js?v=30';
+import { Trap }        from './Trap.js?v=30';
+import { Mine }        from './Mine.js?v=30';
+import { WaveManager } from './WaveManager.js?v=30';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -1288,95 +1288,217 @@ class Game {
       return { x: W/2 + (side/fwd)*focal, y: horizon + (eyeH/fwd)*focal, fwd, sc: focal/fwd };
     };
 
-    // ── SKY ──
-    const sg = ctx.createLinearGradient(0, 0, 0, horizon);
-    sg.addColorStop(0, '#0d1a2a'); sg.addColorStop(0.55, '#1a3a5a'); sg.addColorStop(1, '#3a5a48');
-    ctx.fillStyle = sg; ctx.fillRect(0, 0, W, horizon);
-
-    // Sun (glowing circle in the sky) — positioned based on camYaw
-    const sunX = W * 0.5 + Math.sin(this.camYaw) * W * 0.4;
-    const sunY = horizon * 0.3;
-    if (sunX > -60 && sunX < W + 60) {
-      ctx.save();
-      ctx.shadowColor = '#ffdd44'; ctx.shadowBlur = 40;
-      ctx.fillStyle = '#ffee88';
-      ctx.beginPath(); ctx.arc(sunX, sunY, 22, 0, Math.PI*2); ctx.fill();
-      ctx.shadowBlur = 0; ctx.restore();
-      // Sun glow ring
-      const sunGlow = ctx.createRadialGradient(sunX, sunY, 20, sunX, sunY, 60);
-      sunGlow.addColorStop(0, 'rgba(255,220,100,0.3)');
-      sunGlow.addColorStop(1, 'rgba(255,220,100,0)');
-      ctx.fillStyle = sunGlow;
-      ctx.beginPath(); ctx.arc(sunX, sunY, 60, 0, Math.PI*2); ctx.fill();
+    // ── PRECOMPUTE grass tufts lazily ──
+    if (!this._grassTufts) {
+      this._grassTufts = [];
+      const rng = (seed) => { let x = Math.sin(seed) * 43758.5453; return x - Math.floor(x); };
+      for (let i = 0; i < 260; i++) {
+        this._grassTufts.push({
+          wx: cx + (rng(i*3.1)-0.5)*700,
+          wy: cy + (rng(i*3.7)-0.5)*700,
+          s:  0.6 + rng(i*1.3)*0.8,
+        });
+      }
+    }
+    if (!this._dustParticles) {
+      this._dustParticles = [];
+      const rng2 = (s) => { let x = Math.sin(s*7.3+1.9)*99871.23; return x - Math.floor(x); };
+      for (let i = 0; i < 40; i++) {
+        this._dustParticles.push({
+          wx: cx + (rng2(i*2.1)-0.5)*500,
+          wy: cy + (rng2(i*2.9)-0.5)*500,
+          r:  1 + rng2(i)*2,
+          sp: 0.3 + rng2(i*1.7)*0.7,
+          ph: rng2(i*3.3)*Math.PI*2,
+        });
+      }
     }
 
-    // Distant clouds
-    ctx.fillStyle = 'rgba(200,200,175,0.07)';
-    for (let i = 0; i < 5; i++) {
+    const now = Date.now();
+
+    // ── SKY — rich deep gradient ──
+    const sg = ctx.createLinearGradient(0, 0, 0, horizon);
+    sg.addColorStop(0,   '#06101e');
+    sg.addColorStop(0.3, '#0d2240');
+    sg.addColorStop(0.7, '#1a4a7a');
+    sg.addColorStop(0.9, '#2e6a9e');
+    sg.addColorStop(1,   '#7ab8d8');
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, W, horizon);
+
+    // ── SUN ──
+    const sunX = W * 0.5 + Math.sin(this.camYaw) * W * 0.42;
+    const sunY = horizon * 0.28;
+    if (sunX > -120 && sunX < W + 120) {
+      ctx.save();
+      // Outer soft glow
+      const sunOuter = ctx.createRadialGradient(sunX, sunY, 18, sunX, sunY, 110);
+      sunOuter.addColorStop(0,   'rgba(255,240,160,0.55)');
+      sunOuter.addColorStop(0.4, 'rgba(255,200,80,0.18)');
+      sunOuter.addColorStop(1,   'rgba(255,200,80,0)');
+      ctx.fillStyle = sunOuter;
+      ctx.beginPath(); ctx.arc(sunX, sunY, 110, 0, Math.PI*2); ctx.fill();
+      // Inner corona
+      const sunInner = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 26);
+      sunInner.addColorStop(0,   '#ffffff');
+      sunInner.addColorStop(0.5, '#fffde0');
+      sunInner.addColorStop(1,   '#ffe066');
+      ctx.fillStyle = sunInner;
+      ctx.beginPath(); ctx.arc(sunX, sunY, 26, 0, Math.PI*2); ctx.fill();
+      // God rays — 12 semi-transparent lines
+      for (let r = 0; r < 12; r++) {
+        const ang = (r / 12) * Math.PI * 2 + now * 0.00004;
+        const len = 180 + Math.sin(now*0.0002 + r) * 40;
+        const op  = 0.04 + 0.06 * Math.sin(now*0.0003 + r*0.9);
+        ctx.strokeStyle = `rgba(255,245,200,${op})`;
+        ctx.lineWidth = 18 + r * 3;
+        ctx.beginPath();
+        ctx.moveTo(sunX, sunY);
+        ctx.lineTo(sunX + Math.cos(ang)*len, sunY + Math.sin(ang)*len);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // ── CLOUDS — 7 procedural overlapping ellipse clusters ──
+    const cloudOff = (now / 40000) % 1;
+    const cloudDefs = [
+      { bx:0.08, by:0.18, blobs:[{dx:0,dy:0,rx:80,ry:22},{dx:55,dy:8,rx:60,ry:18},{dx:-40,dy:12,rx:50,ry:16}] },
+      { bx:0.26, by:0.10, blobs:[{dx:0,dy:0,rx:70,ry:20},{dx:45,dy:6,rx:55,ry:17},{dx:-35,dy:9,rx:48,ry:15}] },
+      { bx:0.44, by:0.22, blobs:[{dx:0,dy:0,rx:90,ry:25},{dx:60,dy:10,rx:65,ry:19},{dx:-50,dy:14,rx:55,ry:17}] },
+      { bx:0.60, by:0.12, blobs:[{dx:0,dy:0,rx:75,ry:21},{dx:50,dy:7,rx:58,ry:16}] },
+      { bx:0.74, by:0.20, blobs:[{dx:0,dy:0,rx:85,ry:23},{dx:55,dy:11,rx:62,ry:18},{dx:-42,dy:13,rx:52,ry:16}] },
+      { bx:0.88, by:0.14, blobs:[{dx:0,dy:0,rx:68,ry:19},{dx:44,dy:8,rx:50,ry:15}] },
+      { bx:0.16, by:0.32, blobs:[{dx:0,dy:0,rx:100,ry:28},{dx:70,dy:12,rx:72,ry:22},{dx:-55,dy:15,rx:60,ry:19}] },
+    ];
+    for (const cd of cloudDefs) {
+      const bx = ((cd.bx + cloudOff) % 1) * W;
+      const by = cd.by * horizon;
+      for (const bl of cd.blobs) {
+        const cx2 = bx + bl.dx, cy2 = by + bl.dy;
+        const cg = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, bl.rx);
+        cg.addColorStop(0,   'rgba(255,255,255,0.78)');
+        cg.addColorStop(0.5, 'rgba(235,245,255,0.38)');
+        cg.addColorStop(1,   'rgba(220,235,255,0)');
+        ctx.fillStyle = cg;
+        ctx.beginPath();
+        ctx.ellipse(cx2, cy2, bl.rx, bl.ry, 0, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // ── HORIZON HAZE ──
+    const hazeG = ctx.createLinearGradient(0, horizon - 22, 0, horizon + 8);
+    hazeG.addColorStop(0,   'rgba(255,160,80,0)');
+    hazeG.addColorStop(0.4, 'rgba(255,140,60,0.22)');
+    hazeG.addColorStop(1,   'rgba(200,100,40,0)');
+    ctx.fillStyle = hazeG;
+    ctx.fillRect(0, horizon - 22, W, 30);
+
+    // ── TREE-LINE SILHOUETTE ──
+    ctx.save();
+    ctx.fillStyle = '#0f1e0a';
+    ctx.beginPath(); ctx.moveTo(0, horizon);
+    for (let x = 0; x <= W; x += 10)
+      ctx.lineTo(x, horizon - 28 + Math.sin(x*0.021)*22 + Math.sin(x*0.057)*11 + Math.sin(x*0.133)*6);
+    ctx.lineTo(W, horizon); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // ── GROUND base gradient ──
+    const gg = ctx.createLinearGradient(0, horizon, 0, H);
+    gg.addColorStop(0,    '#1c2812');
+    gg.addColorStop(0.10, '#243014');
+    gg.addColorStop(0.35, '#2e3f18');
+    gg.addColorStop(0.65, '#283818');
+    gg.addColorStop(1,    '#1a2a0e');
+    ctx.fillStyle = gg; ctx.fillRect(0, horizon, W, H - horizon);
+
+    // ── GROUND REFLECTION STRIP (morning dew near horizon) ──
+    const reflG = ctx.createLinearGradient(0, horizon, 0, horizon + 28);
+    reflG.addColorStop(0,   'rgba(120,170,220,0.12)');
+    reflG.addColorStop(1,   'rgba(120,170,220,0)');
+    ctx.fillStyle = reflG; ctx.fillRect(0, horizon, W, 28);
+
+    // ── GRASS TUFTS ──
+    for (const gt of this._grassTufts) {
+      const gp = proj(gt.wx, gt.wy);
+      if (!gp || gp.x < -10 || gp.x > W+10) continue;
+      const gs = gt.s * gp.sc * 1.4;
+      if (gs < 0.5) continue;
+      ctx.fillStyle = 'rgba(18,34,8,0.55)';
       ctx.beginPath();
-      ctx.ellipse(W*(0.1+i*0.2)+Math.sin(i*1.7)*50, horizon*(0.25+i*0.06), 90+i*12, 18+i*3, 0, 0, Math.PI*2);
+      ctx.ellipse(gp.x, gp.y, gs*1.8, gs*0.55, 0, 0, Math.PI*2);
       ctx.fill();
     }
 
-    // Far tree-line silhouette
-    ctx.fillStyle = '#182e12';
-    ctx.beginPath(); ctx.moveTo(0, horizon);
-    for (let x = 0; x <= W; x += 12)
-      ctx.lineTo(x, horizon - 22 + Math.sin(x*0.022)*20 + Math.sin(x*0.058)*10);
-    ctx.lineTo(W, horizon); ctx.closePath(); ctx.fill();
-
-    // ── GROUND (darkens near horizon for depth) ──
-    const gg = ctx.createLinearGradient(0, horizon, 0, H);
-    gg.addColorStop(0, '#1a2210');   // very dark at horizon
-    gg.addColorStop(0.12, '#263015'); gg.addColorStop(0.35, '#30401c');
-    gg.addColorStop(0.65, '#2a3815'); gg.addColorStop(1, '#1e2c0e');
-    ctx.fillStyle = gg; ctx.fillRect(0, horizon, W, H - horizon);
-
-    // Dirt texture strips — alternating slightly darker patches for variety
-    ctx.strokeStyle = 'rgba(20,10,0,0.08)'; ctx.lineWidth = 14;
-    for (let z = 30; z <= 600; z += 60) {
-      const lp = proj(cx + cosA*z - sinA*400, cy + sinA*z + cosA*400);
-      const rp = proj(cx + cosA*z + sinA*400, cy + sinA*z - cosA*400);
-      if (!lp || !rp) continue;
-      ctx.beginPath(); ctx.moveTo(lp.x, lp.y); ctx.lineTo(rp.x, rp.y); ctx.stroke();
+    // ── DUST PARTICLES ──
+    for (const dp of this._dustParticles) {
+      const t2 = now * 0.0002 * dp.sp + dp.ph;
+      const wxd = dp.wx + Math.cos(t2)*18;
+      const wyd = dp.wy + Math.sin(t2*0.7)*12;
+      const pp = proj(wxd, wyd);
+      if (!pp || pp.x < 0 || pp.x > W) continue;
+      const ds = dp.r * pp.sc * 2;
+      if (ds < 0.3) continue;
+      ctx.fillStyle = `rgba(255,255,240,${0.15 + 0.12*Math.sin(t2)})`;
+      ctx.beginPath(); ctx.arc(pp.x, pp.y, ds, 0, Math.PI*2); ctx.fill();
     }
 
-    // Perspective depth grid
-    ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.lineWidth = 1;
-    for (let z = 40; z <= 600; z += 40) {
-      const lp = proj(cx + cosA*z - sinA*500, cy + sinA*z + cosA*500);
-      const rp = proj(cx + cosA*z + sinA*500, cy + sinA*z - cosA*500);
-      if (!lp || !rp) continue;
-      ctx.beginPath(); ctx.moveTo(lp.x, lp.y); ctx.lineTo(rp.x, rp.y); ctx.stroke();
-    }
-
-    // ── CRATERS (dark ellipses on the ground) ──
+    // ── CRATERS ──
     for (const cr of (this.map.craters || [])) {
       const p = proj(cr.x, cr.y);
       if (!p || p.fwd < 5 || p.x < -80 || p.x > W+80) continue;
       const rw = cr.r * p.sc * 2.5, rh = rw * 0.35;
-      ctx.fillStyle = 'rgba(15,8,0,0.45)';
+      const crG = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rw);
+      crG.addColorStop(0,   'rgba(8,4,0,0.7)');
+      crG.addColorStop(0.6, 'rgba(15,8,0,0.45)');
+      crG.addColorStop(1,   'rgba(15,8,0,0)');
+      ctx.fillStyle = crG;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, rw, rh, 0, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = 'rgba(80,50,20,0.3)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y, rw, rh, 0, 0, Math.PI*2); ctx.stroke();
     }
 
-    // ── PATH ──
+    // ── PATH — multi-stop gradient quads with ruts ──
     for (let seg = 0; seg < this.path.length - 1; seg++) {
       const a = this.path[seg], b = this.path[seg+1];
       const ang = Math.atan2(b.y-a.y, b.x-a.x) + Math.PI/2;
-      const pw = 28, px = Math.cos(ang)*pw, py = Math.sin(ang)*pw;
+      const pw = 28, ppx = Math.cos(ang)*pw, ppy = Math.sin(ang)*pw;
       for (let t = 0; t < 10; t++) {
         const t0=t/10, t1=(t+1)/10;
         const x0=a.x+(b.x-a.x)*t0, y0=a.y+(b.y-a.y)*t0;
         const x1=a.x+(b.x-a.x)*t1, y1=a.y+(b.y-a.y)*t1;
-        const c = [proj(x0-px,y0-py), proj(x0+px,y0+py), proj(x1+px,y1+py), proj(x1-px,y1-py)];
-        if (c.some(p => !p)) continue;
-        ctx.fillStyle = (seg+t)%2===0 ? '#7a5520' : '#6a4818';
+        const c = [proj(x0-ppx,y0-ppy), proj(x0+ppx,y0+ppy), proj(x1+ppx,y1+ppy), proj(x1-ppx,y1-ppy)];
+        if (c.some(pp => !pp)) continue;
+        // Path gradient: lighter center, darker worn edges
+        const midX = (c[0].x+c[1].x+c[2].x+c[3].x)/4;
+        const midY = (c[0].y+c[1].y+c[2].y+c[3].y)/4;
+        const pathG = ctx.createLinearGradient(c[0].x, midY, c[1].x, midY);
+        pathG.addColorStop(0,   '#4a2e0a');
+        pathG.addColorStop(0.2, '#7a5520');
+        pathG.addColorStop(0.5, '#9a6c2a');
+        pathG.addColorStop(0.8, '#7a5520');
+        pathG.addColorStop(1,   '#4a2e0a');
+        ctx.fillStyle = pathG;
         ctx.beginPath();
         ctx.moveTo(c[0].x,c[0].y); ctx.lineTo(c[1].x,c[1].y);
         ctx.lineTo(c[2].x,c[2].y); ctx.lineTo(c[3].x,c[3].y);
         ctx.closePath(); ctx.fill();
+        // AO edge: dark seam where path meets grass
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(c[0].x,c[0].y); ctx.lineTo(c[3].x,c[3].y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(c[1].x,c[1].y); ctx.lineTo(c[2].x,c[2].y); ctx.stroke();
+      }
+      // Rut grooves along path center
+      for (let t = 0; t < 20; t++) {
+        const tf = t/20, tf1=(t+1)/20;
+        const rx0=a.x+(b.x-a.x)*tf, ry0=a.y+(b.y-a.y)*tf;
+        const rx1=a.x+(b.x-a.x)*tf1, ry1=a.y+(b.y-a.y)*tf1;
+        const off = 8;
+        for (const side of [-1, 1]) {
+          const pr0 = proj(rx0+Math.cos(ang)*off*side, ry0+Math.sin(ang)*off*side);
+          const pr1 = proj(rx1+Math.cos(ang)*off*side, ry1+Math.sin(ang)*off*side);
+          if (!pr0 || !pr1) continue;
+          ctx.strokeStyle = 'rgba(30,12,0,0.18)'; ctx.lineWidth = Math.max(1, pr0.sc*3);
+          ctx.beginPath(); ctx.moveTo(pr0.x, pr0.y); ctx.lineTo(pr1.x, pr1.y); ctx.stroke();
+        }
       }
     }
 
@@ -1405,16 +1527,27 @@ class Game {
       if (obj.kind === 'tree') {
         const sz = obj.tr.r * p.sc;
         const gy = Math.min(p.y, openB);
-        ctx.fillStyle = '#2a1a06';
+        // Trunk gradient
+        const trunkG = ctx.createLinearGradient(p.x-sz*0.22, 0, p.x+sz*0.22, 0);
+        trunkG.addColorStop(0, '#1a0e04');
+        trunkG.addColorStop(0.4, '#3a2a0e');
+        trunkG.addColorStop(1, '#140a02');
+        ctx.fillStyle = trunkG;
         ctx.fillRect(p.x - sz*0.22, gy - sz*2.2, sz*0.44, sz*2.2);
-        ctx.fillStyle = '#1e3d18';
+        // Lower foliage (darker)
+        const fg1 = ctx.createRadialGradient(p.x-sz*0.2, gy-sz*2.4, 0, p.x, gy-sz*2.2, sz);
+        fg1.addColorStop(0, '#3a6a28'); fg1.addColorStop(1, '#152010');
+        ctx.fillStyle = fg1;
         ctx.beginPath(); ctx.arc(p.x, gy - sz*2.2, sz, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#2e5a24';
+        // Upper foliage (lighter sun-hit)
+        const fg2 = ctx.createRadialGradient(p.x-sz*0.2, gy-sz*2.7, 0, p.x-sz*0.15, gy-sz*2.5, sz*0.72);
+        fg2.addColorStop(0, '#5a9040'); fg2.addColorStop(1, '#1e3812');
+        ctx.fillStyle = fg2;
         ctx.beginPath(); ctx.arc(p.x - sz*0.15, gy - sz*2.5, sz*0.72, 0, Math.PI*2); ctx.fill();
-        // Atmospheric fog for far trees
-        if (p.fwd > 200) {
-          const fogAlpha = Math.min(0.7, (p.fwd - 200) / 300);
-          ctx.fillStyle = `rgba(100,110,90,${fogAlpha})`;
+        // Exponential fog
+        if (p.fwd > 60) {
+          const fogA = Math.min(0.75, 1 - Math.exp(-p.fwd / 300));
+          ctx.fillStyle = `rgba(78,95,72,${fogA})`;
           const gy2 = Math.min(p.y, openB);
           ctx.beginPath(); ctx.arc(p.x, gy2 - sz*2.2, sz * 1.1, 0, Math.PI*2); ctx.fill();
         }
@@ -1444,193 +1577,403 @@ class Game {
       } else {
         const { e } = obj;
         // Ogre is bigger; dragonRider also slightly bigger
-        const sizeScale = e.kind === 'ogre' ? 1.5 : 1.0;
+        const sizeScale = e.kind === 'ogre' ? 1.6 : 1.0;
         const sz = e.size * p.sc * 1.8 * sizeScale;
         if (sz < 2) continue;
         const gy = Math.min(p.y, openB);
         const bh = sz * 2.2;
 
-        // ── Shadow (larger/darker as enemy is closer) ────────────────────
-        const shadowScale = Math.max(0.8, Math.min(2.0, 200 / p.fwd));
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
-        ctx.save(); ctx.translate(p.x + sz*0.3, gy); ctx.scale(1.2 * shadowScale, 0.22 * shadowScale);
-        ctx.beginPath(); ctx.arc(0, 0, sz*1.2, 0, Math.PI*2); ctx.fill(); ctx.restore();
+        // Walking leg phase (stateless — derived from world pos + time)
+        const legPhase = Math.sin(e.x * 0.15 + now / 200);
+
+        // ── Cast shadow ────────────────────────────────────────────────────
+        ctx.save();
+        const shadowScale = Math.max(0.6, Math.min(2.2, 200 / p.fwd));
+        const shadowG = ctx.createRadialGradient(p.x+sz*0.4, gy, 0, p.x+sz*0.4, gy, sz*1.5*shadowScale);
+        shadowG.addColorStop(0,   'rgba(0,0,0,0.45)');
+        shadowG.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = shadowG;
+        ctx.save(); ctx.translate(p.x + sz*0.4, gy); ctx.scale(1.4*shadowScale, 0.25*shadowScale);
+        ctx.beginPath(); ctx.arc(0, 0, sz*1.3, 0, Math.PI*2); ctx.fill(); ctx.restore();
+        // AO circle at feet
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
+        ctx.beginPath(); ctx.ellipse(p.x, gy, sz*0.7, sz*0.18, 0, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+
+        // ── Shading helpers ────────────────────────────────────────────────
+        // bodyGrad: sun from top-left → shadow bottom-right
+        const makeBodyGrad = (x, y, w, h, light, dark) => {
+          const g = ctx.createLinearGradient(x - w*0.5, y - h, x + w*0.5, y);
+          g.addColorStop(0,   light);
+          g.addColorStop(0.4, light);
+          g.addColorStop(1,   dark);
+          return g;
+        };
 
         // ── Per-type body drawing ─────────────────────────────────────────
         if (e.kind === 'goblin') {
-          // Stubby green goblin with spiky hair
-          // Legs
-          ctx.fillStyle = '#1a3a10';
-          ctx.fillRect(p.x-sz*0.45, gy-bh*0.5, sz*0.35, bh*0.5);
-          ctx.fillRect(p.x+sz*0.10, gy-bh*0.5, sz*0.35, bh*0.5);
+          // Animated legs
+          const l1 = legPhase * sz * 0.22, l2 = -legPhase * sz * 0.22;
+          ctx.save();
+          const legG = makeBodyGrad(p.x, gy, sz*0.35, bh*0.5, '#2a5a18', '#0e2208');
+          ctx.fillStyle = legG;
+          ctx.beginPath(); ctx.roundRect(p.x-sz*0.42+l1, gy-bh*0.5, sz*0.32, bh*0.52, sz*0.05); ctx.fill();
+          ctx.beginPath(); ctx.roundRect(p.x+sz*0.10+l2, gy-bh*0.5, sz*0.32, bh*0.52, sz*0.05); ctx.fill();
+          ctx.restore();
           // Arms
-          ctx.strokeStyle = '#2a5a18'; ctx.lineWidth = Math.max(1.5, sz*0.2);
-          ctx.beginPath(); ctx.moveTo(p.x-sz*0.72, gy-bh+sz*0.2); ctx.lineTo(p.x-sz*0.3, gy-bh*0.6); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(p.x+sz*0.72, gy-bh+sz*0.2); ctx.lineTo(p.x+sz*0.3, gy-bh*0.6); ctx.stroke();
-          // Body
-          ctx.fillStyle = e.color;
-          ctx.fillRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65);
-          // Head
+          ctx.strokeStyle = '#3a7a20'; ctx.lineWidth = Math.max(1.5, sz*0.22);
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(p.x-sz*0.72, gy-bh+sz*0.15); ctx.lineTo(p.x-sz*0.28, gy-bh*0.6); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p.x+sz*0.72, gy-bh+sz*0.15); ctx.lineTo(p.x+sz*0.28, gy-bh*0.6); ctx.stroke();
+          // Body gradient
+          ctx.save();
+          const bodyG = makeBodyGrad(p.x, gy-bh*0.35, sz*1.44, bh*0.65, '#4aaa2a', '#1a4a0a');
+          ctx.fillStyle = bodyG;
+          ctx.beginPath(); ctx.roundRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65, sz*0.12); ctx.fill();
+          ctx.restore();
+          // Head gradient
+          ctx.save();
+          const headG = ctx.createRadialGradient(p.x-sz*0.18, gy-bh-sz*0.72, 0, p.x, gy-bh-sz*0.55, sz*0.62);
+          headG.addColorStop(0,   '#6acc3a');
+          headG.addColorStop(0.6, '#3a8a18');
+          headG.addColorStop(1,   '#1a4a08');
+          ctx.fillStyle = headG;
           ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.55, sz*0.62, 0, Math.PI*2); ctx.fill();
-          // Spiky hair (3 triangles)
-          ctx.fillStyle = '#4a1a00';
-          for (let sp = -1; sp <= 1; sp++) {
-            const hx = p.x + sp * sz * 0.3;
+          ctx.restore();
+          // Ears (triangles on sides of head)
+          ctx.fillStyle = '#3a8a18';
+          ctx.beginPath(); ctx.moveTo(p.x-sz*0.62, gy-bh-sz*0.45); ctx.lineTo(p.x-sz*0.88, gy-bh-sz*0.78); ctx.lineTo(p.x-sz*0.52, gy-bh-sz*0.75); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(p.x+sz*0.62, gy-bh-sz*0.45); ctx.lineTo(p.x+sz*0.88, gy-bh-sz*0.78); ctx.lineTo(p.x+sz*0.52, gy-bh-sz*0.75); ctx.closePath(); ctx.fill();
+          // Spiky hair (5 triangles)
+          ctx.fillStyle = '#2a0e00';
+          for (let sp = -2; sp <= 2; sp++) {
+            const hx = p.x + sp * sz * 0.21;
             ctx.beginPath();
-            ctx.moveTo(hx - sz*0.12, gy-bh-sz*0.90);
-            ctx.lineTo(hx, gy-bh-sz*1.35);
-            ctx.lineTo(hx + sz*0.12, gy-bh-sz*0.90);
+            ctx.moveTo(hx - sz*0.10, gy-bh-sz*0.88);
+            ctx.lineTo(hx, gy-bh-sz*(1.26 + Math.abs(sp)*0.08));
+            ctx.lineTo(hx + sz*0.10, gy-bh-sz*0.88);
             ctx.closePath(); ctx.fill();
           }
-          // Yellow eyes
+          // Glowing orange-yellow eyes
+          ctx.save();
+          ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = sz*0.9;
           ctx.fillStyle = '#ffee00';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.22, gy-bh-sz*0.62, sz*0.14, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.22, gy-bh-sz*0.62, sz*0.14, 0, Math.PI*2); ctx.fill();
-          ctx.fillStyle = '#000';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.22, gy-bh-sz*0.62, sz*0.07, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.22, gy-bh-sz*0.62, sz*0.07, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x-sz*0.22, gy-bh-sz*0.60, sz*0.14, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.22, gy-bh-sz*0.60, sz*0.14, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+          ctx.fillStyle = '#1a0800';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.22, gy-bh-sz*0.60, sz*0.07, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.22, gy-bh-sz*0.60, sz*0.07, 0, Math.PI*2); ctx.fill();
+          // Tiny teeth
+          ctx.fillStyle = '#e8e8cc';
+          for (let t2 = -1; t2 <= 1; t2++) {
+            ctx.beginPath(); ctx.rect(p.x+t2*sz*0.14-sz*0.04, gy-bh-sz*0.44, sz*0.09, sz*0.09); ctx.fill();
+          }
+          // Specular highlight on head
+          ctx.fillStyle = 'rgba(200,255,180,0.30)';
+          ctx.beginPath(); ctx.ellipse(p.x-sz*0.18, gy-bh-sz*0.72, sz*0.22, sz*0.14, -0.4, 0, Math.PI*2); ctx.fill();
 
         } else if (e.kind === 'runner') {
-          // Lean forward, orange-brown, narrower body
-          ctx.save(); ctx.translate(p.x, gy); ctx.rotate(-0.18); // lean forward
+          ctx.save(); ctx.translate(p.x, gy); ctx.rotate(-0.18);
           const rbh = bh * 0.9;
-          ctx.fillStyle = '#2a1a00';
-          ctx.fillRect(-sz*0.38, -rbh*0.5, sz*0.30, rbh*0.5);
-          ctx.fillRect(sz*0.08, -rbh*0.5, sz*0.30, rbh*0.5);
+          // Animated legs
+          const rl1 = legPhase * sz * 0.28, rl2 = -legPhase * sz * 0.28;
+          const legRG = makeBodyGrad(0, 0, sz*0.30, rbh*0.5, '#5a3010', '#1a0a00');
+          ctx.fillStyle = legRG;
+          ctx.beginPath(); ctx.roundRect(-sz*0.38+rl1, -rbh*0.5, sz*0.28, rbh*0.52, sz*0.04); ctx.fill();
+          ctx.beginPath(); ctx.roundRect(sz*0.10+rl2, -rbh*0.5, sz*0.28, rbh*0.52, sz*0.04); ctx.fill();
+          // Motion blur streaks
+          for (let mb = 1; mb <= 3; mb++) {
+            ctx.fillStyle = `rgba(120,70,20,${0.07*mb})`;
+            ctx.fillRect(sz*(0.2*mb), -rbh*0.85, sz*1.1, rbh*0.55);
+          }
           // Arms
-          ctx.strokeStyle = '#7a4a10'; ctx.lineWidth = Math.max(1.5, sz*0.18);
-          ctx.beginPath(); ctx.moveTo(-sz*0.55, -rbh+sz*0.2); ctx.lineTo(-sz*0.25, -rbh*0.65); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(sz*0.55, -rbh+sz*0.2); ctx.lineTo(sz*0.25, -rbh*0.65); ctx.stroke();
-          // Body (narrower)
-          ctx.fillStyle = e.color;
-          ctx.fillRect(-sz*0.55, -rbh, sz*1.10, rbh*0.62);
+          ctx.strokeStyle = '#9a5a18'; ctx.lineWidth = Math.max(1.5, sz*0.20);
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(-sz*0.55, -rbh+sz*0.15); ctx.lineTo(-sz*0.22, -rbh*0.60); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(sz*0.55, -rbh+sz*0.15); ctx.lineTo(sz*0.22, -rbh*0.60); ctx.stroke();
+          // Narrow body
+          const rbG = makeBodyGrad(0, -rbh*0.5, sz*1.10, rbh*0.62, '#cc7a30', '#5a2808');
+          ctx.fillStyle = rbG;
+          ctx.beginPath(); ctx.roundRect(-sz*0.55, -rbh, sz*1.10, rbh*0.62, sz*0.10); ctx.fill();
           // Head
+          const rhG = ctx.createRadialGradient(-sz*0.15, -rbh-sz*0.62, 0, 0, -rbh-sz*0.5, sz*0.55);
+          rhG.addColorStop(0, '#ee9a40'); rhG.addColorStop(1, '#602808');
+          ctx.fillStyle = rhG;
           ctx.beginPath(); ctx.arc(0, -rbh-sz*0.5, sz*0.55, 0, Math.PI*2); ctx.fill();
-          // Simple dot eyes
+          // Glowing eyes
+          ctx.save(); ctx.shadowColor = '#ffaa44'; ctx.shadowBlur = sz*0.7;
           ctx.fillStyle = '#ffaa44';
-          ctx.beginPath(); ctx.arc(-sz*0.18, -rbh-sz*0.56, sz*0.11, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(sz*0.18, -rbh-sz*0.56, sz*0.11, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(-sz*0.18, -rbh-sz*0.54, sz*0.12, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(sz*0.18, -rbh-sz*0.54, sz*0.12, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+          // Specular
+          ctx.fillStyle = 'rgba(255,200,120,0.28)';
+          ctx.beginPath(); ctx.ellipse(-sz*0.15, -rbh-sz*0.64, sz*0.20, sz*0.12, -0.3, 0, Math.PI*2); ctx.fill();
           ctx.restore();
 
         } else if (e.kind === 'saboteur') {
-          // Dark purple with cape
-          // Cape (triangle behind body)
-          ctx.fillStyle = '#1a0830';
+          // Flowing cape (bezier behind body)
+          ctx.save();
+          const capeG = ctx.createLinearGradient(p.x, gy-bh-sz*0.5, p.x, gy);
+          capeG.addColorStop(0, 'rgba(40,5,70,0.9)');
+          capeG.addColorStop(0.5, 'rgba(20,2,40,0.95)');
+          capeG.addColorStop(1, 'rgba(5,0,12,0.8)');
+          ctx.fillStyle = capeG;
           ctx.beginPath();
-          ctx.moveTo(p.x-sz*0.85, gy-bh-sz*0.2);
-          ctx.lineTo(p.x, gy-bh-sz*1.1);
-          ctx.lineTo(p.x+sz*0.85, gy-bh-sz*0.2);
-          ctx.lineTo(p.x+sz*0.7, gy-sz*0.4);
-          ctx.lineTo(p.x-sz*0.7, gy-sz*0.4);
+          ctx.moveTo(p.x-sz*0.28, gy-bh+sz*0.1);
+          ctx.bezierCurveTo(p.x-sz*1.1, gy-bh+sz*0.3, p.x-sz*1.2, gy-sz*0.1, p.x-sz*0.85, gy);
+          ctx.lineTo(p.x+sz*0.85, gy);
+          ctx.bezierCurveTo(p.x+sz*1.2, gy-sz*0.1, p.x+sz*1.1, gy-bh+sz*0.3, p.x+sz*0.28, gy-bh+sz*0.1);
           ctx.closePath(); ctx.fill();
-          // Legs
-          ctx.fillStyle = '#2a1535';
-          ctx.fillRect(p.x-sz*0.45, gy-bh*0.5, sz*0.34, bh*0.5);
-          ctx.fillRect(p.x+sz*0.11, gy-bh*0.5, sz*0.34, bh*0.5);
+          ctx.restore();
+          // Legs hidden under cape — minimal visible
+          const sabLG = makeBodyGrad(p.x, gy, sz*0.34, bh*0.5, '#3a1a50', '#150820');
+          ctx.fillStyle = sabLG;
+          ctx.beginPath(); ctx.roundRect(p.x-sz*0.42+legPhase*sz*0.12, gy-bh*0.48, sz*0.30, bh*0.48, sz*0.04); ctx.fill();
+          ctx.beginPath(); ctx.roundRect(p.x+sz*0.12-legPhase*sz*0.12, gy-bh*0.48, sz*0.30, bh*0.48, sz*0.04); ctx.fill();
           // Arms
-          ctx.strokeStyle = '#4a2565'; ctx.lineWidth = Math.max(1.5, sz*0.2);
-          ctx.beginPath(); ctx.moveTo(p.x-sz*0.72, gy-bh+sz*0.1); ctx.lineTo(p.x-sz*0.3, gy-bh*0.65); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(p.x+sz*0.72, gy-bh+sz*0.1); ctx.lineTo(p.x+sz*0.3, gy-bh*0.65); ctx.stroke();
+          ctx.strokeStyle = '#6a3590'; ctx.lineWidth = Math.max(1.5, sz*0.22); ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(p.x-sz*0.72, gy-bh+sz*0.08); ctx.lineTo(p.x-sz*0.28, gy-bh*0.62); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p.x+sz*0.72, gy-bh+sz*0.08); ctx.lineTo(p.x+sz*0.28, gy-bh*0.62); ctx.stroke();
           // Body
-          ctx.fillStyle = e.color;
-          ctx.fillRect(p.x-sz*0.65, gy-bh, sz*1.30, bh*0.65);
-          // Head
+          const sabBG = makeBodyGrad(p.x, gy-bh*0.35, sz*1.30, bh*0.65, '#7a3aaa', '#2a0845');
+          ctx.fillStyle = sabBG;
+          ctx.beginPath(); ctx.roundRect(p.x-sz*0.65, gy-bh, sz*1.30, bh*0.65, sz*0.10); ctx.fill();
+          // Hood arc over head
+          ctx.fillStyle = '#1a0630';
+          ctx.beginPath();
+          ctx.arc(p.x, gy-bh-sz*0.55, sz*0.72, Math.PI, Math.PI*2);
+          ctx.closePath(); ctx.fill();
+          // Head under hood
+          const sabHG = ctx.createRadialGradient(p.x-sz*0.15, gy-bh-sz*0.70, 0, p.x, gy-bh-sz*0.55, sz*0.60);
+          sabHG.addColorStop(0, '#8a40c0'); sabHG.addColorStop(1, '#2a0845');
+          ctx.fillStyle = sabHG;
           ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.55, sz*0.60, 0, Math.PI*2); ctx.fill();
-          // Glowing purple eyes
-          ctx.fillStyle = '#cc44ff';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.20, gy-bh-sz*0.60, sz*0.12, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.20, gy-bh-sz*0.60, sz*0.12, 0, Math.PI*2); ctx.fill();
+          // Red glowing eyes
+          ctx.save(); ctx.shadowColor = '#ff2200'; ctx.shadowBlur = sz*1.2;
+          ctx.fillStyle = '#ff3300';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.20, gy-bh-sz*0.58, sz*0.13, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.20, gy-bh-sz*0.58, sz*0.13, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+          // Specular on head
+          ctx.fillStyle = 'rgba(200,120,255,0.22)';
+          ctx.beginPath(); ctx.ellipse(p.x-sz*0.16, gy-bh-sz*0.72, sz*0.20, sz*0.12, -0.4, 0, Math.PI*2); ctx.fill();
 
         } else if (e.kind === 'ogre') {
-          // Wide squat body, grey-green, tiny head
-          const ow = sz * 1.8, oh = bh * 0.55;
-          // Legs (short and wide)
-          ctx.fillStyle = '#2a3520';
-          ctx.fillRect(p.x-sz*0.65, gy-bh*0.45, sz*0.50, bh*0.45);
-          ctx.fillRect(p.x+sz*0.15, gy-bh*0.45, sz*0.50, bh*0.45);
-          // Arms (thick)
-          ctx.strokeStyle = '#5a7040'; ctx.lineWidth = Math.max(3, sz*0.38);
-          ctx.beginPath(); ctx.moveTo(p.x-ow/2, gy-bh+sz*0.2); ctx.lineTo(p.x-sz*0.72, gy-bh*0.7); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(p.x+ow/2, gy-bh+sz*0.2); ctx.lineTo(p.x+sz*0.72, gy-bh*0.7); ctx.stroke();
-          // Wide squat body
-          ctx.fillStyle = e.color;
-          ctx.fillRect(p.x - ow/2, gy-bh, ow, oh);
+          const ow = sz * 1.8;
+          // Wide short legs
+          const oLG = makeBodyGrad(p.x, gy, sz*0.52, bh*0.45, '#4a5a30', '#1a2212');
+          ctx.fillStyle = oLG;
+          ctx.save();
+          ctx.beginPath(); ctx.roundRect(p.x-sz*0.65+legPhase*sz*0.15, gy-bh*0.45, sz*0.50, bh*0.46, sz*0.06); ctx.fill();
+          ctx.beginPath(); ctx.roundRect(p.x+sz*0.15-legPhase*sz*0.15, gy-bh*0.45, sz*0.50, bh*0.46, sz*0.06); ctx.fill();
+          ctx.restore();
+          // Huge arms with fist circles
+          ctx.strokeStyle = '#6a8040'; ctx.lineWidth = Math.max(4, sz*0.42); ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(p.x-ow/2, gy-bh+sz*0.15); ctx.lineTo(p.x-sz*0.82, gy-bh*0.68); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p.x+ow/2, gy-bh+sz*0.15); ctx.lineTo(p.x+sz*0.82, gy-bh*0.68); ctx.stroke();
+          // Fist circles
+          ctx.fillStyle = '#5a7030';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.82, gy-bh*0.68, sz*0.28, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.82, gy-bh*0.68, sz*0.28, 0, Math.PI*2); ctx.fill();
+          // Wide mottled body (two overlapping gradient ellipses)
+          ctx.save();
+          const ob1 = makeBodyGrad(p.x, gy-bh*0.28, ow, bh*0.55, '#7a9050', '#2e4018');
+          ctx.fillStyle = ob1;
+          ctx.beginPath(); ctx.roundRect(p.x-ow/2, gy-bh, ow, bh*0.55, sz*0.14); ctx.fill();
+          // Mottled overlay
+          const ob2 = ctx.createRadialGradient(p.x+ow*0.2, gy-bh*0.6, 0, p.x, gy-bh*0.28, ow*0.6);
+          ob2.addColorStop(0,   'rgba(100,130,60,0.35)');
+          ob2.addColorStop(0.5, 'rgba(50,70,25,0.18)');
+          ob2.addColorStop(1,   'rgba(20,35,10,0)');
+          ctx.fillStyle = ob2;
+          ctx.beginPath(); ctx.roundRect(p.x-ow/2, gy-bh, ow, bh*0.55, sz*0.14); ctx.fill();
+          ctx.restore();
           // Tiny head
-          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.38, sz*0.50, 0, Math.PI*2); ctx.fill();
-          // Beady eyes
-          ctx.fillStyle = '#ff3300';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.18, gy-bh-sz*0.44, sz*0.12, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.18, gy-bh-sz*0.44, sz*0.12, 0, Math.PI*2); ctx.fill();
+          const ohG = ctx.createRadialGradient(p.x-sz*0.14, gy-bh-sz*0.5, 0, p.x, gy-bh-sz*0.38, sz*0.52);
+          ohG.addColorStop(0, '#88a055'); ohG.addColorStop(1, '#2a3818');
+          ctx.fillStyle = ohG;
+          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.38, sz*0.52, 0, Math.PI*2); ctx.fill();
+          // Wrinkled brow (arc lines)
+          ctx.strokeStyle = 'rgba(20,30,10,0.5)'; ctx.lineWidth = Math.max(1, sz*0.08);
+          for (let wr = 0; wr < 3; wr++) {
+            ctx.beginPath();
+            ctx.arc(p.x, gy-bh-sz*0.60+wr*sz*0.08, sz*(0.28-wr*0.04), Math.PI*1.1, Math.PI*1.9);
+            ctx.stroke();
+          }
+          // Sunken red eyes
+          ctx.fillStyle = '#331010';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.20, gy-bh-sz*0.42, sz*0.16, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.20, gy-bh-sz*0.42, sz*0.16, 0, Math.PI*2); ctx.fill();
+          ctx.save(); ctx.shadowColor = '#ff2200'; ctx.shadowBlur = sz*0.8;
+          ctx.fillStyle = '#cc2200';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.20, gy-bh-sz*0.44, sz*0.10, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.20, gy-bh-sz*0.44, sz*0.10, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+          // Specular
+          ctx.fillStyle = 'rgba(180,220,120,0.22)';
+          ctx.beginPath(); ctx.ellipse(p.x-sz*0.14, gy-bh-sz*0.52, sz*0.24, sz*0.14, -0.3, 0, Math.PI*2); ctx.fill();
 
         } else if (e.kind === 'dragon') {
-          // Elongated body (wider than tall), green, wing arcs on sides
-          const dw = sz * 2.0, dh = bh * 0.55;
-          // Wing hints (two arcs on sides)
-          ctx.strokeStyle = '#1a5030'; ctx.lineWidth = Math.max(2, sz*0.3);
-          ctx.beginPath(); ctx.arc(p.x - dw*0.5, gy-bh*0.5, sz*0.9, -Math.PI*0.7, Math.PI*0.1); ctx.stroke();
-          ctx.beginPath(); ctx.arc(p.x + dw*0.5, gy-bh*0.5, sz*0.9, Math.PI*0.9, Math.PI*1.7); ctx.stroke();
-          // Body (wide ellipse)
-          ctx.fillStyle = e.color;
-          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.6, 0.9);
+          const dw = sz * 2.0;
+          // Wing triangles (curved)
+          ctx.save();
+          const wingG = ctx.createLinearGradient(p.x-dw, gy-bh, p.x, gy);
+          wingG.addColorStop(0, 'rgba(10,60,20,0.7)');
+          wingG.addColorStop(1, 'rgba(5,30,10,0.4)');
+          ctx.fillStyle = wingG;
+          ctx.beginPath();
+          ctx.moveTo(p.x-sz*0.55, gy-bh*0.7);
+          ctx.bezierCurveTo(p.x-dw*0.8, gy-bh*1.1, p.x-dw*0.9, gy-bh*0.3, p.x-dw*0.55, gy-bh*0.15);
+          ctx.lineTo(p.x-sz*0.55, gy-bh*0.4);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = wingG;
+          ctx.beginPath();
+          ctx.moveTo(p.x+sz*0.55, gy-bh*0.7);
+          ctx.bezierCurveTo(p.x+dw*0.8, gy-bh*1.1, p.x+dw*0.9, gy-bh*0.3, p.x+dw*0.55, gy-bh*0.15);
+          ctx.lineTo(p.x+sz*0.55, gy-bh*0.4);
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
+          // Tail bezier
+          ctx.save();
+          ctx.strokeStyle = '#1a5a28'; ctx.lineWidth = Math.max(2, sz*0.28); ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(p.x-dw*0.5, gy-bh*0.4);
+          ctx.bezierCurveTo(p.x-dw*0.9, gy-bh*0.2, p.x-dw*1.1, gy-bh*0.6, p.x-dw*1.3, gy-bh*0.3);
+          ctx.stroke();
+          ctx.restore();
+          // Body iridescent
+          ctx.save();
+          const dbG = makeBodyGrad(p.x, gy-bh*0.55, dw*0.85, bh*0.6, '#5acc60', '#1a5028');
+          ctx.fillStyle = dbG;
+          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.8, 0.75);
           ctx.beginPath(); ctx.arc(0, 0, sz*0.85, 0, Math.PI*2); ctx.fill(); ctx.restore();
-          // Head (on right side, facing forward)
-          ctx.beginPath(); ctx.arc(p.x + dw*0.3, gy-bh-sz*0.15, sz*0.55, 0, Math.PI*2); ctx.fill();
-          // Eye
-          ctx.fillStyle = '#ffe000';
-          ctx.beginPath(); ctx.arc(p.x + dw*0.3 + sz*0.18, gy-bh-sz*0.22, sz*0.14, 0, Math.PI*2); ctx.fill();
-          ctx.fillStyle = '#000';
-          ctx.beginPath(); ctx.arc(p.x + dw*0.3 + sz*0.18, gy-bh-sz*0.22, sz*0.07, 0, Math.PI*2); ctx.fill();
+          // Shimmer overlay (time-varying)
+          const shimmer = ctx.createRadialGradient(
+            p.x + Math.cos(now*0.001)*sz*0.5, gy-bh*0.6 + Math.sin(now*0.0013)*sz*0.3, 0,
+            p.x, gy-bh*0.6, sz*1.2
+          );
+          shimmer.addColorStop(0,   `rgba(120,255,160,${0.2 + 0.12*Math.sin(now*0.002)})`);
+          shimmer.addColorStop(0.5, 'rgba(60,180,80,0.06)');
+          shimmer.addColorStop(1,   'rgba(20,100,40,0)');
+          ctx.fillStyle = shimmer;
+          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.8, 0.75);
+          ctx.beginPath(); ctx.arc(0, 0, sz*0.85, 0, Math.PI*2); ctx.fill(); ctx.restore();
+          ctx.restore();
           // Spine ridges
           ctx.fillStyle = '#1a5030';
           for (let ri = -2; ri <= 1; ri++) {
-            const rx = p.x + ri * sz * 0.4 - sz*0.2;
+            const rx2 = p.x + ri * sz * 0.42 - sz*0.18;
             ctx.beginPath();
-            ctx.moveTo(rx-sz*0.09, gy-bh*0.8);
-            ctx.lineTo(rx, gy-bh-sz*0.22);
-            ctx.lineTo(rx+sz*0.09, gy-bh*0.8);
+            ctx.moveTo(rx2-sz*0.10, gy-bh*0.78);
+            ctx.lineTo(rx2, gy-bh-sz*0.22);
+            ctx.lineTo(rx2+sz*0.10, gy-bh*0.78);
             ctx.closePath(); ctx.fill();
           }
+          // Head
+          const dhG = ctx.createRadialGradient(p.x+dw*0.18, gy-bh-sz*0.28, 0, p.x+dw*0.3, gy-bh-sz*0.15, sz*0.58);
+          dhG.addColorStop(0, '#7aee80'); dhG.addColorStop(1, '#1a5028');
+          ctx.fillStyle = dhG;
+          ctx.beginPath(); ctx.arc(p.x+dw*0.3, gy-bh-sz*0.15, sz*0.55, 0, Math.PI*2); ctx.fill();
+          // Glowing eye
+          ctx.save(); ctx.shadowColor = '#ffe000'; ctx.shadowBlur = sz*1.0;
+          ctx.fillStyle = '#ffe000';
+          ctx.beginPath(); ctx.arc(p.x+dw*0.3+sz*0.20, gy-bh-sz*0.22, sz*0.15, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(p.x+dw*0.3+sz*0.20, gy-bh-sz*0.22, sz*0.07, 0, Math.PI*2); ctx.fill();
+          // Specular on body
+          ctx.fillStyle = 'rgba(180,255,200,0.25)';
+          ctx.beginPath(); ctx.ellipse(p.x-sz*0.3, gy-bh*0.8, sz*0.45, sz*0.20, -0.3, 0, Math.PI*2); ctx.fill();
 
         } else if (e.kind === 'dragonRider') {
-          // Dark red dragon body + small rider on top
-          const dw = sz * 2.0, dh = bh * 0.55;
-          // Wing arcs
-          ctx.strokeStyle = '#3a0000'; ctx.lineWidth = Math.max(2, sz*0.3);
-          ctx.beginPath(); ctx.arc(p.x - dw*0.5, gy-bh*0.5, sz*0.9, -Math.PI*0.7, Math.PI*0.1); ctx.stroke();
-          ctx.beginPath(); ctx.arc(p.x + dw*0.5, gy-bh*0.5, sz*0.9, Math.PI*0.9, Math.PI*1.7); ctx.stroke();
-          // Dragon body
-          ctx.fillStyle = e.color;
-          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.6, 0.9);
+          const dw = sz * 2.0;
+          // Wing triangles
+          ctx.save();
+          const drWingG = ctx.createLinearGradient(p.x-dw, gy-bh, p.x, gy);
+          drWingG.addColorStop(0, 'rgba(50,0,0,0.7)');
+          drWingG.addColorStop(1, 'rgba(20,0,0,0.4)');
+          ctx.fillStyle = drWingG;
+          ctx.beginPath();
+          ctx.moveTo(p.x-sz*0.55, gy-bh*0.7);
+          ctx.bezierCurveTo(p.x-dw*0.8, gy-bh*1.1, p.x-dw*0.9, gy-bh*0.3, p.x-dw*0.55, gy-bh*0.15);
+          ctx.lineTo(p.x-sz*0.55, gy-bh*0.4);
+          ctx.closePath(); ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(p.x+sz*0.55, gy-bh*0.7);
+          ctx.bezierCurveTo(p.x+dw*0.8, gy-bh*1.1, p.x+dw*0.9, gy-bh*0.3, p.x+dw*0.55, gy-bh*0.15);
+          ctx.lineTo(p.x+sz*0.55, gy-bh*0.4);
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
+          // Dragon body (dark red)
+          const drBG = makeBodyGrad(p.x, gy-bh*0.55, dw*0.85, bh*0.6, '#cc3322', '#3a0808');
+          ctx.fillStyle = drBG;
+          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.8, 0.75);
           ctx.beginPath(); ctx.arc(0, 0, sz*0.85, 0, Math.PI*2); ctx.fill(); ctx.restore();
           // Dragon head
-          ctx.beginPath(); ctx.arc(p.x + dw*0.3, gy-bh-sz*0.15, sz*0.55, 0, Math.PI*2); ctx.fill();
-          // Rider (small figure on top of body)
-          const rx = p.x - sz*0.1, ry = gy-bh*0.78;
-          ctx.fillStyle = '#555';
-          ctx.fillRect(rx-sz*0.18, ry-sz*0.5, sz*0.36, sz*0.40);
-          ctx.fillStyle = '#aaa';
-          ctx.beginPath(); ctx.arc(rx, ry-sz*0.68, sz*0.26, 0, Math.PI*2); ctx.fill();
-          // Rider helmet
-          ctx.fillStyle = '#444';
-          ctx.beginPath(); ctx.arc(rx, ry-sz*0.68, sz*0.26, Math.PI, Math.PI*2); ctx.fill();
-          // Lance
-          ctx.strokeStyle = '#8b5e2a'; ctx.lineWidth = Math.max(1.5, sz*0.12);
+          const drHG = ctx.createRadialGradient(p.x+dw*0.18, gy-bh-sz*0.28, 0, p.x+dw*0.3, gy-bh-sz*0.15, sz*0.58);
+          drHG.addColorStop(0, '#ee4433'); drHG.addColorStop(1, '#3a0808');
+          ctx.fillStyle = drHG;
+          ctx.beginPath(); ctx.arc(p.x+dw*0.3, gy-bh-sz*0.15, sz*0.55, 0, Math.PI*2); ctx.fill();
+          // Rider — dark armored humanoid
+          const rrx = p.x - sz*0.08, rry = gy-bh*0.80;
+          // Rider body (armored)
+          const rrBG = makeBodyGrad(rrx, rry, sz*0.38, sz*0.55, '#666677', '#22222e');
+          ctx.fillStyle = rrBG;
+          ctx.beginPath(); ctx.roundRect(rrx-sz*0.19, rry-sz*0.55, sz*0.38, sz*0.45, sz*0.04); ctx.fill();
+          // Rider head
+          const rrHG = ctx.createRadialGradient(rrx-sz*0.08, rry-sz*0.80, 0, rrx, rry-sz*0.70, sz*0.27);
+          rrHG.addColorStop(0, '#aaaacc'); rrHG.addColorStop(1, '#333344');
+          ctx.fillStyle = rrHG;
+          ctx.beginPath(); ctx.arc(rrx, rry-sz*0.70, sz*0.27, 0, Math.PI*2); ctx.fill();
+          // Helmet dark arc
+          ctx.fillStyle = '#333344';
+          ctx.beginPath(); ctx.arc(rrx, rry-sz*0.70, sz*0.27, Math.PI, Math.PI*2); ctx.fill();
+          // Red plume on helmet
+          ctx.save();
+          ctx.strokeStyle = '#cc2222'; ctx.lineWidth = Math.max(2, sz*0.16); ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.moveTo(rx + sz*0.18, ry-sz*0.48);
-          ctx.lineTo(rx + sz*1.0, ry-sz*0.65);
+          ctx.moveTo(rrx, rry-sz*0.96);
+          ctx.bezierCurveTo(rrx-sz*0.18, rry-sz*1.18, rrx-sz*0.35, rry-sz*1.05, rrx-sz*0.30, rry-sz*0.88);
           ctx.stroke();
-          ctx.fillStyle = '#ccc';
-          const lx = rx + sz*1.0, ly = ry-sz*0.65;
-          ctx.beginPath(); ctx.moveTo(lx-sz*0.06, ly-sz*0.1); ctx.lineTo(lx, ly+sz*0.1); ctx.lineTo(lx+sz*0.12, ly-sz*0.02); ctx.closePath(); ctx.fill();
+          ctx.restore();
+          // Lance
+          ctx.save();
+          ctx.strokeStyle = '#9a6a20'; ctx.lineWidth = Math.max(1.5, sz*0.13); ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(rrx+sz*0.19, rry-sz*0.50);
+          ctx.lineTo(rrx+sz*1.1, rry-sz*0.72);
+          ctx.stroke();
+          ctx.restore();
+          // Lance tip
+          ctx.fillStyle = '#ddddcc';
+          const ltx = rrx+sz*1.1, lty = rry-sz*0.72;
+          ctx.beginPath(); ctx.moveTo(ltx-sz*0.06, lty-sz*0.11); ctx.lineTo(ltx, lty+sz*0.11); ctx.lineTo(ltx+sz*0.14, lty-sz*0.02); ctx.closePath(); ctx.fill();
+          // Specular on dragon
+          ctx.fillStyle = 'rgba(255,100,80,0.22)';
+          ctx.beginPath(); ctx.ellipse(p.x-sz*0.3, gy-bh*0.8, sz*0.45, sz*0.20, -0.3, 0, Math.PI*2); ctx.fill();
 
         } else {
-          // Generic fallback (any unknown type)
-          ctx.fillStyle = '#2a2a2a';
-          ctx.fillRect(p.x-sz*0.5, gy-bh*0.5, sz*0.38, bh*0.52);
-          ctx.fillRect(p.x+sz*0.12, gy-bh*0.5, sz*0.38, bh*0.52);
-          ctx.fillStyle = e.color;
-          ctx.fillRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65);
+          // Generic fallback
+          const fbLG = makeBodyGrad(p.x, gy, sz*0.40, bh*0.52, '#444455', '#111118');
+          ctx.fillStyle = fbLG;
+          ctx.beginPath(); ctx.roundRect(p.x-sz*0.50, gy-bh*0.5, sz*0.38, bh*0.52, sz*0.04); ctx.fill();
+          ctx.beginPath(); ctx.roundRect(p.x+sz*0.12, gy-bh*0.5, sz*0.38, bh*0.52, sz*0.04); ctx.fill();
+          const fbBG = makeBodyGrad(p.x, gy-bh*0.35, sz*1.44, bh*0.65, e.color, '#111');
+          ctx.fillStyle = fbBG;
+          ctx.beginPath(); ctx.roundRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65, sz*0.10); ctx.fill();
+          const fbHG = ctx.createRadialGradient(p.x-sz*0.2, gy-bh-sz*0.75, 0, p.x, gy-bh-sz*0.6, sz*0.65);
+          fbHG.addColorStop(0, e.color); fbHG.addColorStop(1, '#111');
+          ctx.fillStyle = fbHG;
           ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
+        }
+
+        // ── Exponential distance fog overlay on enemy ──────────────────────
+        if (p.fwd > 80) {
+          const fogA = Math.min(0.72, 1 - Math.exp(-p.fwd / 350));
+          ctx.fillStyle = `rgba(78,92,72,${fogA})`;
+          ctx.fillRect(p.x-sz*0.82, gy-bh-sz*1.4, sz*1.64, bh + sz*1.4);
         }
 
         // HP bar
@@ -1686,65 +2029,260 @@ class Game {
     if (wallP && wallP.x > -200 && wallP.x < W + 200) {
       const wallW = 80 * wallP.sc, wallH = 120 * wallP.sc;
       const wx = wallP.x - wallW / 2, wy = wallP.y - wallH;
-      // Wall body
-      ctx.fillStyle = '#555055';
-      ctx.fillRect(wx, wy, wallW, wallH);
-      // Stone texture lines on wall
-      ctx.strokeStyle = 'rgba(30,30,30,0.4)'; ctx.lineWidth = 1;
-      for (let row = wy; row < wy + wallH; row += wallH/6)
-        ctx.strokeRect(wx, row, wallW, wallH/6);
-      // Battlements on top
-      ctx.fillStyle = '#4a4050';
-      const mw = wallW / 5;
-      for (let m = 0; m < 5; m += 2) ctx.fillRect(wx + m * mw, wy - mw*0.8, mw*0.9, mw*0.8);
-      // Gate arch
-      ctx.fillStyle = '#1a1018';
+
+      // Top-face trapezoid for 3D depth
+      ctx.save();
+      const topFaceG = ctx.createLinearGradient(wx, wy-wallH*0.12, wx, wy);
+      topFaceG.addColorStop(0, '#9a9590');
+      topFaceG.addColorStop(1, '#6a6560');
+      ctx.fillStyle = topFaceG;
       ctx.beginPath();
-      ctx.arc(wallP.x, wy + wallH * 0.55, wallW * 0.2, Math.PI, Math.PI * 2);
-      ctx.rect(wallP.x - wallW*0.2, wy + wallH * 0.55, wallW*0.4, wallH*0.45);
+      ctx.moveTo(wx - wallW*0.06, wy);
+      ctx.lineTo(wx + wallW*1.06, wy);
+      ctx.lineTo(wx + wallW*0.96, wy - wallH*0.12);
+      ctx.lineTo(wx + wallW*0.04, wy - wallH*0.12);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+
+      // Front face gradient (top light → bottom dark)
+      const wallFG = ctx.createLinearGradient(wx, wy, wx, wy+wallH);
+      wallFG.addColorStop(0,   '#7a7570');
+      wallFG.addColorStop(0.3, '#606060');
+      wallFG.addColorStop(1,   '#3a3535');
+      ctx.fillStyle = wallFG;
+      ctx.fillRect(wx, wy, wallW, wallH);
+
+      // Stone block mortar lines
+      const brickH = wallH / 7, brickW = wallW / 4;
+      for (let row = 0; row < 8; row++) {
+        const ry = wy + row * brickH;
+        // Horizontal mortar
+        ctx.strokeStyle = 'rgba(20,18,16,0.5)'; ctx.lineWidth = Math.max(1, wallP.sc*1.5);
+        ctx.beginPath(); ctx.moveTo(wx, ry); ctx.lineTo(wx+wallW, ry); ctx.stroke();
+        // Vertical mortar (offset every other row)
+        const off = (row % 2) * brickW * 0.5;
+        for (let col = off; col < wallW + brickW; col += brickW) {
+          ctx.beginPath(); ctx.moveTo(wx+col, ry); ctx.lineTo(wx+col, ry+brickH); ctx.stroke();
+        }
+        // Per-block color variation
+        for (let col2 = 0; col2 < 4; col2++) {
+          const varyOff = (row % 2)*0.5;
+          const bx = wx + (col2 + varyOff) * brickW;
+          const vary = (Math.sin(row*7.3 + col2*3.1) * 0.5 + 0.5) * 0.08;
+          ctx.fillStyle = `rgba(${vary>0.04?'255,255,255':'0,0,0'},${Math.abs(vary-0.04)*1.5})`;
+          ctx.fillRect(bx+1, ry+1, brickW-2, brickH-2);
+        }
+      }
+
+      // Battlements with beveled edges
+      const mw = wallW / 5;
+      for (let m = 0; m < 5; m += 2) {
+        const mx2 = wx + m * mw;
+        const mTop = wy - mw*0.85;
+        // Battlement face
+        const mG = ctx.createLinearGradient(mx2, mTop, mx2, wy);
+        mG.addColorStop(0, '#8a8580');
+        mG.addColorStop(1, '#4a4540');
+        ctx.fillStyle = mG;
+        ctx.fillRect(mx2, mTop, mw*0.88, mw*0.85);
+        // Top face (sunlight)
+        ctx.fillStyle = '#aaa59a';
+        ctx.fillRect(mx2, mTop, mw*0.88, mw*0.10);
+        // Left bevel highlight
+        ctx.fillStyle = 'rgba(255,255,240,0.18)';
+        ctx.fillRect(mx2, mTop, 2, mw*0.85);
+        // Right bevel shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(mx2+mw*0.88-2, mTop, 2, mw*0.85);
+      }
+
+      // Gate arch (portcullis)
+      const gateX = wallP.x, gateW = wallW * 0.40, gateH = wallH * 0.52;
+      const gateTop = wy + wallH * 0.48;
+      ctx.save();
+      // Gate darkness
+      ctx.fillStyle = '#0c0810';
+      ctx.beginPath();
+      ctx.arc(gateX, gateTop, gateW*0.5, Math.PI, Math.PI*2);
+      ctx.rect(gateX - gateW*0.5, gateTop, gateW, wallH - (gateTop-wy));
       ctx.fill();
+      // Portcullis bars
+      const barCount = 5, barSpacing = gateW / (barCount + 1);
+      ctx.strokeStyle = 'rgba(60,50,40,0.88)'; ctx.lineWidth = Math.max(1.5, wallP.sc*2.5);
+      for (let b = 1; b <= barCount; b++) {
+        const bx2 = gateX - gateW*0.5 + b*barSpacing;
+        ctx.beginPath(); ctx.moveTo(bx2, gateTop); ctx.lineTo(bx2, wy+wallH); ctx.stroke();
+      }
+      const crossCount = 3;
+      for (let c = 0; c < crossCount; c++) {
+        const cy2 = gateTop + (c+1) * (wallH - (gateTop-wy)) / (crossCount+1);
+        ctx.beginPath();
+        ctx.moveTo(gateX - gateW*0.5 + barSpacing, cy2);
+        ctx.lineTo(gateX + gateW*0.5 - barSpacing, cy2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Ivy/moss patches (lower wall)
+      ctx.save();
+      ctx.fillStyle = 'rgba(30,65,20,0.65)';
+      for (let iv = 0; iv < 4; iv++) {
+        const ivx = wx + wallW*(0.05 + iv*0.22), ivy2 = wy + wallH*0.6;
+        ctx.beginPath();
+        ctx.bezierCurveTo(ivx-wallW*0.05, ivy2-wallH*0.12, ivx+wallW*0.08, ivy2-wallH*0.08, ivx+wallW*0.06, ivy2+wallH*0.22);
+        ctx.bezierCurveTo(ivx+wallW*0.04, ivy2+wallH*0.28, ivx-wallW*0.04, ivy2+wallH*0.25, ivx-wallW*0.06, ivy2+wallH*0.20);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+
+      // Torch flames at gate sides
+      const torchFlame = (tx, ty) => {
+        const tf2 = now / 90;
+        const fl2 = 0.7 + 0.3*Math.sin(tf2 + tx*0.1);
+        ctx.save();
+        // Torch glow pool
+        const tg = ctx.createRadialGradient(tx, ty, 0, tx, ty, wallW*0.18);
+        tg.addColorStop(0, `rgba(255,140,30,${0.35*fl2})`);
+        tg.addColorStop(1, 'rgba(255,80,0,0)');
+        ctx.fillStyle = tg;
+        ctx.beginPath(); ctx.arc(tx, ty, wallW*0.18, 0, Math.PI*2); ctx.fill();
+        // Flame
+        ctx.fillStyle = `rgba(255,80,0,${0.85*fl2})`;
+        ctx.beginPath(); ctx.moveTo(tx-wallW*0.04, ty); ctx.lineTo(tx, ty-wallW*(0.10+fl2*0.06)); ctx.lineTo(tx+wallW*0.04, ty); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = `rgba(255,220,40,${0.7*fl2})`;
+        ctx.beginPath(); ctx.moveTo(tx-wallW*0.025, ty); ctx.lineTo(tx, ty-wallW*(0.065+fl2*0.04)); ctx.lineTo(tx+wallW*0.025, ty); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      };
+      torchFlame(gateX - gateW*0.62, gateTop + wallH*0.04);
+      torchFlame(gateX + gateW*0.62, gateTop + wallH*0.04);
     }
 
-    // ── STONE BATTLEMENT FRAME (left wall slightly lighter, right slightly darker) ──
+    // ── STONE BATTLEMENT FRAME ──
     const openL = W * 0.14, openR = W * 0.86;
     const drawStone = (x1, x2, lightBias) => {
-      const baseL = lightBias > 0 ? '#525252' : '#484848';
-      const baseM = lightBias > 0 ? '#606060' : '#565656';
-      ctx.fillStyle = baseL; ctx.fillRect(x1, 0, x2-x1, H);
-      ctx.fillStyle = baseM; ctx.fillRect(x1, 0, x2-x1, H);
-      ctx.strokeStyle = '#383838'; ctx.lineWidth = 1;
-      for (let row = 0; row < H; row += 14) {
-        const off = (Math.floor(row/14)%2)*22;
-        for (let col = x1-22+off; col < x2+22; col += 44)
-          ctx.strokeRect(col, row, 42, 13);
+      // Base stone gradient (lighter top → darker bottom)
+      const sg2 = ctx.createLinearGradient(x1, 0, x2, H);
+      if (lightBias > 0) {
+        sg2.addColorStop(0,   '#6e6a65');
+        sg2.addColorStop(0.4, '#585450');
+        sg2.addColorStop(1,   '#3e3a38');
+      } else {
+        sg2.addColorStop(0,   '#5a5652');
+        sg2.addColorStop(0.4, '#484440');
+        sg2.addColorStop(1,   '#302e2c');
       }
-      ctx.strokeStyle = 'rgba(255,255,255,0.055)'; ctx.lineWidth = 0.8;
-      for (let row = 0; row < H; row += 14) {
-        ctx.beginPath(); ctx.moveTo(x1, row+1); ctx.lineTo(x2, row+1); ctx.stroke();
+      ctx.fillStyle = sg2; ctx.fillRect(x1, 0, x2-x1, H);
+
+      // Brick rows with bevel
+      ctx.strokeStyle = 'rgba(18,16,14,0.55)'; ctx.lineWidth = 1.2;
+      for (let row = 0; row < H; row += 16) {
+        const off = (Math.floor(row/16)%2)*24;
+        for (let col = x1-24+off; col < x2+24; col += 48) {
+          const bx = col, by = row;
+          // Brick fill variation
+          const vary = Math.sin(bx*0.17 + by*0.31) * 0.06;
+          ctx.fillStyle = `rgba(${lightBias>0?'255,255,250':'0,0,0'},${Math.abs(vary)})`;
+          ctx.fillRect(bx+1, by+1, 46, 14);
+          // Mortar outline
+          ctx.strokeRect(bx, by, 46, 14);
+          // Top bevel (bright) and bottom bevel (dark)
+          ctx.strokeStyle = 'rgba(255,255,240,0.12)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(bx+1, by+1); ctx.lineTo(bx+45, by+1); ctx.stroke();
+          ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(bx+1, by+13); ctx.lineTo(bx+45, by+13); ctx.stroke();
+          ctx.strokeStyle = 'rgba(18,16,14,0.55)'; ctx.lineWidth = 1.2;
+        }
       }
+
+      // Crack lines (weathering)
+      ctx.strokeStyle = 'rgba(10,8,6,0.35)'; ctx.lineWidth = 1;
+      const crackSeeds = [0.15, 0.48, 0.72, 0.91];
+      for (const cs of crackSeeds) {
+        const cx3 = x1 + (x2-x1)*cs, cy3 = H*(0.1 + cs*0.6);
+        ctx.beginPath();
+        ctx.moveTo(cx3, cy3);
+        ctx.lineTo(cx3 + (lightBias>0?6:-6)*Math.sin(cs*7), cy3+30);
+        ctx.lineTo(cx3 + (lightBias>0?3:-3)*Math.sin(cs*13), cy3+52);
+        ctx.stroke();
+      }
+
+      // Torch sconce
+      const tscX = lightBias > 0 ? x2 - (x2-x1)*0.35 : x1 + (x2-x1)*0.35;
+      const tscY = H * 0.32;
+      // Orange light pool on stone
+      const tscG = ctx.createRadialGradient(tscX, tscY, 0, tscX, tscY, (x2-x1)*0.7);
+      tscG.addColorStop(0,   `rgba(255,130,30,0.28)`);
+      tscG.addColorStop(0.5, `rgba(255,90,10,0.10)`);
+      tscG.addColorStop(1,   `rgba(255,60,0,0)`);
+      ctx.fillStyle = tscG; ctx.fillRect(x1, 0, x2-x1, H);
+      // Flame animation
+      const tscFl = 0.75 + 0.25*Math.sin(now/80 + tscX);
+      ctx.save();
+      ctx.fillStyle = `rgba(255,80,0,${0.9*tscFl})`;
+      ctx.beginPath(); ctx.moveTo(tscX-5, tscY); ctx.lineTo(tscX, tscY-14*tscFl); ctx.lineTo(tscX+5, tscY); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = `rgba(255,220,40,${0.8*tscFl})`;
+      ctx.beginPath(); ctx.moveTo(tscX-3, tscY); ctx.lineTo(tscX, tscY-8*tscFl); ctx.lineTo(tscX+3, tscY); ctx.closePath(); ctx.fill();
+      ctx.restore();
+
+      // Vines (thin bezier with leaf ovals)
+      ctx.save();
+      ctx.strokeStyle = 'rgba(25,65,15,0.55)'; ctx.lineWidth = 1.5;
+      const vx = lightBias > 0 ? x2-8 : x1+8;
+      ctx.beginPath();
+      ctx.moveTo(vx, 0);
+      ctx.bezierCurveTo(vx-lightBias*12, H*0.25, vx+lightBias*8, H*0.55, vx-lightBias*6, H*0.85);
+      ctx.stroke();
+      // Leaf ovals along vine
+      ctx.fillStyle = 'rgba(30,75,18,0.55)';
+      for (let lf = 0; lf < 5; lf++) {
+        const lt = lf / 4;
+        const lx2 = vx + (lightBias>0?-1:1)*Math.sin(lt*Math.PI*2)*10;
+        const ly2 = lt * H * 0.85;
+        ctx.save();
+        ctx.translate(lx2, ly2); ctx.rotate(lt*1.2);
+        ctx.beginPath(); ctx.ellipse(0, 0, 7, 4, 0, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
     };
     drawStone(0, openL, 1); drawStone(openR, W, -1);
 
-    // Side vignette (darkens corners of viewport opening)
-    const vigL = ctx.createLinearGradient(openL, 0, openL + 60, 0);
-    vigL.addColorStop(0, 'rgba(0,0,0,0.45)'); vigL.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = vigL; ctx.fillRect(openL, 0, 60, H);
-    const vigR = ctx.createLinearGradient(openR - 60, 0, openR, 0);
-    vigR.addColorStop(0, 'rgba(0,0,0,0)'); vigR.addColorStop(1, 'rgba(0,0,0,0.45)');
-    ctx.fillStyle = vigR; ctx.fillRect(openR - 60, 0, 60, H);
+    // Side vignette
+    const vigL = ctx.createLinearGradient(openL, 0, openL + 70, 0);
+    vigL.addColorStop(0, 'rgba(0,0,0,0.55)'); vigL.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = vigL; ctx.fillRect(openL, 0, 70, H);
+    const vigR = ctx.createLinearGradient(openR - 70, 0, openR, 0);
+    vigR.addColorStop(0, 'rgba(0,0,0,0)'); vigR.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = vigR; ctx.fillRect(openR - 70, 0, 70, H);
 
-    // Crenellations (merlons) on inner edge of walls
-    ctx.fillStyle = '#4e4e4e';
-    for (let y = 10; y < H*0.55; y += 56) {
-      ctx.fillRect(openL-14, y, 20, 32); ctx.fillRect(openR-6, y, 20, 32);
+    // Merlons on inner edge of walls
+    ctx.fillStyle = '#525050';
+    for (let y = 8; y < H*0.55; y += 58) {
+      ctx.fillRect(openL-16, y, 22, 34); ctx.fillRect(openR-6, y, 22, 34);
     }
     // Bottom stone sill
-    ctx.fillStyle = '#4e4e4e'; ctx.fillRect(0, openB, W, H-openB);
-    ctx.fillStyle = '#5c5c5c'; ctx.fillRect(0, openB, W, 10);
-    ctx.strokeStyle = '#383838'; ctx.lineWidth = 1;
-    for (let col = 0; col < W; col += 48) ctx.strokeRect(col, openB+1, 46, H-openB-2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
+    const sillG = ctx.createLinearGradient(0, openB, 0, H);
+    sillG.addColorStop(0,   '#5a5650');
+    sillG.addColorStop(0.08,'#4e4a45');
+    sillG.addColorStop(1,   '#2a2826');
+    ctx.fillStyle = sillG; ctx.fillRect(0, openB, W, H-openB);
+    ctx.fillStyle = '#6a6660'; ctx.fillRect(0, openB, W, 12);
+    ctx.strokeStyle = '#2a2826'; ctx.lineWidth = 1;
+    for (let col = 0; col < W; col += 52) ctx.strokeRect(col, openB+1, 50, H-openB-2);
+    ctx.strokeStyle = 'rgba(255,255,240,0.10)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, openB); ctx.lineTo(W, openB); ctx.stroke();
+
+    // ── POST-PROCESSING ──
+    // Vignette (black radial from corners)
+    const vigFull = ctx.createRadialGradient(W/2, H/2, H*0.28, W/2, H/2, H*0.82);
+    vigFull.addColorStop(0, 'rgba(0,0,0,0)');
+    vigFull.addColorStop(0.6, 'rgba(0,0,0,0.10)');
+    vigFull.addColorStop(1,   'rgba(0,0,0,0.52)');
+    ctx.fillStyle = vigFull; ctx.fillRect(openL, 0, openR-openL, H);
+    // Warm sepia top half
+    ctx.fillStyle = 'rgba(255,200,100,0.04)'; ctx.fillRect(openL, 0, openR-openL, H/2);
+    // Cool blue bottom half
+    ctx.fillStyle = 'rgba(0,50,100,0.04)';    ctx.fillRect(openL, H/2, openR-openL, H/2);
 
     // ── CROSSHAIR (follows mouse, snaps red to nearby enemy) ──
     const rawMx = this.mouse.x, rawMy = this.mouse.y;
@@ -2011,7 +2549,7 @@ class Game {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
     // Version badge — helps confirm the right code is loaded
-    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v29';
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v30';
 
     // Draw map background
     this._drawTitleBg();
