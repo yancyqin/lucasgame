@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=30';
-import { GameMap }     from './Map.js?v=30';
-import { Tower }       from './Tower.js?v=30';
-import { Enemy }       from './Enemy.js?v=30';
-import { Projectile }  from './Projectile.js?v=30';
-import { Trap }        from './Trap.js?v=30';
-import { Mine }        from './Mine.js?v=30';
-import { WaveManager } from './WaveManager.js?v=30';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=31';
+import { GameMap }     from './Map.js?v=31';
+import { Tower }       from './Tower.js?v=31';
+import { Enemy }       from './Enemy.js?v=31';
+import { Projectile }  from './Projectile.js?v=31';
+import { Trap }        from './Trap.js?v=31';
+import { Mine }        from './Mine.js?v=31';
+import { WaveManager } from './WaveManager.js?v=31';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -2549,7 +2549,7 @@ class Game {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
     // Version badge — helps confirm the right code is loaded
-    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v30';
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v31';
 
     // Draw map background
     this._drawTitleBg();
@@ -2880,9 +2880,11 @@ class Game {
       const clickedSoldier = this.soldiers.find(s => Math.hypot(s.x-x, s.y-y) < 16);
       if (clickedSoldier) { this._enter3DSoldier(clickedSoldier); return; }
 
-      // Click on tower → check for upgrade panel click, or enter 3D view
+      // Click on tower → second click same tower enters 3D, otherwise fire manual
       if (this.selectedTower) {
-        // Check if clicked the upgrade button area (drawn in _drawHUD)
+        // Second click on the same selected tower → enter 3D view
+        if (this.trySelectTower(x, y)) return;
+        // Clicked elsewhere — check upgrade panel, then fire manual shot
         if (this._checkUpgradeClick(x, y)) return;
         this.tryFireManual(x, y); return;
       }
