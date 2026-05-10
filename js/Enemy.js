@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=28';
-import { Projectile } from './Projectile.js?v=28';
+import { ENEMIES, distance } from './constants.js?v=29';
+import { Projectile } from './Projectile.js?v=29';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -198,35 +198,68 @@ export class Enemy {
       this._drawKnight(ctx, facing, bc);
     }
 
-    // Stun stars
-    if (this.stunTimer > 0) {
-      const s2 = this.size;
-      for (let i = 0; i < 3; i++) {
-        const a = (Date.now() / 200 + i * Math.PI * 2 / 3) % (Math.PI * 2);
-        const sx = this.x + Math.cos(a) * (s2 + 6), sy = this.y - s2 - 16 + Math.sin(a) * 6;
-        ctx.fillStyle = '#ffff44';
-        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('★', sx, sy);
-      }
-      ctx.textAlign = 'left';
-    }
-
-    // Shock visual
-    if (this.shockTimer > 0) {
-      ctx.strokeStyle = `rgba(255,255,80,${this.shockTimer/30})`;
-      ctx.lineWidth = 1.5;
-      for (let i = 0; i < 4; i++) {
-        const a = (Date.now()/100 + i*Math.PI/2) % (Math.PI*2);
-        ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x+Math.cos(a)*(this.size+8), this.y+Math.sin(a)*(this.size+8)); ctx.stroke();
-      }
-    }
-
-    // Burn visual
+    // Burn visual — flickering orange flame dots around enemy
     if (this.burnTimer > 0) {
       const bp = Math.min(this.burnTimer/180, 1);
       ctx.strokeStyle = `rgba(255,100,0,${bp*0.7})`;
       ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(this.x, this.y, this.size+4, 0, Math.PI*2); ctx.stroke();
+      // Flame dots that flicker using Date.now()
+      const ft = Date.now() / 80;
+      for (let fi = 0; fi < 3; fi++) {
+        const fa = ft + fi * Math.PI * 2 / 3;
+        const fr = this.size + 3 + Math.sin(ft * 2 + fi) * 3;
+        const fdx = Math.cos(fa) * fr, fdy = Math.sin(fa) * fr;
+        const flicker = 0.6 + 0.4 * Math.sin(ft * 3 + fi * 1.5);
+        ctx.fillStyle = `rgba(255,${Math.floor(80 + flicker*100)},0,${bp * flicker})`;
+        ctx.beginPath(); ctx.arc(this.x + fdx, this.y + fdy - 4, 3 + flicker*2, 0, Math.PI*2); ctx.fill();
+      }
+    }
+
+    // Slow/freeze — snowflake above head
+    if (this.slowTimer > 0) {
+      ctx.fillStyle = `rgba(140,200,255,${Math.min(1, this.slowTimer/60)})`;
+      ctx.font = `bold ${Math.max(10, this.size)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('❄', this.x, this.y - this.size - 18);
+      ctx.textAlign = 'left';
+    }
+
+    // Stun stars — spinning grey circles above head
+    if (this.stunTimer > 0) {
+      const s2 = this.size;
+      for (let i = 0; i < 3; i++) {
+        const a = (Date.now() / 200 + i * Math.PI * 2 / 3) % (Math.PI * 2);
+        const sx = this.x + Math.cos(a) * (s2 + 6), sy = this.y - s2 - 16 + Math.sin(a) * 6;
+        ctx.fillStyle = '#aaaaaa';
+        ctx.beginPath(); ctx.arc(sx, sy, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ffff44';
+        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('★', sx, sy + 1);
+      }
+      ctx.textAlign = 'left';
+    }
+
+    // Shock visual — yellow zigzag lightning bolt near enemy
+    if (this.shockTimer > 0) {
+      const alpha = this.shockTimer/30;
+      ctx.strokeStyle = `rgba(255,255,80,${alpha})`;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) {
+        const a = (Date.now()/100 + i*Math.PI/2) % (Math.PI*2);
+        ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x+Math.cos(a)*(this.size+8), this.y+Math.sin(a)*(this.size+8)); ctx.stroke();
+      }
+      // Zigzag bolt to the right side
+      const bx = this.x + this.size + 4, by = this.y - this.size;
+      ctx.strokeStyle = `rgba(255,240,0,${alpha * 0.9})`;
+      ctx.lineWidth = 2; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + 4, by + 5);
+      ctx.lineTo(bx, by + 10);
+      ctx.lineTo(bx + 5, by + 16);
+      ctx.stroke();
+      ctx.lineJoin = 'miter';
     }
 
     // HP bar

@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=28';
-import { GameMap }     from './Map.js?v=28';
-import { Tower }       from './Tower.js?v=28';
-import { Enemy }       from './Enemy.js?v=28';
-import { Projectile }  from './Projectile.js?v=28';
-import { Trap }        from './Trap.js?v=28';
-import { Mine }        from './Mine.js?v=28';
-import { WaveManager } from './WaveManager.js?v=28';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=29';
+import { GameMap }     from './Map.js?v=29';
+import { Tower }       from './Tower.js?v=29';
+import { Enemy }       from './Enemy.js?v=29';
+import { Projectile }  from './Projectile.js?v=29';
+import { Trap }        from './Trap.js?v=29';
+import { Mine }        from './Mine.js?v=29';
+import { WaveManager } from './WaveManager.js?v=29';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -510,6 +510,8 @@ class Game {
     this.multiShotActive = false; // Multishot: towers fire 2 projectiles
     this.bounceActive   = false; // Bouncing Arrows: arrows bounce to a second target
 
+    this.paused         = false;
+    this.helpOpen       = false;
     this.titleActive    = true;
     this.selectedLevelId = 1;
     this.campLimit = 5; // raised to 10 by gem_camps upgrade
@@ -540,6 +542,7 @@ class Game {
     }
 
     if (this.titleActive || this.gameOver || this.levelComplete) return;
+    if (this.paused) return;
     if (this.flashTimer > 0) this.flashTimer--;
 
     // Tick down power-up timers
@@ -804,6 +807,10 @@ class Game {
     this._drawHint();
     this._drawGameOver();
     this._drawLevelComplete();
+    // Draw pause overlay
+    if (this.paused) this._drawPauseOverlay();
+    // Draw help overlay
+    if (this.helpOpen) this._drawHelpOverlay();
     // Draw wheel on top if it's open
     if (this.wheelOpen) this._drawWheel();
   }
@@ -1318,9 +1325,11 @@ class Game {
       ctx.lineTo(x, horizon - 22 + Math.sin(x*0.022)*20 + Math.sin(x*0.058)*10);
     ctx.lineTo(W, horizon); ctx.closePath(); ctx.fill();
 
-    // ── GROUND ──
+    // ── GROUND (darkens near horizon for depth) ──
     const gg = ctx.createLinearGradient(0, horizon, 0, H);
-    gg.addColorStop(0, '#3a4824'); gg.addColorStop(0.3, '#30401c'); gg.addColorStop(0.6, '#2a3815'); gg.addColorStop(1, '#1e2c0e');
+    gg.addColorStop(0, '#1a2210');   // very dark at horizon
+    gg.addColorStop(0.12, '#263015'); gg.addColorStop(0.35, '#30401c');
+    gg.addColorStop(0.65, '#2a3815'); gg.addColorStop(1, '#1e2c0e');
     ctx.fillStyle = gg; ctx.fillRect(0, horizon, W, H - horizon);
 
     // Dirt texture strips — alternating slightly darker patches for variety
@@ -1434,23 +1443,196 @@ class Game {
         ctx.closePath(); ctx.fill();
       } else {
         const { e } = obj;
-        const sz = e.size * p.sc * 1.8;
+        // Ogre is bigger; dragonRider also slightly bigger
+        const sizeScale = e.kind === 'ogre' ? 1.5 : 1.0;
+        const sz = e.size * p.sc * 1.8 * sizeScale;
         if (sz < 2) continue;
         const gy = Math.min(p.y, openB);
         const bh = sz * 2.2;
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.3)';
-        ctx.save(); ctx.translate(p.x+sz*0.3, gy); ctx.scale(1.1, 0.25);
-        ctx.beginPath(); ctx.arc(0, 0, sz*1.1, 0, Math.PI*2); ctx.fill(); ctx.restore();
-        // Legs
-        ctx.fillStyle = '#2a2a2a';
-        ctx.fillRect(p.x-sz*0.5, gy-bh*0.5, sz*0.38, bh*0.52);
-        ctx.fillRect(p.x+sz*0.12, gy-bh*0.5, sz*0.38, bh*0.52);
-        // Body
-        ctx.fillStyle = e.color;
-        ctx.fillRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65);
-        // Head
-        ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
+
+        // ── Shadow (larger/darker as enemy is closer) ────────────────────
+        const shadowScale = Math.max(0.8, Math.min(2.0, 200 / p.fwd));
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.save(); ctx.translate(p.x + sz*0.3, gy); ctx.scale(1.2 * shadowScale, 0.22 * shadowScale);
+        ctx.beginPath(); ctx.arc(0, 0, sz*1.2, 0, Math.PI*2); ctx.fill(); ctx.restore();
+
+        // ── Per-type body drawing ─────────────────────────────────────────
+        if (e.kind === 'goblin') {
+          // Stubby green goblin with spiky hair
+          // Legs
+          ctx.fillStyle = '#1a3a10';
+          ctx.fillRect(p.x-sz*0.45, gy-bh*0.5, sz*0.35, bh*0.5);
+          ctx.fillRect(p.x+sz*0.10, gy-bh*0.5, sz*0.35, bh*0.5);
+          // Arms
+          ctx.strokeStyle = '#2a5a18'; ctx.lineWidth = Math.max(1.5, sz*0.2);
+          ctx.beginPath(); ctx.moveTo(p.x-sz*0.72, gy-bh+sz*0.2); ctx.lineTo(p.x-sz*0.3, gy-bh*0.6); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p.x+sz*0.72, gy-bh+sz*0.2); ctx.lineTo(p.x+sz*0.3, gy-bh*0.6); ctx.stroke();
+          // Body
+          ctx.fillStyle = e.color;
+          ctx.fillRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65);
+          // Head
+          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.55, sz*0.62, 0, Math.PI*2); ctx.fill();
+          // Spiky hair (3 triangles)
+          ctx.fillStyle = '#4a1a00';
+          for (let sp = -1; sp <= 1; sp++) {
+            const hx = p.x + sp * sz * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(hx - sz*0.12, gy-bh-sz*0.90);
+            ctx.lineTo(hx, gy-bh-sz*1.35);
+            ctx.lineTo(hx + sz*0.12, gy-bh-sz*0.90);
+            ctx.closePath(); ctx.fill();
+          }
+          // Yellow eyes
+          ctx.fillStyle = '#ffee00';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.22, gy-bh-sz*0.62, sz*0.14, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.22, gy-bh-sz*0.62, sz*0.14, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.22, gy-bh-sz*0.62, sz*0.07, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.22, gy-bh-sz*0.62, sz*0.07, 0, Math.PI*2); ctx.fill();
+
+        } else if (e.kind === 'runner') {
+          // Lean forward, orange-brown, narrower body
+          ctx.save(); ctx.translate(p.x, gy); ctx.rotate(-0.18); // lean forward
+          const rbh = bh * 0.9;
+          ctx.fillStyle = '#2a1a00';
+          ctx.fillRect(-sz*0.38, -rbh*0.5, sz*0.30, rbh*0.5);
+          ctx.fillRect(sz*0.08, -rbh*0.5, sz*0.30, rbh*0.5);
+          // Arms
+          ctx.strokeStyle = '#7a4a10'; ctx.lineWidth = Math.max(1.5, sz*0.18);
+          ctx.beginPath(); ctx.moveTo(-sz*0.55, -rbh+sz*0.2); ctx.lineTo(-sz*0.25, -rbh*0.65); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(sz*0.55, -rbh+sz*0.2); ctx.lineTo(sz*0.25, -rbh*0.65); ctx.stroke();
+          // Body (narrower)
+          ctx.fillStyle = e.color;
+          ctx.fillRect(-sz*0.55, -rbh, sz*1.10, rbh*0.62);
+          // Head
+          ctx.beginPath(); ctx.arc(0, -rbh-sz*0.5, sz*0.55, 0, Math.PI*2); ctx.fill();
+          // Simple dot eyes
+          ctx.fillStyle = '#ffaa44';
+          ctx.beginPath(); ctx.arc(-sz*0.18, -rbh-sz*0.56, sz*0.11, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(sz*0.18, -rbh-sz*0.56, sz*0.11, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+
+        } else if (e.kind === 'saboteur') {
+          // Dark purple with cape
+          // Cape (triangle behind body)
+          ctx.fillStyle = '#1a0830';
+          ctx.beginPath();
+          ctx.moveTo(p.x-sz*0.85, gy-bh-sz*0.2);
+          ctx.lineTo(p.x, gy-bh-sz*1.1);
+          ctx.lineTo(p.x+sz*0.85, gy-bh-sz*0.2);
+          ctx.lineTo(p.x+sz*0.7, gy-sz*0.4);
+          ctx.lineTo(p.x-sz*0.7, gy-sz*0.4);
+          ctx.closePath(); ctx.fill();
+          // Legs
+          ctx.fillStyle = '#2a1535';
+          ctx.fillRect(p.x-sz*0.45, gy-bh*0.5, sz*0.34, bh*0.5);
+          ctx.fillRect(p.x+sz*0.11, gy-bh*0.5, sz*0.34, bh*0.5);
+          // Arms
+          ctx.strokeStyle = '#4a2565'; ctx.lineWidth = Math.max(1.5, sz*0.2);
+          ctx.beginPath(); ctx.moveTo(p.x-sz*0.72, gy-bh+sz*0.1); ctx.lineTo(p.x-sz*0.3, gy-bh*0.65); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p.x+sz*0.72, gy-bh+sz*0.1); ctx.lineTo(p.x+sz*0.3, gy-bh*0.65); ctx.stroke();
+          // Body
+          ctx.fillStyle = e.color;
+          ctx.fillRect(p.x-sz*0.65, gy-bh, sz*1.30, bh*0.65);
+          // Head
+          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.55, sz*0.60, 0, Math.PI*2); ctx.fill();
+          // Glowing purple eyes
+          ctx.fillStyle = '#cc44ff';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.20, gy-bh-sz*0.60, sz*0.12, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.20, gy-bh-sz*0.60, sz*0.12, 0, Math.PI*2); ctx.fill();
+
+        } else if (e.kind === 'ogre') {
+          // Wide squat body, grey-green, tiny head
+          const ow = sz * 1.8, oh = bh * 0.55;
+          // Legs (short and wide)
+          ctx.fillStyle = '#2a3520';
+          ctx.fillRect(p.x-sz*0.65, gy-bh*0.45, sz*0.50, bh*0.45);
+          ctx.fillRect(p.x+sz*0.15, gy-bh*0.45, sz*0.50, bh*0.45);
+          // Arms (thick)
+          ctx.strokeStyle = '#5a7040'; ctx.lineWidth = Math.max(3, sz*0.38);
+          ctx.beginPath(); ctx.moveTo(p.x-ow/2, gy-bh+sz*0.2); ctx.lineTo(p.x-sz*0.72, gy-bh*0.7); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p.x+ow/2, gy-bh+sz*0.2); ctx.lineTo(p.x+sz*0.72, gy-bh*0.7); ctx.stroke();
+          // Wide squat body
+          ctx.fillStyle = e.color;
+          ctx.fillRect(p.x - ow/2, gy-bh, ow, oh);
+          // Tiny head
+          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.38, sz*0.50, 0, Math.PI*2); ctx.fill();
+          // Beady eyes
+          ctx.fillStyle = '#ff3300';
+          ctx.beginPath(); ctx.arc(p.x-sz*0.18, gy-bh-sz*0.44, sz*0.12, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x+sz*0.18, gy-bh-sz*0.44, sz*0.12, 0, Math.PI*2); ctx.fill();
+
+        } else if (e.kind === 'dragon') {
+          // Elongated body (wider than tall), green, wing arcs on sides
+          const dw = sz * 2.0, dh = bh * 0.55;
+          // Wing hints (two arcs on sides)
+          ctx.strokeStyle = '#1a5030'; ctx.lineWidth = Math.max(2, sz*0.3);
+          ctx.beginPath(); ctx.arc(p.x - dw*0.5, gy-bh*0.5, sz*0.9, -Math.PI*0.7, Math.PI*0.1); ctx.stroke();
+          ctx.beginPath(); ctx.arc(p.x + dw*0.5, gy-bh*0.5, sz*0.9, Math.PI*0.9, Math.PI*1.7); ctx.stroke();
+          // Body (wide ellipse)
+          ctx.fillStyle = e.color;
+          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.6, 0.9);
+          ctx.beginPath(); ctx.arc(0, 0, sz*0.85, 0, Math.PI*2); ctx.fill(); ctx.restore();
+          // Head (on right side, facing forward)
+          ctx.beginPath(); ctx.arc(p.x + dw*0.3, gy-bh-sz*0.15, sz*0.55, 0, Math.PI*2); ctx.fill();
+          // Eye
+          ctx.fillStyle = '#ffe000';
+          ctx.beginPath(); ctx.arc(p.x + dw*0.3 + sz*0.18, gy-bh-sz*0.22, sz*0.14, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(p.x + dw*0.3 + sz*0.18, gy-bh-sz*0.22, sz*0.07, 0, Math.PI*2); ctx.fill();
+          // Spine ridges
+          ctx.fillStyle = '#1a5030';
+          for (let ri = -2; ri <= 1; ri++) {
+            const rx = p.x + ri * sz * 0.4 - sz*0.2;
+            ctx.beginPath();
+            ctx.moveTo(rx-sz*0.09, gy-bh*0.8);
+            ctx.lineTo(rx, gy-bh-sz*0.22);
+            ctx.lineTo(rx+sz*0.09, gy-bh*0.8);
+            ctx.closePath(); ctx.fill();
+          }
+
+        } else if (e.kind === 'dragonRider') {
+          // Dark red dragon body + small rider on top
+          const dw = sz * 2.0, dh = bh * 0.55;
+          // Wing arcs
+          ctx.strokeStyle = '#3a0000'; ctx.lineWidth = Math.max(2, sz*0.3);
+          ctx.beginPath(); ctx.arc(p.x - dw*0.5, gy-bh*0.5, sz*0.9, -Math.PI*0.7, Math.PI*0.1); ctx.stroke();
+          ctx.beginPath(); ctx.arc(p.x + dw*0.5, gy-bh*0.5, sz*0.9, Math.PI*0.9, Math.PI*1.7); ctx.stroke();
+          // Dragon body
+          ctx.fillStyle = e.color;
+          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.6, 0.9);
+          ctx.beginPath(); ctx.arc(0, 0, sz*0.85, 0, Math.PI*2); ctx.fill(); ctx.restore();
+          // Dragon head
+          ctx.beginPath(); ctx.arc(p.x + dw*0.3, gy-bh-sz*0.15, sz*0.55, 0, Math.PI*2); ctx.fill();
+          // Rider (small figure on top of body)
+          const rx = p.x - sz*0.1, ry = gy-bh*0.78;
+          ctx.fillStyle = '#555';
+          ctx.fillRect(rx-sz*0.18, ry-sz*0.5, sz*0.36, sz*0.40);
+          ctx.fillStyle = '#aaa';
+          ctx.beginPath(); ctx.arc(rx, ry-sz*0.68, sz*0.26, 0, Math.PI*2); ctx.fill();
+          // Rider helmet
+          ctx.fillStyle = '#444';
+          ctx.beginPath(); ctx.arc(rx, ry-sz*0.68, sz*0.26, Math.PI, Math.PI*2); ctx.fill();
+          // Lance
+          ctx.strokeStyle = '#8b5e2a'; ctx.lineWidth = Math.max(1.5, sz*0.12);
+          ctx.beginPath();
+          ctx.moveTo(rx + sz*0.18, ry-sz*0.48);
+          ctx.lineTo(rx + sz*1.0, ry-sz*0.65);
+          ctx.stroke();
+          ctx.fillStyle = '#ccc';
+          const lx = rx + sz*1.0, ly = ry-sz*0.65;
+          ctx.beginPath(); ctx.moveTo(lx-sz*0.06, ly-sz*0.1); ctx.lineTo(lx, ly+sz*0.1); ctx.lineTo(lx+sz*0.12, ly-sz*0.02); ctx.closePath(); ctx.fill();
+
+        } else {
+          // Generic fallback (any unknown type)
+          ctx.fillStyle = '#2a2a2a';
+          ctx.fillRect(p.x-sz*0.5, gy-bh*0.5, sz*0.38, bh*0.52);
+          ctx.fillRect(p.x+sz*0.12, gy-bh*0.5, sz*0.38, bh*0.52);
+          ctx.fillStyle = e.color;
+          ctx.fillRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65);
+          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
+        }
+
         // HP bar
         const bw = Math.max(sz*2.5, 22);
         ctx.fillStyle = '#111'; ctx.fillRect(p.x-bw/2-1, gy-bh-sz*1.9-1, bw+2, 7);
@@ -1523,11 +1705,13 @@ class Game {
       ctx.fill();
     }
 
-    // ── STONE BATTLEMENT FRAME ──
+    // ── STONE BATTLEMENT FRAME (left wall slightly lighter, right slightly darker) ──
     const openL = W * 0.14, openR = W * 0.86;
-    const drawStone = (x1, x2) => {
-      ctx.fillStyle = '#4e4e4e'; ctx.fillRect(x1, 0, x2-x1, H);
-      ctx.fillStyle = '#5c5c5c'; ctx.fillRect(x1, 0, x2-x1, H);
+    const drawStone = (x1, x2, lightBias) => {
+      const baseL = lightBias > 0 ? '#525252' : '#484848';
+      const baseM = lightBias > 0 ? '#606060' : '#565656';
+      ctx.fillStyle = baseL; ctx.fillRect(x1, 0, x2-x1, H);
+      ctx.fillStyle = baseM; ctx.fillRect(x1, 0, x2-x1, H);
       ctx.strokeStyle = '#383838'; ctx.lineWidth = 1;
       for (let row = 0; row < H; row += 14) {
         const off = (Math.floor(row/14)%2)*22;
@@ -1539,7 +1723,15 @@ class Game {
         ctx.beginPath(); ctx.moveTo(x1, row+1); ctx.lineTo(x2, row+1); ctx.stroke();
       }
     };
-    drawStone(0, openL); drawStone(openR, W);
+    drawStone(0, openL, 1); drawStone(openR, W, -1);
+
+    // Side vignette (darkens corners of viewport opening)
+    const vigL = ctx.createLinearGradient(openL, 0, openL + 60, 0);
+    vigL.addColorStop(0, 'rgba(0,0,0,0.45)'); vigL.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = vigL; ctx.fillRect(openL, 0, 60, H);
+    const vigR = ctx.createLinearGradient(openR - 60, 0, openR, 0);
+    vigR.addColorStop(0, 'rgba(0,0,0,0)'); vigR.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = vigR; ctx.fillRect(openR - 60, 0, 60, H);
 
     // Crenellations (merlons) on inner edge of walls
     ctx.fillStyle = '#4e4e4e';
@@ -1554,16 +1746,27 @@ class Game {
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, openB); ctx.lineTo(W, openB); ctx.stroke();
 
-    // ── CROSSHAIR ──
-    const mx2 = W/2, my2 = (horizon + openB)/2;
-    ctx.strokeStyle = 'rgba(255,230,80,0.88)'; ctx.lineWidth = 2;
+    // ── CROSSHAIR (follows mouse, snaps red to nearby enemy) ──
+    const rawMx = this.mouse.x, rawMy = this.mouse.y;
+    let mx2 = Math.max(openL + 10, Math.min(openR - 10, rawMx));
+    let my2 = Math.max(horizon + 10, Math.min(openB - 10, rawMy));
+    let snapEnemy = null, snapDist = 60;
+    for (const e of this.enemies) {
+      if (e._3dx == null) continue;
+      const d = Math.hypot(rawMx - e._3dx, rawMy - e._3dy);
+      if (d < snapDist) { snapDist = d; snapEnemy = e; }
+    }
+    if (snapEnemy) { mx2 = snapEnemy._3dx; my2 = snapEnemy._3dy; }
+    const chColor = snapEnemy ? 'rgba(255,80,0,0.95)' : 'rgba(255,230,80,0.88)';
+    const chRingColor = snapEnemy ? 'rgba(255,60,0,0.6)' : 'rgba(255,230,80,0.35)';
+    ctx.strokeStyle = chColor; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(mx2-20, my2); ctx.lineTo(mx2-7, my2);
     ctx.moveTo(mx2+7, my2);  ctx.lineTo(mx2+20, my2);
     ctx.moveTo(mx2, my2-20); ctx.lineTo(mx2, my2-7);
     ctx.moveTo(mx2, my2+7);  ctx.lineTo(mx2, my2+20);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,230,80,0.35)';
+    ctx.strokeStyle = chRingColor;
     ctx.beginPath(); ctx.arc(mx2, my2, 14, 0, Math.PI*2); ctx.stroke();
 
     // ── COMPASS (top-center) ──
@@ -1705,6 +1908,7 @@ class Game {
     }
     this.castleHp = 10000; this.money = 100; this.score = 0;
     this.gameOver = false; this.levelComplete = false;
+    this.paused = false; this.helpOpen = false;
     this.flashMsg = ''; this.flashTimer = 0;
     this.selectedTower = null;
     this.workers = 0; this.workerTimer = 0;
@@ -1807,7 +2011,7 @@ class Game {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
     // Version badge — helps confirm the right code is loaded
-    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v28';
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v29';
 
     // Draw map background
     this._drawTitleBg();
@@ -2013,6 +2217,33 @@ class Game {
     wBtn.onclick = () => this.hireWorker();
     ui.appendChild(wBtn);
 
+    // Pause button
+    const pauseBtn = document.createElement('button');
+    pauseBtn.id = 'btn-pause';
+    pauseBtn.className = 'btn';
+    pauseBtn.style.background = '#000';
+    pauseBtn.style.color = '#fff';
+    pauseBtn.style.fontWeight = 'bold';
+    pauseBtn.textContent = '⏸';
+    pauseBtn.title = 'Pause (Space)';
+    pauseBtn.onclick = () => {
+      this.paused = !this.paused;
+      pauseBtn.textContent = this.paused ? '▶' : '⏸';
+    };
+    ui.appendChild(pauseBtn);
+
+    // Help button
+    const helpBtn = document.createElement('button');
+    helpBtn.id = 'btn-help';
+    helpBtn.className = 'btn';
+    helpBtn.style.background = '#224';
+    helpBtn.style.color = '#fff';
+    helpBtn.style.fontWeight = 'bold';
+    helpBtn.textContent = '?';
+    helpBtn.title = 'Help (H)';
+    helpBtn.onclick = () => { this.helpOpen = !this.helpOpen; };
+    ui.appendChild(helpBtn);
+
     this._updateButtons();
   }
 
@@ -2168,6 +2399,15 @@ class Game {
         this.selectedTower = null; return;
       }
       if (e.code === 'Space' && this.viewMode === '3d-soldier') { e.preventDefault(); this.viewSoldier?.jump(); return; }
+      if (e.code === 'Space' && !this.titleActive && !this.gameOver && !this.levelComplete && this.viewMode !== '3d' && this.viewMode !== '3d-soldier') {
+        e.preventDefault();
+        this.paused = !this.paused;
+        const btn = document.getElementById('btn-pause');
+        if (btn) btn.textContent = this.paused ? '▶' : '⏸';
+        return;
+      }
+      if ((e.key === 'h' || e.key === 'H') && !this.titleActive) { this.helpOpen = !this.helpOpen; return; }
+      if (e.key === 'Escape' && this.helpOpen) { this.helpOpen = false; return; }
       if (this.wheelOpen) return; // don't handle hotkeys while wheel overlay is open
       const allowedTowers = this.currentLevel ? this.currentLevel.towers : this.typeKeys;
       const allowedTraps  = this.currentLevel ? this.currentLevel.traps  : this.trapKeys;
@@ -2361,6 +2601,91 @@ class Game {
       hint = '1-8 towers · traps · W worker · right-click sell · R = menu';
     }
     this.ctx.fillText(hint, this.canvas.width/2-320, 22);
+  }
+
+  _drawPauseOverlay() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 72px sans-serif';
+    ctx.fillText('⏸ PAUSED', W/2, H/2 - 20);
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '22px sans-serif';
+    ctx.fillText('Press SPACE to resume', W/2, H/2 + 30);
+    ctx.textAlign = 'left';
+  }
+
+  _drawHelpOverlay() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    const pw = Math.min(700, W - 40), ph = Math.min(540, H - 40);
+    const px = (W - pw) / 2, py = (H - ph) / 2;
+    // Background panel
+    ctx.fillStyle = 'rgba(10,10,30,0.93)';
+    ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.fill();
+    ctx.strokeStyle = '#446'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 26px sans-serif';
+    ctx.fillText('HOW TO PLAY', W/2, py + 38);
+
+    ctx.textAlign = 'left';
+    const col1 = px + 28, col2 = px + pw/2 + 14;
+    let y = py + 70;
+
+    ctx.fillStyle = '#88ccff'; ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('CONTROLS', col1, y);
+    ctx.fillStyle = '#ddd'; ctx.font = '13px sans-serif';
+    const controls = [
+      'Click map = place selected tower/trap',
+      'Right-click tower = sell it',
+      'Click tower twice = enter 3D view',
+      'Drag in 3D view = look around',
+      'Click in 3D view = shoot enemy',
+      'SPACE = pause / resume',
+      'H = open/close this help screen',
+      'ESC = exit 3D / deselect',
+      'R = return to main menu',
+    ];
+    for (const line of controls) { y += 18; ctx.fillText('• ' + line, col1, y); }
+
+    y = py + 70;
+    ctx.fillStyle = '#88ccff'; ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('TOWERS', col2, y);
+    ctx.fillStyle = '#ddd'; ctx.font = '13px sans-serif';
+    const towers = [
+      'Basic — cheap balanced starter',
+      'Sniper — long range, high damage',
+      'Rapid — fast fire, lower damage',
+      'Fire — burns enemies over time',
+      'Ice — slows enemies down',
+      'Lightning — chains to nearby foes',
+      'Earth — stuns enemies briefly',
+    ];
+    for (const line of towers) { y += 18; ctx.fillText('• ' + line, col2, y); }
+
+    y += 30;
+    ctx.fillStyle = '#ffaa44'; ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('ENEMIES', col2, y);
+    ctx.fillStyle = '#ddd'; ctx.font = '13px sans-serif';
+    const enemies = [
+      'Goblin — small, weak, fast swarms',
+      'Runner — quick, shoots back at towers',
+      'Saboteur — seeks and destroys traps',
+      'Ogre — slow but very tanky',
+      'Dragon — large, breathes fire',
+      'DragonRider — boss, combo attacks',
+    ];
+    for (const line of enemies) { y += 18; ctx.fillText('• ' + line, col2, y); }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '13px sans-serif';
+    ctx.fillText('Press H or ESC to close', W/2, py + ph - 14);
+    ctx.textAlign = 'left';
   }
 
   _drawGameOver() {
