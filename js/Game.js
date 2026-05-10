@@ -1202,7 +1202,39 @@ class Game {
     const dmg = tower.damage * 4;
     if (best) {
       best.takeDamage(dmg);
-      this.flash(best.isDead() ? `KILL! +$${best.reward}` : `HIT! −${dmg} dmg`);
+
+      // Apply the tower's elemental effect — same behaviour as auto-fire in Tower.js
+      if (tower.typeKey === 'fire') {
+        // 🔥 Fire: burn + splash damage to nearby enemies
+        best.burnTimer = 180;
+        for (const e of this.enemies)
+          if (Math.hypot(e.x - best.x, e.y - best.y) < 45) e.takeDamage(dmg * 0.5);
+        this.flash(best.isDead() ? `KILL! 🔥 +$${best.reward}` : `HIT! 🔥 FIRE! −${dmg}`);
+      } else if (tower.typeKey === 'ice') {
+        // ❄️ Ice: freeze the enemy in place for ~2.5 seconds
+        best.slowTimer = 150;
+        this.flash(best.isDead() ? `KILL! ❄️ +$${best.reward}` : `HIT! ❄️ FROZEN!`);
+      } else if (tower.typeKey === 'lightning') {
+        // ⚡ Lightning: shock + chain to 2 nearest other enemies
+        best.shockTimer = 40;
+        const others = this.enemies
+          .filter(e => e !== best)
+          .sort((a, b) => Math.hypot(a.x - best.x, a.y - best.y) - Math.hypot(b.x - best.x, b.y - best.y))
+          .slice(0, 2);
+        for (const e of others) {
+          if (Math.hypot(e.x - best.x, e.y - best.y) < 120) {
+            e.takeDamage(dmg * 0.5);
+            e.shockTimer = 40;
+          }
+        }
+        this.flash(best.isDead() ? `KILL! ⚡ +$${best.reward}` : `HIT! ⚡ CHAIN! −${dmg}`);
+      } else if (tower.typeKey === 'earth') {
+        // 🪨 Earth: stun the enemy for ~1.7 seconds
+        best.stunTimer = 100;
+        this.flash(best.isDead() ? `KILL! 🪨 +$${best.reward}` : `HIT! 🪨 STUNNED!`);
+      } else {
+        this.flash(best.isDead() ? `KILL! +$${best.reward}` : `HIT! −${dmg} dmg`);
+      }
     } else {
       this.flash('Missed!');
     }
@@ -2037,6 +2069,12 @@ class Game {
       if (this.selectedType.startsWith('camp_')) { this.tryPlaceCamp(x, y); return; }
       if (this.selectedType.startsWith('trap_')) { this.tryPlaceTrap(x, y); }
       else { this.tryPlaceTower(x, y); }
+    });
+
+    // Double-click exits whichever 3D control mode is active
+    this.canvas.addEventListener('dblclick', () => {
+      if (this.viewMode === '3d')         { this._exit3D();         return; }
+      if (this.viewMode === '3d-soldier') { this._exit3DSoldier();  return; }
     });
 
     this.canvas.addEventListener('contextmenu', e => {
