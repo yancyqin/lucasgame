@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=27';
-import { GameMap }     from './Map.js?v=27';
-import { Tower }       from './Tower.js?v=27';
-import { Enemy }       from './Enemy.js?v=27';
-import { Projectile }  from './Projectile.js?v=27';
-import { Trap }        from './Trap.js?v=27';
-import { Mine }        from './Mine.js?v=27';
-import { WaveManager } from './WaveManager.js?v=27';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=28';
+import { GameMap }     from './Map.js?v=28';
+import { Tower }       from './Tower.js?v=28';
+import { Enemy }       from './Enemy.js?v=28';
+import { Projectile }  from './Projectile.js?v=28';
+import { Trap }        from './Trap.js?v=28';
+import { Mine }        from './Mine.js?v=28';
+import { WaveManager } from './WaveManager.js?v=28';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -1206,21 +1206,22 @@ class Game {
     }
     const dmg = tower.damage * 4;
     if (best) {
-      best.takeDamage(dmg);
-
       // Apply the tower's elemental effect — same behaviour as auto-fire in Tower.js
       if (tower.typeKey === 'fire') {
         // 🔥 Fire: burn + splash damage to nearby enemies
+        best.takeDamage(dmg);
         best.burnTimer = 180;
         for (const e of this.enemies)
           if (Math.hypot(e.x - best.x, e.y - best.y) < 45) e.takeDamage(dmg * 0.5);
-        this.flash(best.isDead() ? `KILL! 🔥 +$${best.reward}` : `HIT! 🔥 FIRE! −${dmg}`);
+        this.flash(best.isDead() ? `KILL! 🔥 +$${best.reward}` : `HIT! 🔥 BURNING!`);
       } else if (tower.typeKey === 'ice') {
         // ❄️ Ice: freeze the enemy in place for ~2.5 seconds
+        best.takeDamage(dmg);
         best.slowTimer = 150;
         this.flash(best.isDead() ? `KILL! ❄️ +$${best.reward}` : `HIT! ❄️ FROZEN!`);
       } else if (tower.typeKey === 'lightning') {
         // ⚡ Lightning: shock + chain to 2 nearest other enemies
+        best.takeDamage(dmg);
         best.shockTimer = 40;
         const others = this.enemies
           .filter(e => e !== best)
@@ -1232,21 +1233,25 @@ class Game {
             e.shockTimer = 40;
           }
         }
-        this.flash(best.isDead() ? `KILL! ⚡ +$${best.reward}` : `HIT! ⚡ CHAIN! −${dmg}`);
+        this.flash(best.isDead() ? `KILL! ⚡ +$${best.reward}` : `HIT! ⚡ CHAINED!`);
       } else if (tower.typeKey === 'earth') {
         // 🪨 Earth: stun the enemy for ~1.7 seconds
+        best.takeDamage(dmg);
         best.stunTimer = 100;
         this.flash(best.isDead() ? `KILL! 🪨 +$${best.reward}` : `HIT! 🪨 STUNNED!`);
       } else if (tower.typeKey === 'rapid') {
-        // 🏹 Crossbow: burst — fires 3 arrows hitting the 3 closest enemies
+        // 🏹 Crossbow burst: hit the 3 closest enemies with 1 arrow each
+        // (don't pre-hit best — let the loop handle all targets including best)
         const targets = [best, ...this.enemies
           .filter(e => e !== best && e._3dx != null)
           .sort((a, b) => Math.hypot(a._3dx - mx, a._3dy - my) - Math.hypot(b._3dx - mx, b._3dy - my))
           .slice(0, 2)];
         let kills = 0;
         for (const t of targets) { t.takeDamage(dmg); if (t.isDead()) kills++; }
-        this.flash(kills > 0 ? `BURST! 🏹 ${kills} KILL${kills>1?'S':''}!` : `BURST! 🏹 ×${targets.length} arrows!`);
+        const n = targets.length;
+        this.flash(kills > 0 ? `BURST! 🏹 ${kills} KILL${kills>1?'S':''}!` : `BURST! 🏹 ${n} ARROW${n>1?'S':''}!`);
       } else {
+        best.takeDamage(dmg);
         this.flash(best.isDead() ? `KILL! +$${best.reward}` : `HIT! −${dmg} dmg`);
       }
     } else {
@@ -1451,6 +1456,37 @@ class Game {
         ctx.fillStyle = '#111'; ctx.fillRect(p.x-bw/2-1, gy-bh-sz*1.9-1, bw+2, 7);
         ctx.fillStyle = e.hp/e.maxHp > 0.5 ? '#2f2' : '#f82';
         ctx.fillRect(p.x-bw/2, gy-bh-sz*1.9, bw*(e.hp/e.maxHp), 5);
+        // ── Elemental status overlays ──────────────────────────────────────
+        if (e.slowTimer > 0) {
+          // ❄️ Ice: blue frost overlay
+          ctx.fillStyle = `rgba(100,200,255,${Math.min(0.55, e.slowTimer/150)})`;
+          ctx.fillRect(p.x-sz*0.72, gy-bh-sz*0.3, sz*1.44, bh*0.65);
+          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
+        }
+        if (e.burnTimer > 0) {
+          // 🔥 Fire: orange flicker overlay
+          const fl = 0.4 + 0.3 * Math.sin(Date.now() / 80);
+          ctx.fillStyle = `rgba(255,100,0,${fl * Math.min(0.7, e.burnTimer/180)})`;
+          ctx.fillRect(p.x-sz*0.72, gy-bh-sz*0.3, sz*1.44, bh*0.65);
+          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
+        }
+        if (e.shockTimer > 0) {
+          // ⚡ Lightning: yellow glow outline
+          ctx.strokeStyle = `rgba(255,255,0,${e.shockTimer/40})`;
+          ctx.lineWidth = sz * 0.25;
+          ctx.strokeRect(p.x-sz*0.72, gy-bh-sz*0.3, sz*1.44, bh*0.65);
+        }
+        if (e.stunTimer > 0) {
+          // 🪨 Earth: grey dizzy stars above head
+          const t = Date.now() / 200;
+          for (let i = 0; i < 3; i++) {
+            const a = t + (i / 3) * Math.PI * 2;
+            ctx.fillStyle = '#aaaaaa';
+            ctx.beginPath();
+            ctx.arc(p.x + Math.cos(a)*sz*0.8, gy-bh-sz*1.6 + Math.sin(a)*sz*0.3, sz*0.22, 0, Math.PI*2);
+            ctx.fill();
+          }
+        }
         // Store for _shoot3D click detection
         e._3dx = p.x; e._3dy = gy - bh/2; e._3dr = Math.max(sz*1.3, 20);
         // Atmospheric fog for far enemies
