@@ -507,7 +507,7 @@ class Game {
 
     this.titleActive    = true;
     this.selectedLevelId = 1;
-    this.campLimit = 10; // raised to 15 by gem_camps upgrade
+    this.campLimit = 5; // raised to 10 by gem_camps upgrade
     this.gemFastFire = false; this.gemHeadStart = false;
     this.gemMinerDouble = false; this.gemSoldierDmg = false;
 
@@ -1668,7 +1668,7 @@ class Game {
     // Reset gem upgrade flags (re-applied by _applyGemUpgrades below)
     this.gemFastFire = false; this.gemHeadStart = false;
     this.gemMinerDouble = false; this.gemSoldierDmg = false;
-    this.campLimit = 10; // default camp limit
+    this.campLimit = 5; // default camp limit
     // Reset tower _savedFireRate flags
     for (const t of this.towers) t._savedFireRate = null;
 
@@ -1986,11 +1986,13 @@ class Game {
       const btn = document.getElementById('btn-trap_' + k);
       if (btn) btn.style.opacity = this.money >= TRAPS[k].cost ? '0.9' : '0.35';
     }
-    // Update all 5 camp type buttons
+    // Update all 5 camp type buttons — show current/max so the limit is visible
     for (const [typeName, cfg] of Object.entries(CAMP_TYPES)) {
       const btn = document.getElementById('btn-camp_' + typeName);
-      const canAfford = this.money >= cfg.cost && this.camps.length < 10;
-      if (btn) btn.style.opacity = canAfford ? '0.9' : '0.35';
+      if (!btn) continue;
+      const atLimit = this.camps.length >= this.campLimit;
+      btn.style.opacity = (this.money >= cfg.cost && !atLimit) ? '0.9' : '0.35';
+      btn.textContent = `${cfg.label} (${this.camps.length}/${this.campLimit})`;
     }
     const wBtn = document.getElementById('btn-worker');
     if (wBtn) {
@@ -2744,8 +2746,8 @@ class Game {
       this.gemSoldierDmg = true;
     }
     if (purchases.includes('gem_camps')) {
-      // Raise the camp limit from 10 to 15
-      this.campLimit = 15;
+      // Raise the camp limit from 5 to 10
+      this.campLimit = 10;
     }
     if (purchases.includes('gem_dragon')) {
       // Spawn a dragon ally at the start of the level
