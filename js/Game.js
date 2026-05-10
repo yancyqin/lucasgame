@@ -179,7 +179,7 @@ class Soldier {
     this._3dx = null; this._3dy = null; this._3dr = 0;
   }
 
-  update(enemies, path) {
+  update(enemies, path, projectiles = []) {
     if (this.hitTimer > 0) this.hitTimer--;
     if (this.attackTimer > 0) this.attackTimer--;
     if (this.swingTimer > 0) this.swingTimer--;
@@ -199,12 +199,17 @@ class Soldier {
     if (this.target) {
       if (this.attackTimer <= 0) {
         if (this.magic) {
-          // Mage: AOE blast — damages all enemies near the target
-          for (const e of enemies) {
-            if (Math.hypot(e.x-this.target.x, e.y-this.target.y) < 55)
-              e.takeDamage(this.damage * 0.6);
-          }
-          this.target.takeDamage(this.damage); // direct hit always full
+          // Mage: fires a visible explosive magic orb that splashes on impact
+          const dx = this.target.x - this.x, dy = this.target.y - this.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          projectiles.push(new Projectile({
+            x: this.x, y: this.y,
+            vx: (dx / dist) * 5, vy: (dy / dist) * 5,
+            damage: this.damage,
+            magicOrb: true, splash: true, splashRadius: 55,
+            manual: true,  // so it only hits enemies (not towers)
+          }));
+          // No instant damage — the projectile handles it on arrival
         } else if (this.aoe) {
           // Siege: hits every enemy within melee reach
           for (const e of enemies) {
@@ -687,7 +692,7 @@ class Game {
       }
     }
     // Soldiers fight
-    for (const s of this.soldiers) s.update(this.enemies, this.path);
+    for (const s of this.soldiers) s.update(this.enemies, this.path, this.projectiles);
     this.soldiers = this.soldiers.filter(s => !s.isDead());
 
     // Check soldier count achievements

@@ -2,7 +2,8 @@ import { distance } from './constants.js?v=18';
 
 export class Projectile {
   constructor({ x, y, target, speed, vx, vy, damage, slows, fromEnemy, fire, manual, boulder, arrow, magic,
-                fireball, iceOrb, iceSlows, lightningBolt, chain, chainRadius, earthBoulder, splash, splashRadius, stuns, burns, shocks }) {
+                fireball, iceOrb, iceSlows, lightningBolt, chain, chainRadius, earthBoulder, splash, splashRadius, stuns, burns, shocks,
+                magicOrb }) {
     this.x = x; this.y = y;
     this.target = target; this.speed = speed;
     this.vx = vx; this.vy = vy;
@@ -22,6 +23,7 @@ export class Projectile {
     this.chain        = chain || 0;
     this.chainRadius  = chainRadius || 120;
     this.earthBoulder = earthBoulder;
+    this.magicOrb     = magicOrb;
     this.splash       = splash;
     this.splashRadius = splashRadius || 40;
     this.stuns        = stuns || 0;
@@ -117,6 +119,25 @@ export class Projectile {
       ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#ffee88'; ctx.globalAlpha = 0.7;
       ctx.beginPath(); ctx.arc(this.x-2, this.y-2, 2, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.restore();
+    } else if (this.magicOrb) {
+      // Purple explosive orb fired by mage soldiers
+      ctx.save();
+      ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 24;
+      ctx.fillStyle = '#aa22ee'; ctx.beginPath(); ctx.arc(this.x, this.y, 9, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#dd66ff'; ctx.beginPath(); ctx.arc(this.x, this.y, 6, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.arc(this.x-2, this.y-2, 2.5, 0, Math.PI*2); ctx.fill();
+      // Sparkle spikes
+      ctx.strokeStyle = '#ee88ff'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.7;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(this.x + Math.cos(a)*9, this.y + Math.sin(a)*9);
+        ctx.lineTo(this.x + Math.cos(a)*14, this.y + Math.sin(a)*14);
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1; ctx.restore();
     } else if (this.fireball) {
       ctx.save();
