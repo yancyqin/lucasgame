@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=26';
-import { GameMap }     from './Map.js?v=26';
-import { Tower }       from './Tower.js?v=26';
-import { Enemy }       from './Enemy.js?v=26';
-import { Projectile }  from './Projectile.js?v=26';
-import { Trap }        from './Trap.js?v=26';
-import { Mine }        from './Mine.js?v=26';
-import { WaveManager } from './WaveManager.js?v=26';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=27';
+import { GameMap }     from './Map.js?v=27';
+import { Tower }       from './Tower.js?v=27';
+import { Enemy }       from './Enemy.js?v=27';
+import { Projectile }  from './Projectile.js?v=27';
+import { Trap }        from './Trap.js?v=27';
+import { Mine }        from './Mine.js?v=27';
+import { WaveManager } from './WaveManager.js?v=27';
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -1770,6 +1770,8 @@ class Game {
   _buildTitleScreen() {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
+    // Version badge — helps confirm the right code is loaded
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v26';
 
     // Draw map background
     this._drawTitleBg();
