@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=39';
-import { Projectile } from './Projectile.js?v=39';
+import { ENEMIES, distance } from './constants.js?v=31';
+import { Projectile } from './Projectile.js?v=31';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -638,32 +638,6 @@ export class Enemy {
     ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.6/0.72;
     ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
-
-    // Scales — overlapping arcs in a fish-scale pattern
-    if (bc !== '#fff') {
-      ctx.save();
-      ctx.globalAlpha = 0.22;
-      const scaleColor = this.kind === 'dragonRider' ? '#ff2200' : '#00aa44';
-      ctx.strokeStyle = scaleColor;
-      ctx.lineWidth = 1.2;
-      // Draw rows of semicircle scales across the body oval
-      for (let row = -2; row <= 2; row++) {
-        const ry = row * s * 0.28;
-        const rowW = Math.sqrt(Math.max(0, 1 - (ry/(s*0.72))**2)) * s * 1.15;
-        const cols = Math.floor(rowW / (s * 0.32)) + 1;
-        for (let col = -cols; col <= cols; col++) {
-          const rx = col * s * 0.30 + (row % 2 === 0 ? s * 0.15 : 0);
-          const scaleR = s * 0.22;
-          // Only draw if within the body ellipse
-          if ((rx / (s*1.15))**2 + (ry / (s*0.72))**2 < 0.92) {
-            ctx.beginPath();
-            ctx.arc(rx, ry, scaleR, Math.PI, Math.PI*2);
-            ctx.stroke();
-          }
-        }
-      }
-      ctx.restore();
-    }
 
     // Spine ridges
     if (bc !== '#fff') {
