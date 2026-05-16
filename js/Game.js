@@ -1043,6 +1043,19 @@ function _getWaveMsg(wave, levelId) {
 }
 
 // Returns a dramatic one-liner keyed to which milestone wave this is
+function _getMilestoneMsg(wave, levelDef) {
+  const en = levelDef?.enemies ?? [];
+  const total = levelDef?.waves ?? 99;
+  if (wave === 1)                                 return 'THE FIRST WAVE — DARK KNIGHTS CHARGE!';
+  if (en.includes('runner')      && wave === 2)   return 'SCOUTS APPEAR — TOO FAST TO STOP!';
+  if (en.includes('saboteur')    && wave === 4)   return 'TRAP WRECKERS INFILTRATE YOUR DEFENSES!';
+  if (en.includes('ogre')        && wave === 5)   return 'GIANTS EMERGE FROM THE CAVES!';
+  if (en.includes('dragon')      && wave === 7)   return 'DRAGONS TAKE THE SKY — AIM HIGH!';
+  if (en.includes('dragonRider') && wave === 10)  return 'DEATH RIDERS — MOUNTED ON CRIMSON DRAGONS!';
+  if (wave === total)                             return 'FINAL WAVE — HOLD EVERYTHING!';
+  return _getWaveMsg(wave, levelDef?.id ?? 1);
+}
+
 class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -1542,6 +1555,7 @@ class Game {
     this._drawBreakOverlay();
     this._drawStoryBanner();   // cinematic level-start overlay
     this._drawWaveBanner();    // dramatic wave announcement
+    this._drawTitanBossBar();  // boss HP bar while Titan is alive
     this._drawFlash();
     this._drawHint();
     this._drawGameOver();
@@ -4183,6 +4197,54 @@ class Game {
     ctx.fillText(this.waveBannerText, W / 2, 92);
     ctx.shadowBlur = 0;
 
+    ctx.restore();
+  }
+
+  // ── Cinematic boss health bar — shown while the Titan is alive ───────────
+  _drawTitanBossBar() {
+    if (!this.titanSpawned) return;
+    const titan = this.enemies.find(e => e.isTitan);
+    if (!titan) return;
+
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    const barW = Math.min(W * 0.6, 480);
+    const barH = 22;
+    const bx   = (W - barW) / 2;
+    const by   = H - 52;
+    const pct  = Math.max(0, titan.hp / titan.maxHp);
+
+    ctx.save();
+    ctx.shadowColor = '#ff2200'; ctx.shadowBlur = 22;
+    ctx.fillStyle   = 'rgba(0,0,0,0.75)';
+    ctx.beginPath(); ctx.roundRect(bx - 12, by - 26, barW + 24, barH + 44, 10); ctx.fill();
+    ctx.shadowBlur  = 0;
+
+    ctx.textAlign = 'center';
+    ctx.font      = `bold ${Math.floor(W * 0.022)}px sans-serif`;
+    const pulse   = 0.78 + 0.22 * Math.sin(Date.now() / 300);
+    ctx.fillStyle = `rgba(255,${Math.floor(80 * pulse)},40,${pulse})`;
+    ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 12 * pulse;
+    ctx.fillText('⚡  ANCIENT TITAN  ⚡', W / 2, by - 6);
+    ctx.shadowBlur  = 0;
+
+    ctx.fillStyle = 'rgba(60,0,0,0.9)';
+    ctx.beginPath(); ctx.roundRect(bx, by, barW, barH, 5); ctx.fill();
+
+    if (pct > 0) {
+      const grad = ctx.createLinearGradient(bx, 0, bx + barW * pct, 0);
+      grad.addColorStop(0, '#cc0000'); grad.addColorStop(0.5, '#ee3300'); grad.addColorStop(1, '#7700cc');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.roundRect(bx, by, barW * pct, barH, 5); ctx.fill();
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.beginPath(); ctx.roundRect(bx, by, barW * pct, barH * 0.45, 4); ctx.fill();
+
+    ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.floor(W * 0.016)}px sans-serif`;
+    ctx.shadowColor = '#000'; ctx.shadowBlur = 4;
+    ctx.fillText(`${Math.ceil(titan.hp).toLocaleString()}  /  ${titan.maxHp.toLocaleString()}`, W / 2, by + barH - 4);
+    ctx.shadowBlur = 0;
     ctx.restore();
   }
 
