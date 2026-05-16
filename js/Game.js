@@ -1,11 +1,510 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=31';
-import { GameMap }     from './Map.js?v=31';
-import { Tower }       from './Tower.js?v=31';
-import { Enemy }       from './Enemy.js?v=31';
-import { Projectile }  from './Projectile.js?v=31';
-import { Trap }        from './Trap.js?v=31';
-import { Mine }        from './Mine.js?v=31';
-import { WaveManager } from './WaveManager.js?v=31';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=40';
+import { GameMap }     from './Map.js?v=40';
+import { Tower }       from './Tower.js?v=40';
+import { Enemy }       from './Enemy.js?v=40';
+import { Projectile }  from './Projectile.js?v=40';
+import { Trap }        from './Trap.js?v=40';
+import { Mine }        from './Mine.js?v=40';
+import { WaveManager } from './WaveManager.js?v=40';
+
+// ── Button icon renderer ─────────────────────────────────────────────────────
+// Draws the actual in-game unit/tower at small scale onto a canvas context.
+function _drawBtnIcon(ctx, key, w, h) {
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2 + 6;
+
+  // ── Shared: grey stone tower base ────────────────────────────────────────
+  function towerBase(bcy) {
+    const by = bcy ?? cy + 8;
+    ctx.fillStyle = '#555';
+    ctx.beginPath(); ctx.arc(cx, by, 13, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#777';
+    ctx.beginPath(); ctx.arc(cx - 2, by - 2, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#444';
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      ctx.beginPath(); ctx.arc(cx + Math.cos(a) * 12, by + Math.sin(a) * 12, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    // Stone brick texture
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(cx - 7, by - 5); ctx.lineTo(cx + 7, by - 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - 9, by + 1); ctx.lineTo(cx + 9, by + 1); ctx.stroke();
+  }
+
+  if (key === 'basic') {
+    // Archer — green tunic, bow raised
+    const cx2 = w/2, cy2 = h*0.52;
+    // Legs
+    ctx.fillStyle = '#4a3010'; ctx.fillRect(cx2-5,cy2+8,4,10); ctx.fillRect(cx2+1,cy2+8,4,10);
+    // Boots
+    ctx.fillStyle = '#2a1a08'; ctx.fillRect(cx2-6,cy2+16,6,4); ctx.fillRect(cx2,cy2+16,6,4);
+    // Torso — green tunic
+    ctx.fillStyle = '#2a6020'; ctx.fillRect(cx2-7,cy2-6,14,14);
+    // Belt
+    ctx.fillStyle = '#5a3010'; ctx.fillRect(cx2-7,cy2+6,14,3);
+    // Neck
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(cx2-2,cy2-9,4,4);
+    // Head
+    ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(cx2,cy2-13,5,0,Math.PI*2); ctx.fill();
+    // Hood
+    ctx.fillStyle = '#1a4a14'; ctx.beginPath(); ctx.arc(cx2,cy2-13,5,Math.PI,Math.PI*2); ctx.fill();
+    ctx.fillRect(cx2-5,cy2-18,10,6);
+    // Left arm — holds bow
+    ctx.fillStyle = '#2a6020'; ctx.fillRect(cx2-12,cy2-4,6,3);
+    // Bow arc
+    ctx.strokeStyle = '#884400'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.arc(cx2-18,cy2-2,8,-1.1,1.1); ctx.stroke();
+    // Bowstring
+    ctx.strokeStyle='#ddd'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx2-18,cy2-9); ctx.lineTo(cx2-10,cy2-2); ctx.lineTo(cx2-18,cy2+5); ctx.stroke();
+    // Arrow nocked
+    ctx.strokeStyle='#aa6600'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(cx2-22,cy2-2); ctx.lineTo(cx2-10,cy2-2); ctx.stroke();
+    ctx.fillStyle='#999'; ctx.beginPath(); ctx.moveTo(cx2-10,cy2-4); ctx.lineTo(cx2-7,cy2-2); ctx.lineTo(cx2-10,cy2); ctx.fill();
+    // Right arm extended
+    ctx.fillStyle='#2a6020'; ctx.fillRect(cx2+6,cy2-4,6,3);
+    ctx.lineCap='butt';
+
+  } else if (key === 'sniper') {
+    // Catapult operator — brown leather, cranking handle
+    const cx2=w/2, cy2=h*0.55;
+    // Legs
+    ctx.fillStyle='#5a3a18'; ctx.fillRect(cx2-5,cy2+6,4,10); ctx.fillRect(cx2+1,cy2+6,4,10);
+    ctx.fillStyle='#2a1808'; ctx.fillRect(cx2-6,cy2+14,6,4); ctx.fillRect(cx2,cy2+14,6,4);
+    // Torso — brown leather
+    ctx.fillStyle='#7a4a18'; ctx.fillRect(cx2-7,cy2-8,14,14);
+    // Shoulder pads
+    ctx.fillStyle='#5a3010'; ctx.fillRect(cx2-9,cy2-8,4,5); ctx.fillRect(cx2+5,cy2-8,4,5);
+    // Neck + Head
+    ctx.fillStyle='#e8b890'; ctx.fillRect(cx2-2,cy2-11,4,4);
+    ctx.beginPath(); ctx.arc(cx2,cy2-15,5,0,Math.PI*2); ctx.fill();
+    // Helmet — brown leather cap
+    ctx.fillStyle='#5a3010'; ctx.beginPath(); ctx.arc(cx2,cy2-15,5,-Math.PI,0); ctx.fill();
+    ctx.fillRect(cx2-6,cy2-20,12,6);
+    // Left arm holding crank
+    ctx.fillStyle='#7a4a18'; ctx.fillRect(cx2-12,cy2-5,6,3);
+    // Crank handle (T-shape)
+    ctx.fillStyle='#8b4c12';
+    ctx.fillRect(cx2-18,cy2-8,4,12);   // vertical bar
+    ctx.fillRect(cx2-21,cy2-9,10,3);   // horizontal bar top
+    // Right arm with firing cord
+    ctx.fillStyle='#7a4a18'; ctx.fillRect(cx2+6,cy2-5,7,3);
+    ctx.strokeStyle='#cc9900'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(cx2+13,cy2-3); ctx.lineTo(cx2+16,cy2-12); ctx.stroke();
+    // Boulder dangling at cord end
+    ctx.fillStyle='#666'; ctx.beginPath(); ctx.arc(cx2+16,cy2-14,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#888'; ctx.beginPath(); ctx.arc(cx2+15,cy2-15,3,0,Math.PI*2); ctx.fill();
+
+  } else if (key === 'rapid') {
+    // Crossbow soldier — dark leather, crossbow aimed forward
+    const cx2=w/2, cy2=h*0.52;
+    // Legs
+    ctx.fillStyle='#3a2a10'; ctx.fillRect(cx2-5,cy2+8,4,10); ctx.fillRect(cx2+1,cy2+8,4,10);
+    ctx.fillStyle='#1a1008'; ctx.fillRect(cx2-6,cy2+16,6,4); ctx.fillRect(cx2,cy2+16,6,4);
+    // Torso — dark leather
+    ctx.fillStyle='#4a3018'; ctx.fillRect(cx2-7,cy2-6,14,14);
+    // Chest strap
+    ctx.strokeStyle='#2a1808'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx2-7,cy2-2); ctx.lineTo(cx2+7,cy2+4); ctx.stroke();
+    // Neck + Head
+    ctx.fillStyle='#e8b890'; ctx.fillRect(cx2-2,cy2-9,4,4);
+    ctx.beginPath(); ctx.arc(cx2,cy2-13,5,0,Math.PI*2); ctx.fill();
+    // Helmet — steel cap
+    ctx.fillStyle='#7a8a9a'; ctx.beginPath(); ctx.arc(cx2,cy2-13,5,-Math.PI,0); ctx.fill();
+    ctx.fillRect(cx2-6,cy2-18,12,6);
+    // Crossbow body — horizontal, both arms extended
+    ctx.fillStyle='#5a3010'; ctx.fillRect(cx2-18,cy2-5,22,4);
+    // Crossbow stock
+    ctx.fillRect(cx2-4,cy2-5,8,8);
+    // Crossbow limbs (wings)
+    ctx.fillStyle='#888'; ctx.fillRect(cx2-18,cy2-9,3,8); ctx.fillRect(cx2+1,cy2-9,3,8);
+    // String
+    ctx.strokeStyle='#ccc'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx2-18,cy2-9); ctx.lineTo(cx2-7,cy2-5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx2+4,cy2-9); ctx.lineTo(cx2-7,cy2-5); ctx.stroke();
+    // Bolt
+    ctx.strokeStyle='#cc8800'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx2-16,cy2-3); ctx.lineTo(cx2+5,cy2-3); ctx.stroke();
+    ctx.fillStyle='#aaa'; ctx.beginPath(); ctx.moveTo(cx2+5,cy2-5); ctx.lineTo(cx2+9,cy2-3); ctx.lineTo(cx2+5,cy2-1); ctx.fill();
+    // Arms holding crossbow
+    ctx.fillStyle='#4a3018'; ctx.fillRect(cx2-12,cy2-3,6,3); ctx.fillRect(cx2+5,cy2-3,5,3);
+
+  } else if (key === 'slow') {
+    // Mage — purple robes, glowing staff raised high
+    const cx2=w/2, cy2=h*0.52;
+    // Robe bottom (long flowing)
+    ctx.fillStyle='#6a1a8a'; ctx.beginPath(); ctx.moveTo(cx2-8,cy2+8); ctx.lineTo(cx2-10,cy2+20); ctx.lineTo(cx2+10,cy2+20); ctx.lineTo(cx2+8,cy2+8); ctx.closePath(); ctx.fill();
+    // Torso — purple robe
+    ctx.fillStyle='#7a2a9a'; ctx.fillRect(cx2-7,cy2-6,14,14);
+    // Robe trim
+    ctx.strokeStyle='#cc88ff'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx2-7,cy2-6); ctx.lineTo(cx2,cy2+8); ctx.lineTo(cx2+7,cy2-6); ctx.stroke();
+    // Left arm — holds staff upright
+    ctx.fillStyle='#7a2a9a'; ctx.fillRect(cx2-12,cy2-5,6,4);
+    // Staff — tall brown pole with glowing orb
+    ctx.fillStyle='#6a3a0a'; ctx.fillRect(cx2-16,cy2-22,3,26);
+    // Glowing orb on staff top
+    ctx.shadowColor='#cc44ff'; ctx.shadowBlur=10;
+    ctx.fillStyle='#aa33ee';
+    ctx.beginPath(); ctx.arc(cx2-14,cy2-24,6,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#dd99ff'; ctx.beginPath(); ctx.arc(cx2-14,cy2-24,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(cx2-16,cy2-26,2,0,Math.PI*2); ctx.fill();
+    // Right arm extended with sparks
+    ctx.fillStyle='#7a2a9a'; ctx.fillRect(cx2+6,cy2-5,6,4);
+    ctx.fillStyle='#dd99ff';
+    for (let i=0;i<4;i++) { const a=i/4*Math.PI*2; ctx.beginPath(); ctx.arc(cx2+14+Math.cos(a)*3,cy2-3+Math.sin(a)*3,1.5,0,Math.PI*2); ctx.fill(); }
+    // Neck + Head
+    ctx.fillStyle='#e8b890'; ctx.fillRect(cx2-2,cy2-9,4,4);
+    ctx.beginPath(); ctx.arc(cx2,cy2-13,5,0,Math.PI*2); ctx.fill();
+    // Wizard hat
+    ctx.fillStyle='#4a0a6a';
+    ctx.beginPath(); ctx.moveTo(cx2-6,cy2-16); ctx.lineTo(cx2,cy2-26); ctx.lineTo(cx2+6,cy2-16); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#6a2a8a'; ctx.fillRect(cx2-7,cy2-18,14,3);
+
+  } else if (key === 'fire') {
+    // Fire warrior — red armour, flaming sword held high
+    const cx2=w/2, cy2=h*0.52;
+    // Legs — red armour
+    ctx.fillStyle='#8a1a00'; ctx.fillRect(cx2-5,cy2+8,4,10); ctx.fillRect(cx2+1,cy2+8,4,10);
+    ctx.fillStyle='#5a1000'; ctx.fillRect(cx2-6,cy2+16,6,4); ctx.fillRect(cx2,cy2+16,6,4);
+    // Torso — crimson plate
+    ctx.fillStyle='#aa2200'; ctx.fillRect(cx2-7,cy2-6,14,14);
+    ctx.strokeStyle='#ff4400'; ctx.lineWidth=1.2;
+    ctx.strokeRect(cx2-7,cy2-6,14,14);
+    // Shoulder spikes
+    ctx.fillStyle='#cc3300'; ctx.fillRect(cx2-9,cy2-7,4,4); ctx.fillRect(cx2+5,cy2-7,4,4);
+    // Neck + Head
+    ctx.fillStyle='#e8b890'; ctx.fillRect(cx2-2,cy2-9,4,4);
+    ctx.beginPath(); ctx.arc(cx2,cy2-13,5,0,Math.PI*2); ctx.fill();
+    // Red battle helm
+    ctx.fillStyle='#aa2200'; ctx.beginPath(); ctx.arc(cx2,cy2-13,5,-Math.PI,0); ctx.fill();
+    ctx.fillRect(cx2-6,cy2-18,12,6);
+    ctx.fillStyle='#ff4400'; ctx.fillRect(cx2-1,cy2-24,2,8); // crest
+    // Left arm — shield
+    ctx.fillStyle='#8a1a00'; ctx.fillRect(cx2-14,cy2-5,6,4);
+    ctx.fillStyle='#aa2200'; ctx.fillRect(cx2-18,cy2-9,6,12);
+    ctx.strokeStyle='#ff4400'; ctx.lineWidth=1; ctx.strokeRect(cx2-18,cy2-9,6,12);
+    // Right arm — flaming sword raised
+    ctx.fillStyle='#8a1a00'; ctx.fillRect(cx2+6,cy2-5,5,4);
+    // Sword blade
+    ctx.fillStyle='#ffaa44'; ctx.fillRect(cx2+11,cy2-20,4,18);
+    ctx.fillStyle='#ff6600'; ctx.fillRect(cx2+12,cy2-20,2,18);
+    ctx.fillStyle='#884400'; ctx.fillRect(cx2+9,cy2-4,8,3); // crossguard
+    // Flames on blade
+    ctx.fillStyle='rgba(255,100,0,0.8)';
+    ctx.beginPath(); ctx.moveTo(cx2+11,cy2-20); ctx.bezierCurveTo(cx2+8,cy2-26,cx2+14,cy2-28,cx2+13,cy2-24); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,200,0,0.7)';
+    ctx.beginPath(); ctx.moveTo(cx2+12,cy2-20); ctx.bezierCurveTo(cx2+10,cy2-25,cx2+15,cy2-26,cx2+13,cy2-22); ctx.closePath(); ctx.fill();
+
+  } else if (key === 'ice') {
+    // Ice soldier — silver-blue plate, holding ice lance
+    const cx2=w/2, cy2=h*0.52;
+    // Legs
+    ctx.fillStyle='#4a6a8a'; ctx.fillRect(cx2-5,cy2+8,4,10); ctx.fillRect(cx2+1,cy2+8,4,10);
+    ctx.fillStyle='#2a4a6a'; ctx.fillRect(cx2-6,cy2+16,6,4); ctx.fillRect(cx2,cy2+16,6,4);
+    // Torso — ice-blue plate
+    ctx.fillStyle='#5a8aaa'; ctx.fillRect(cx2-7,cy2-6,14,14);
+    ctx.strokeStyle='#aaddff'; ctx.lineWidth=1;
+    ctx.strokeRect(cx2-7,cy2-6,14,14);
+    // Ice crystal on chest
+    ctx.fillStyle='#aaddff'; ctx.beginPath(); ctx.moveTo(cx2,cy2-2); ctx.lineTo(cx2+3,cy2+2); ctx.lineTo(cx2,cy2+6); ctx.lineTo(cx2-3,cy2+2); ctx.closePath(); ctx.fill();
+    // Neck + Head
+    ctx.fillStyle='#e8b890'; ctx.fillRect(cx2-2,cy2-9,4,4);
+    ctx.beginPath(); ctx.arc(cx2,cy2-13,5,0,Math.PI*2); ctx.fill();
+    // Ice helm — silver with blue visor
+    ctx.fillStyle='#7aaacc'; ctx.beginPath(); ctx.arc(cx2,cy2-13,5,-Math.PI,0); ctx.fill();
+    ctx.fillRect(cx2-6,cy2-18,12,6);
+    ctx.fillStyle='#aaddff'; ctx.fillRect(cx2-4,cy2-15,8,4); // visor
+    // Left arm holding ice lance horizontally
+    ctx.fillStyle='#5a8aaa'; ctx.fillRect(cx2-14,cy2-4,8,3);
+    // Ice lance — long spear with crystal tip
+    ctx.shadowColor='#88ddff'; ctx.shadowBlur=6;
+    ctx.fillStyle='#7ab8cc'; ctx.fillRect(cx2-22,cy2-5,22,3); // shaft
+    ctx.shadowBlur=0;
+    // Crystal spearhead
+    ctx.fillStyle='#cceeff';
+    ctx.beginPath(); ctx.moveTo(cx2-22,cy2-3); ctx.lineTo(cx2-28,cy2-3.5); ctx.lineTo(cx2-22,cy2-7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(180,230,255,0.7)';
+    ctx.beginPath(); ctx.moveTo(cx2-22,cy2-4); ctx.lineTo(cx2-26,cy2-4); ctx.lineTo(cx2-22,cy2-6); ctx.closePath(); ctx.fill();
+    // Snowflake crossguard
+    ctx.strokeStyle='#aaddff'; ctx.lineWidth=1.5; ctx.lineCap='round';
+    for (let i=0;i<4;i++){const a=i/4*Math.PI; ctx.beginPath(); ctx.moveTo(cx2-6,cy2-3.5); ctx.lineTo(cx2-6+Math.cos(a)*5,cy2-3.5+Math.sin(a)*5); ctx.stroke();}
+    ctx.lineCap='butt';
+    // Right arm extended
+    ctx.fillStyle='#5a8aaa'; ctx.fillRect(cx2+6,cy2-4,6,3);
+
+  } else if (key === 'lightning') {
+    // Lightning crossbowman — yellow-green armor, lightning crossbow cracking with sparks
+    const cx2=w/2, cy2=h*0.52;
+    // Legs
+    ctx.fillStyle='#3a4a10'; ctx.fillRect(cx2-5,cy2+8,4,10); ctx.fillRect(cx2+1,cy2+8,4,10);
+    ctx.fillStyle='#1a2208'; ctx.fillRect(cx2-6,cy2+16,6,4); ctx.fillRect(cx2,cy2+16,6,4);
+    // Torso — dark green with yellow trim
+    ctx.fillStyle='#3a5010'; ctx.fillRect(cx2-7,cy2-6,14,14);
+    ctx.strokeStyle='#aacc00'; ctx.lineWidth=1.5;
+    ctx.strokeRect(cx2-7,cy2-6,14,14);
+    // Neck + Head
+    ctx.fillStyle='#e8b890'; ctx.fillRect(cx2-2,cy2-9,4,4);
+    ctx.beginPath(); ctx.arc(cx2,cy2-13,5,0,Math.PI*2); ctx.fill();
+    // Helmet with lightning bolt emblem
+    ctx.fillStyle='#4a6018'; ctx.beginPath(); ctx.arc(cx2,cy2-13,5,-Math.PI,0); ctx.fill();
+    ctx.fillRect(cx2-6,cy2-18,12,6);
+    ctx.fillStyle='#ffff44';
+    ctx.beginPath(); ctx.moveTo(cx2+2,cy2-18); ctx.lineTo(cx2-1,cy2-13); ctx.lineTo(cx2+2,cy2-13); ctx.lineTo(cx2-1,cy2-10); ctx.lineTo(cx2+3,cy2-10); ctx.lineTo(cx2+0,cy2-13); ctx.lineTo(cx2+3,cy2-13); ctx.closePath(); ctx.fill();
+    // Lightning crossbow — glowing electric coils on it
+    ctx.fillStyle='#3a5010'; ctx.fillRect(cx2-18,cy2-5,22,4); // stock
+    ctx.fillRect(cx2-4,cy2-5,8,8); // grip
+    // Metal limbs
+    ctx.fillStyle='#aabb44'; ctx.fillRect(cx2-18,cy2-10,3,10); ctx.fillRect(cx2+1,cy2-10,3,10);
+    // String — crackling electric
+    ctx.shadowColor='#ffff00'; ctx.shadowBlur=8;
+    ctx.strokeStyle='#ffff44'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(cx2-18,cy2-10); ctx.lineTo(cx2-8,cy2-5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx2+4,cy2-10); ctx.lineTo(cx2-8,cy2-5); ctx.stroke();
+    ctx.shadowBlur=0;
+    // Electric bolt loaded
+    ctx.strokeStyle='#ffff00'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx2-15,cy2-3); ctx.lineTo(cx2+4,cy2-3); ctx.stroke();
+    // Sparks around the crossbow
+    ctx.fillStyle='#ffff66';
+    for (let i=0;i<6;i++){const a=i/6*Math.PI*2; ctx.beginPath(); ctx.arc(cx2-7+Math.cos(a)*8,cy2-7+Math.sin(a)*8,1.5,0,Math.PI*2); ctx.fill();}
+    // Arms
+    ctx.fillStyle='#3a5010'; ctx.fillRect(cx2-12,cy2-3,6,3); ctx.fillRect(cx2+5,cy2-3,5,3);
+
+  } else if (key === 'earth') {
+    // Earth warrior — stone-brown heavy armour, massive stone maul
+    const cx2=w/2, cy2=h*0.52;
+    // Legs — thick stone greaves
+    ctx.fillStyle='#5a4a30'; ctx.fillRect(cx2-6,cy2+8,5,10); ctx.fillRect(cx2+1,cy2+8,5,10);
+    ctx.fillStyle='#3a2a18'; ctx.fillRect(cx2-7,cy2+16,7,4); ctx.fillRect(cx2,cy2+16,7,4);
+    // Torso — heavy stone plate
+    ctx.fillStyle='#6a5a3a'; ctx.fillRect(cx2-8,cy2-6,16,14);
+    // Stone texture lines
+    ctx.strokeStyle='#4a3a22'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx2-8,cy2+2); ctx.lineTo(cx2+8,cy2+2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx2,cy2-6); ctx.lineTo(cx2,cy2+8); ctx.stroke();
+    // Shoulder boulders
+    ctx.fillStyle='#7a6a48'; ctx.beginPath(); ctx.arc(cx2-9,cy2-5,5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx2+9,cy2-5,5,0,Math.PI*2); ctx.fill();
+    // Neck + Head
+    ctx.fillStyle='#e8b890'; ctx.fillRect(cx2-2,cy2-9,4,4);
+    ctx.beginPath(); ctx.arc(cx2,cy2-13,5,0,Math.PI*2); ctx.fill();
+    // Stone helm — blocky
+    ctx.fillStyle='#6a5a3a';
+    ctx.fillRect(cx2-6,cy2-18,12,6); // top
+    ctx.fillRect(cx2-7,cy2-12,14,4); // brow ridge
+    ctx.fillStyle='#3a2a18'; ctx.fillRect(cx2-4,cy2-12,8,3); // visor slit
+    // Left arm — braced
+    ctx.fillStyle='#6a5a3a'; ctx.fillRect(cx2-14,cy2-4,7,4);
+    // Right arm — raising maul
+    ctx.fillStyle='#6a5a3a'; ctx.fillRect(cx2+7,cy2-8,4,8);
+    // STONE MAUL — handle then massive boulder head
+    ctx.fillStyle='#5a3a10'; ctx.fillRect(cx2+10,cy2-20,3,24); // handle
+    ctx.fillStyle='#776655'; // boulder head
+    ctx.beginPath(); ctx.arc(cx2+14,cy2-21,9,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#998877'; ctx.beginPath(); ctx.arc(cx2+12,cy2-23,7,0,Math.PI*2); ctx.fill();
+    // Cracks on boulder
+    ctx.strokeStyle='#4a3a28'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx2+10,cy2-24); ctx.lineTo(cx2+14,cy2-18); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx2+16,cy2-23); ctx.lineTo(cx2+12,cy2-20); ctx.stroke();
+
+  // ── Traps ─────────────────────────────────────────────────────────────────
+  } else if (key === 'spike') {
+    ctx.fillStyle = '#5a3a18'; ctx.fillRect(4, h - 16, w - 8, 12); // dirt base
+    ctx.fillStyle = '#999';
+    for (const sx of [cx - 13, cx - 5, cx + 3, cx + 11]) {
+      ctx.beginPath(); ctx.moveTo(sx, h - 16); ctx.lineTo(sx + 4, h - 34); ctx.lineTo(sx + 8, h - 16); ctx.fill();
+      ctx.fillStyle = '#ccc'; ctx.beginPath(); ctx.arc(sx + 4, h - 34, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#999';
+    }
+
+  } else if (key === 'tar') {
+    ctx.fillStyle = '#1a1a0a';
+    ctx.save(); ctx.translate(cx, cy + 8); ctx.scale(1.4, 0.52);
+    ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    ctx.fillStyle = '#2e2c12';
+    ctx.save(); ctx.translate(cx, cy + 8); ctx.scale(1.1, 0.4);
+    ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    // Glossy bubble
+    ctx.fillStyle = 'rgba(80,80,30,0.4)';
+    ctx.save(); ctx.translate(cx - 4, cy + 4); ctx.scale(0.5, 0.3);
+    ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    // Skull symbol
+    ctx.fillStyle = '#553'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('☠', cx, cy - 2); ctx.textAlign = 'left';
+
+  } else if (key === 'barricade') {
+    ctx.strokeStyle = '#8b6030'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(8, 6); ctx.lineTo(w - 8, h - 9); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, h - 9); ctx.lineTo(w - 8, 6); ctx.stroke();
+    ctx.strokeStyle = '#6a4820'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(8, 6); ctx.lineTo(w - 8, h - 9); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, h - 9); ctx.lineTo(w - 8, 6); ctx.stroke();
+    // Bolts at corners
+    ctx.fillStyle = '#ccc';
+    for (const [bx, by] of [[8,6],[w-8,6],[8,h-9],[w-8,h-9]]) {
+      ctx.beginPath(); ctx.arc(bx, by, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.lineCap = 'butt';
+
+  } else if (key === 'wall') {
+    const wy = cy - 14;
+    ctx.fillStyle = '#5a5550'; ctx.fillRect(5, wy, w - 10, 28);
+    ctx.fillStyle = '#6a6560'; ctx.fillRect(7, wy + 2, w - 14, 24);
+    ctx.strokeStyle = '#3a3530'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(5, wy + 14); ctx.lineTo(w - 5, wy + 14); ctx.stroke();
+    for (let bx = 5; bx < w - 7; bx += 13) {
+      ctx.beginPath(); ctx.moveTo(bx, wy + 2); ctx.lineTo(bx, wy + 14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx + 6, wy + 14); ctx.lineTo(bx + 6, wy + 26); ctx.stroke();
+    }
+    ctx.fillStyle = '#5a5550';
+    for (let bx = 5; bx < w - 9; bx += 9) ctx.fillRect(bx, wy - 8, 6, 9);
+
+  // ── Camps — draw the SOLDIER that spawns, not a tent ───────────────────────
+  } else if (key === 'camp_basic') {
+    // Fighter: brown leather, sword
+    const s = 0.85, ox = cx, oy = cy + 4;
+    ctx.fillStyle = '#5a3a1a'; ctx.fillRect(ox-4*s, oy+2*s, 3.5*s, 5*s); ctx.fillRect(ox+0.5*s, oy+2*s, 3.5*s, 5*s);
+    ctx.fillStyle = '#7a4a1a'; ctx.fillRect(ox-4.5*s, oy-7*s, 9*s, 9*s);
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(ox-1*s, oy-10*s, 2.5*s, 3.5*s);
+    ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(ox, oy-13.5*s, 4.5*s, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#7a4a1a'; ctx.beginPath(); ctx.arc(ox, oy-13.5*s, 4.5*s, Math.PI, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ccc'; ctx.save(); ctx.translate(ox+7*s, oy-4*s);
+    ctx.fillRect(-1*s,-12*s,2*s,13*s); ctx.fillStyle='#884400'; ctx.fillRect(-3*s,-1.5*s,6*s,2.5*s); ctx.restore();
+
+  } else if (key === 'camp_archer') {
+    // Archer: green tunic, bow
+    const s = 0.85, ox = cx, oy = cy + 4;
+    ctx.fillStyle = '#5a3a1a'; ctx.fillRect(ox-4*s, oy+2*s, 3.5*s, 5*s); ctx.fillRect(ox+0.5*s, oy+2*s, 3.5*s, 5*s);
+    ctx.fillStyle = '#2a6020'; ctx.fillRect(ox-4.5*s, oy-7*s, 9*s, 9*s);
+    ctx.fillStyle = '#1a4a14'; ctx.beginPath(); ctx.arc(ox, oy-13*s, 5.5*s, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(ox, oy-13*s, 3.5*s, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#884400'; ctx.lineWidth = 2*s;
+    ctx.beginPath(); ctx.arc(ox-9*s, oy-7*s, 9*s, -0.9, 0.9); ctx.stroke();
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1*s;
+    ctx.beginPath(); ctx.moveTo(ox-9*s, oy-15.5*s); ctx.lineTo(ox-1.5*s, oy-7*s); ctx.lineTo(ox-9*s, oy+1.5*s); ctx.stroke();
+
+  } else if (key === 'camp_knight') {
+    // Knight: silver armour, shield, sword
+    const s = 0.85, ox = cx, oy = cy + 4;
+    ctx.fillStyle = '#778899'; ctx.fillRect(ox-5*s, oy+2*s, 4*s, 6*s); ctx.fillRect(ox+1*s, oy+2*s, 4*s, 6*s);
+    ctx.fillStyle = '#8899aa'; ctx.fillRect(ox-5.5*s, oy-8*s, 11*s, 10*s);
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(ox-1*s, oy-11*s, 2.5*s, 3.5*s);
+    ctx.fillStyle = '#aabbcc'; ctx.beginPath(); ctx.arc(ox, oy-14.5*s, 5.5*s, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#334455'; ctx.fillRect(ox-3.5*s, oy-15.5*s, 7*s, 2.5*s);
+    ctx.fillStyle = '#cc8822'; ctx.fillRect(ox-14*s, oy-11*s, 6*s, 16*s);
+    ctx.strokeStyle = '#886600'; ctx.lineWidth = 1;
+    ctx.strokeRect(ox-14*s, oy-11*s, 6*s, 16*s);
+    ctx.fillStyle = '#ffdd44'; ctx.font = `bold ${7*s}px sans-serif`; ctx.textAlign='center';
+    ctx.fillText('✦', ox-11*s, oy-3*s); ctx.textAlign='left';
+    ctx.fillStyle = '#ddd'; ctx.save(); ctx.translate(ox+8*s, oy-5*s);
+    ctx.fillRect(-1.5*s,-15*s,2.5*s,16*s); ctx.fillStyle='#aa6600'; ctx.fillRect(-4*s,-2*s,8*s,2.5*s); ctx.restore();
+
+  } else if (key === 'camp_mage') {
+    // Mage: purple robes, glowing staff, wizard hat
+    const s = 0.85, ox = cx, oy = cy + 4;
+    ctx.fillStyle = '#7733bb'; ctx.beginPath();
+    ctx.moveTo(ox-6.5*s, oy+8*s); ctx.lineTo(ox+6.5*s, oy+8*s); ctx.lineTo(ox+8*s, oy+13*s); ctx.lineTo(ox-8*s, oy+13*s); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#5a2299'; ctx.fillRect(ox-4.5*s, oy-1*s, 9*s, 9*s);
+    ctx.fillStyle = '#6622aa'; ctx.fillRect(ox-4.5*s, oy-9*s, 9*s, 8*s);
+    ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(ox, oy-13*s, 4.5*s, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#3a0066';
+    ctx.beginPath(); ctx.moveTo(ox-6.5*s, oy-11*s); ctx.lineTo(ox, oy-24*s); ctx.lineTo(ox+6.5*s, oy-11*s); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#aa44ff'; ctx.beginPath(); ctx.arc(ox, oy-11*s, 6.5*s, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = '#884400'; ctx.lineWidth = 1.5*s;
+    ctx.beginPath(); ctx.moveTo(ox+9*s, oy+7*s); ctx.lineTo(ox+9*s, oy-18*s); ctx.stroke();
+    ctx.shadowColor = '#aa44ff'; ctx.shadowBlur = 7;
+    ctx.fillStyle = '#bb55ff'; ctx.beginPath(); ctx.arc(ox+9*s, oy-20*s, 4.5*s, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+  } else if (key === 'camp_siege') {
+    // Siege warrior: dark heavy armour, battle axe, horns
+    const s = 0.85, ox = cx, oy = cy + 4;
+    ctx.fillStyle = '#443322'; ctx.fillRect(ox-6*s, oy+1*s, 4.5*s, 7*s); ctx.fillRect(ox+1.5*s, oy+1*s, 4.5*s, 7*s);
+    ctx.fillStyle = '#554433'; ctx.fillRect(ox-6.5*s, oy-9*s, 13*s, 10*s);
+    ctx.fillStyle = '#665544'; ctx.fillRect(ox-9.5*s, oy-9*s, 4.5*s, 4.5*s); ctx.fillRect(ox+5*s, oy-9*s, 4.5*s, 4.5*s);
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(ox-1*s, oy-11*s, 2.5*s, 2.5*s);
+    ctx.fillStyle = '#776655'; ctx.beginPath(); ctx.arc(ox, oy-15*s, 6.5*s, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#887766';
+    ctx.beginPath(); ctx.moveTo(ox-4.5*s, oy-20.5*s); ctx.lineTo(ox-8.5*s, oy-28.5*s); ctx.lineTo(ox-1.5*s, oy-20.5*s); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(ox+4.5*s, oy-20.5*s); ctx.lineTo(ox+8.5*s, oy-28.5*s); ctx.lineTo(ox+1.5*s, oy-20.5*s); ctx.fill();
+    ctx.save(); ctx.translate(ox+10*s, oy-7*s);
+    ctx.fillStyle = '#888'; ctx.fillRect(-1.5*s,-17*s,2.5*s,20*s);
+    ctx.fillStyle = '#aaa';
+    ctx.beginPath(); ctx.moveTo(0,-17*s); ctx.lineTo(7*s,-13*s); ctx.lineTo(7*s,-5*s); ctx.lineTo(0,-4*s); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ccc';
+    ctx.beginPath(); ctx.moveTo(0,-17*s); ctx.lineTo(-4.5*s,-13*s); ctx.lineTo(-3.5*s,-8*s); ctx.lineTo(0,-7*s); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+  // ── Worker ────────────────────────────────────────────────────────────────
+  } else if (key === 'worker') {
+    const ox = cx - 4, oy = cy + 4;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.save(); ctx.translate(ox+2, oy+10); ctx.scale(1,0.3);
+    ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill(); ctx.restore();
+    // Legs
+    ctx.fillStyle = '#5a3a1a'; ctx.fillRect(ox-4, oy+3, 3.5, 7); ctx.fillRect(ox+0.5, oy+3, 3.5, 7);
+    // Body
+    ctx.fillStyle = '#7a4a1a'; ctx.fillRect(ox-5, oy-6, 10, 9);
+    // Arms
+    ctx.fillRect(ox-10, oy-5, 6, 5); ctx.fillRect(ox+4, oy-5, 6, 5);
+    // Neck
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(ox-1.5, oy-9, 3, 4);
+    // Head
+    ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(ox, oy-13, 5, 0, Math.PI*2); ctx.fill();
+    // Hat
+    ctx.fillStyle = '#7a4a1a'; ctx.beginPath(); ctx.arc(ox, oy-13, 5, Math.PI, Math.PI*2); ctx.fill();
+    ctx.fillRect(ox-6, oy-14, 12, 2);
+    // Pickaxe
+    ctx.strokeStyle = '#8b5e20'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(ox+4, oy-10); ctx.lineTo(ox+14, oy-3); ctx.stroke();
+    ctx.fillStyle = '#aaa';
+    ctx.beginPath(); ctx.moveTo(ox+14, oy+2); ctx.lineTo(ox+18, oy-6); ctx.lineTo(ox+12, oy-7); ctx.closePath(); ctx.fill();
+    ctx.lineCap = 'butt';
+  }
+}
+
+// Builds a "WANTED poster" style button with canvas icon + name + cost.
+function _makeTileBtn(id, key, name, cost) {
+  const btn = document.createElement('button');
+  btn.id = id;
+  btn.className = 'btn';
+
+  // "WANTED" header strip
+  const header = document.createElement('div');
+  header.textContent = 'WANTED FOR ARMY';
+  header.style.cssText = 'font-size:8px;font-weight:900;letter-spacing:1px;color:#8b0000;background:rgba(0,0,0,0.12);padding:2px 0;width:100%;text-align:center;border-bottom:1px solid #a07830;';
+  btn.appendChild(header);
+
+  // Canvas icon
+  const cv = document.createElement('canvas');
+  cv.width = 60; cv.height = 52;
+  cv.style.cssText = 'display:block;width:100%;pointer-events:none;';
+  _drawBtnIcon(cv.getContext('2d'), key, 60, 52);
+  btn.appendChild(cv);
+
+  // Ornament divider
+  const div1 = document.createElement('div');
+  div1.textContent = '─────';
+  div1.style.cssText = 'font-size:7px;color:#a07030;text-align:center;line-height:1;';
+  btn.appendChild(div1);
+
+  // Unit name
+  const nameEl = document.createElement('div');
+  nameEl.textContent = name;
+  nameEl.style.cssText = 'font-size:9px;font-weight:bold;color:#2a1208;white-space:nowrap;padding:1px 3px;text-align:center;pointer-events:none;';
+  btn.appendChild(nameEl);
+
+  // Cost as "PAY: $XX"
+  const costEl = document.createElement('div');
+  costEl.textContent = `PAYMENT: ${cost}`;
+  costEl.style.cssText = 'font-size:9px;font-weight:bold;color:#8b0000;padding:2px 0 3px;text-align:center;border-top:1px solid #a07830;width:100%;pointer-events:none;';
+  btn.appendChild(costEl);
+
+  return btn;
+}
 
 // A worker that walks to mines and carries gold back to a home base
 class Worker {
@@ -428,6 +927,122 @@ class Soldier {
   }
 }
 
+// Returns a dramatic one-liner for the wave announcement banner
+// Returns true only for milestone waves that deserve a dramatic announcement
+function _isMilestoneWave(wave, levelDef) {
+  if (!levelDef) return wave === 1;
+  if (wave === 1) return true;                          // always announce wave 1
+  if (wave === levelDef.waves) return true;             // always announce the final wave
+  const en = levelDef.enemies;
+  if (en.includes('runner')      && wave === 2)  return true;   // scouts first appear
+  if (en.includes('saboteur')    && wave === 4)  return true;   // trap wreckers arrive
+  if (en.includes('ogre')        && wave === 5)  return true;   // giants crash through
+  if (en.includes('dragon')      && wave === 7)  return true;   // dragons take the sky
+  if (en.includes('dragonRider') && wave === 10) return true;   // death riders lead
+  return false;
+}
+
+function _getWaveMsg(wave, levelId) {
+  // ── Level 100 (Final Stand) — every wave gets its own narrative line ────────
+  if (levelId === 100) {
+    const msgs = [
+      'THE FINAL STAND BEGINS',        // 1
+      'THE WORLD TREMBLES',            // 2
+      'DARKNESS DESCENDS',             // 3
+      'NO RETREAT. NO SURRENDER.',     // 4
+      'THE ANCIENT EVIL MARCHES',      // 5
+      'HOLD THE LINE!',                // 6
+      'THE TITAN STIRS BENEATH...',    // 7
+      'THE DARK KNIGHTS SWARM',        // 8
+      'DEATH RIDERS LEAD THE CHARGE',  // 9
+      'THE GROUND SPLITS OPEN',        // 10
+      'ALL HOPE RESTS ON YOU',         // 11
+      'THE SKY BURNS RED',             // 12
+      'NOTHING WILL STOP THEM',        // 13
+      'FIGHT TO THE LAST BREATH',      // 14
+      'DESTROY THE CAMP — NOW!',       // 15
+      'YOUR WALLS MUST HOLD',          // 16
+      'THE DARKNESS BREAKS THROUGH',   // 17
+      'STAND FIRM, SOLDIER',           // 18
+      'GIANTS SHAKE THE EARTH',        // 19
+      'THE FINAL WAVE APPROACHES',     // 20
+      'EVERY TOWER COUNTS',            // 21
+      'THERE IS NO MERCY HERE',        // 22
+      'THE TITAN AWAKENS!',            // 23
+      'UNLEASH EVERYTHING YOU HAVE',   // 24
+      'THIS IS IT.',                   // 25
+      'THE LAST STAND IS NOW',         // 26
+      'WIN OR THE WORLD PERISHES',     // 27
+      'ONE LAST PUSH — HOLD ON!',      // 28
+      'DO NOT LET A SINGLE ONE PAST',  // 29
+      'THIS IS WHERE IT ENDS.',        // 30
+    ];
+    return msgs[Math.min(wave - 1, msgs.length - 1)];
+  }
+
+  // ── Level 30+ — Dragon Rider era ─────────────────────────────────────────
+  if (levelId >= 30) {
+    const pool = [
+      'DEATH RIDERS DESCEND',    'ARMORED DRAGONS IN THE SKY',
+      'NOTHING SURVIVES THEIR CHARGE', 'THE CRIMSON WINGS SPREAD',
+      'THEY BREATHE FIRE AND DEATH',   'HOLD YOUR TOWERS!',
+      'THE RIDERS CIRCLE ABOVE',       'CHAIN LIGHTNING — NOW!',
+      'THE ANCIENT WAR RAGES ON',      'SEND THEM BACK TO DUST',
+      'BRACE FOR THE DRAGON CHARGE',   'ALL TOWERS FIRE AT ONCE',
+    ];
+    return pool[(wave - 1) % pool.length];
+  }
+
+  // ── Levels 18-29 — Dragon era ────────────────────────────────────────────
+  if (levelId >= 18) {
+    const pool = [
+      'A DRAGON APPEARS',           'THE SKY DARKENS WITH WINGS',
+      'TOWERS BURN BELOW THEM',     'ICE IS YOUR ONLY HOPE',
+      'THE DRAGONS CIRCLE CLOSER',  'ALL ARCHERS — AIM HIGH!',
+      'WINGS OF FIRE APPROACH',     'THE FOREST BURNS',
+      'HOLD THE WALLS!',            'DRAGON BREATH ON THE RAMPARTS',
+      'THEY FLY TOO FAST TO DODGE', 'FREEZE THEM BEFORE THEY LAND',
+    ];
+    return pool[(wave - 1) % pool.length];
+  }
+
+  // ── Levels 10-17 — Ogre / Giant era ──────────────────────────────────────
+  if (levelId >= 10) {
+    const pool = [
+      'GIANTS EMERGE FROM THE CAVES', 'THEY SHRUG OFF YOUR ARROWS',
+      'THE EARTH SHAKES UNDERFOOT',   'WALLS CRACK UNDER IRON FISTS',
+      'FIRE MELTS THROUGH THEIR ARMOR','THEY ARE TOO LARGE TO STOP',
+      'THE OGRE WARLORD LEADS THEM',  'BOULDERS ROLL TOWARDS THE GATE',
+      'HOLD THE LINE — GIANTS INBOUND','NOT EVEN WALLS CAN STOP THEM',
+      'SEND THE MAGES FORWARD',       'EVERY GIANT YOU KILL IS A VICTORY',
+    ];
+    return pool[(wave - 1) % pool.length];
+  }
+
+  // ── Levels 5-9 — Scout / Trap Wrecker era ────────────────────────────────
+  if (levelId >= 5) {
+    const pool = [
+      'SCOUTS RUSH THE FRONT LINE',    'THEY SPRINT PAST YOUR DEFENSES',
+      'TRAP WRECKERS IN THE RANKS',    'THEY ARE COMING FOR YOUR TRAPS',
+      'FAST AND DEADLY — FIRE NOW',    'THE SHADOW ARMY GATHERS',
+      'YOUR TRAPS ARE UNDER ATTACK',   'OUTRUN THEM WITH CROSSBOWS',
+      'THE ASSASSINS MOVE AT NIGHT',   'HOLD — MORE SCOUTS INCOMING',
+    ];
+    return pool[(wave - 1) % pool.length];
+  }
+
+  // ── Levels 1-4 — Dark Knight / opening raids ─────────────────────────────
+  const pool = [
+    'FIRST BLOOD',               'THE RAID BEGINS',
+    'DARK KNIGHTS CHARGE',       'MORE POUR THROUGH THE WOODS',
+    'THE GOBLINS PRESS HARDER',  'HOLD THE OUTER WALL!',
+    'THEY SMELL VICTORY',        'BRACE THE GATE',
+    'THE HORDE GROWS BOLDER',    'NO MERCY — FIRE!',
+  ];
+  return pool[(wave - 1) % pool.length];
+}
+
+// Returns a dramatic one-liner keyed to which milestone wave this is
 class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -437,7 +1052,7 @@ class Game {
     canvas.height = Math.max(420, window.innerHeight - 88);
 
     this.path = makePath(canvas.width, canvas.height, 0);
-    this.map  = new GameMap(this.path, canvas.width, canvas.height);
+    this.map  = new GameMap(this.path, canvas.width, canvas.height, false);
     this.waveManager = new WaveManager();
 
     this.towers      = [];
@@ -485,6 +1100,7 @@ class Game {
     // ── Loadout state ─────────────────────────────────────────────────────────
     this.pendingConsumables = []; // item IDs queued from gem shop for next level
     this._pendingTriggers   = []; // damage items waiting for first wave enemies
+    this.activeLoadout      = [];   // consumables ready to USE during the current level
 
     // ── Daily Wheel state ──────────────────────────────────────────────────────
     this.wheelOpen     = false;  // is the wheel overlay showing?
@@ -509,6 +1125,22 @@ class Game {
     this.regenActive    = false; // HP Regen: towers slowly heal
     this.multiShotActive = false; // Multishot: towers fire 2 projectiles
     this.bounceActive   = false; // Bouncing Arrows: arrows bounce to a second target
+
+    this.enemyCampHp    = 50000;
+    this.enemyCampMaxHp = 50000;
+    this.titanSpawned   = false;
+    this.cutsceneTimer  = 0;
+    this.cutscenePhase  = 0;
+    this._cutsceneActors = [];  // visual-only soldiers flung by the titan
+
+    // Story banner shown at level start
+    this.storyBannerTimer = 0;   // counts down from 360 (6 seconds)
+    this.storyBannerTitle = '';
+    this.storyBannerText  = '';
+    // Wave announcement banner
+    this.waveBannerTimer  = 0;   // counts down from 150 (2.5 seconds)
+    this.waveBannerText   = '';
+    this._lastAnnouncedWave = 0; // so we only announce each wave once
 
     this.paused         = false;
     this.helpOpen       = false;
@@ -543,7 +1175,9 @@ class Game {
 
     if (this.titleActive || this.gameOver || this.levelComplete) return;
     if (this.paused) return;
-    if (this.flashTimer > 0) this.flashTimer--;
+    if (this.flashTimer      > 0) this.flashTimer--;
+    if (this.storyBannerTimer > 0) this.storyBannerTimer--;
+    if (this.waveBannerTimer  > 0) this.waveBannerTimer--;
 
     // Tick down power-up timers
     if (this.rageTimer     > 0) this.rageTimer--;
@@ -571,7 +1205,8 @@ class Game {
       }
     }
 
-    const waveResult = this.waveManager.update(this.enemies.length);
+    // Once the titan spawns it's the ONLY thing left — no more waves
+    const waveResult = this.titanSpawned ? null : this.waveManager.update(this.enemies.length);
     if (typeof waveResult === 'string') {
       const diff = this.currentLevel ? this.currentLevel.difficulty : 1;
       // Fire pending trigger items on the very first enemy of wave 1
@@ -580,8 +1215,18 @@ class Game {
         this._pendingTriggers = [];
       }
       // Apply Time Slow if active — enemies spawn slower
+      // Only announce milestone waves — not every single wave
+      const curWave = this.waveManager.wave;
+      if (curWave !== this._lastAnnouncedWave && _isMilestoneWave(curWave, this.currentLevel)) {
+        this._lastAnnouncedWave = curWave;
+        this.waveBannerTimer = 200; // slightly longer for milestone moments
+        this.waveBannerText  = _getMilestoneMsg(curWave, this.currentLevel);
+      } else if (curWave !== this._lastAnnouncedWave) {
+        this._lastAnnouncedWave = curWave; // track it but don't show banner
+      }
       const e = new Enemy(waveResult, this.path[0].x - 40, this.path[0].y, diff);
       if (this.timeSlowTimer > 0) e.speed *= 0.5;
+      if (this.currentLevel?.enemySlow && this.currentLevel.enemySlow !== 1) e.speed *= this.currentLevel.enemySlow;
       this.enemies.push(e);
     } else if (waveResult?.levelComplete) {
       this.money = Math.min(this.money + waveResult.bonus, MAX_MONEY);
@@ -676,7 +1321,7 @@ class Game {
       camp.spawnTimer++;
       if (camp.spawnTimer >= effectiveRate) {
         camp.spawnTimer = 0;
-        if (this.soldiers.length < this.camps.length * 3) {
+        if (true) { // unlimited soldiers on all levels
           const pathEnd = this.path[this.path.length - 1];
           // Pass the camp's config AND its name so the soldier looks right
           const sol = new Soldier(
@@ -685,6 +1330,13 @@ class Game {
             camp.campType,  // stats (hp, dmg, ranged, magic, aoe flags)
             camp.typeName   // name so draw() knows which style to use
           );
+          // Level 100: Final Stand soldiers are elite warriors (strong but not godlike)
+          if (this.currentLevel?.id === 100) {
+            sol.hp     *= 8;
+            sol.maxHp  *= 8;
+            sol.damage *= 7;
+            sol.speed  *= 1.5;
+          }
           // Swift Soldiers upgrade
           if (this.swiftSoldiers) sol.speed *= 1.5;
           // Gem upgrade: Elite Army — soldiers deal 2x damage
@@ -697,6 +1349,83 @@ class Game {
     // Soldiers fight
     for (const s of this.soldiers) s.update(this.enemies, this.path, this.projectiles);
     this.soldiers = this.soldiers.filter(s => !s.isDead());
+
+    // Final level only: soldiers at waypoint 0 attack the enemy camp → titan boss
+    if (this.currentLevel?.id === 100 && !this.titanSpawned) {
+      for (const s of this.soldiers) {
+        if (s.waypoint === 0 && s.attackTimer === 0 && this.enemyCampHp > 1) {
+          this.enemyCampHp -= s.damage;
+          s.attackTimer = s.attackRate;
+          s.swingTimer = 14;
+        }
+      }
+      if (this.enemyCampHp < 1) this.enemyCampHp = 1;
+
+      // Camp HP hit 1 → trigger cutscene
+      if (this.enemyCampHp <= 1 && this.cutscenePhase === 0) {
+        this.cutscenePhase = 1;
+        this.cutsceneTimer = 240;
+        this.paused = true;
+      }
+    }
+    // Cutscene countdown (final level only)
+    if (this.currentLevel?.id === 100 && this.cutscenePhase > 0) {
+      this.cutsceneTimer--;
+      // Init actors when phase 2 first starts
+      if (this.cutscenePhase === 1 && this.cutsceneTimer === 120 && this._cutsceneActors.length === 0) {
+        const W = this.canvas.width, H = this.canvas.height;
+        const cx = W / 2, cy = H * 0.65;
+        // Spawn 10 soldiers near the titan's torso area
+        for (let i = 0; i < 10; i++) {
+          const angle = (i / 10) * Math.PI * 2;
+          const dist  = 60 + Math.random() * 40;
+          this._cutsceneActors.push({
+            x: cx + Math.cos(angle) * dist,
+            y: cy + Math.sin(angle) * dist * 0.4,
+            vx: Math.cos(angle) * (3 + Math.random() * 4) * (Math.random() < 0.5 ? 1.5 : 1),
+            vy: -4 - Math.random() * 5,
+            kind: i < 4 ? 'weak' : 'strong',   // weak ones die, strong ones survive hurt
+            alpha: 1,
+            dead: false,
+            bounced: false,
+            hp: i < 4 ? 1 : 3,
+          });
+        }
+      }
+      // Tick actor physics
+      for (const a of this._cutsceneActors) {
+        if (a.dead) continue;
+        a.x  += a.vx;
+        a.y  += a.vy;
+        a.vy += 0.35;  // gravity
+        a.vx *= 0.98;  // air drag
+        const floorY = this.canvas.height * 0.88;
+        if (a.y >= floorY && !a.bounced) {
+          a.bounced = true;
+          if (a.kind === 'weak') {
+            a.dead = true; // weak ones die on impact
+          } else {
+            a.vy = -a.vy * 0.3; // strong ones bounce a little
+            a.hp--;
+            if (a.hp <= 0) a.dead = true;
+          }
+        }
+        if (a.kind === 'weak') a.alpha -= 0.015;
+        if (a.alpha <= 0) a.dead = true;
+      }
+      if (this.cutscenePhase === 1 && this.cutsceneTimer <= 120) this.cutscenePhase = 2;
+      if (this.cutscenePhase === 2 && this.cutsceneTimer <= 0) {
+        this.cutscenePhase = 3;
+        this.titanSpawned = true;
+        this.paused = false;
+        const diff = this.currentLevel.difficulty;
+        const titan = new Enemy('titan', this.path[0].x - 40, this.path[0].y, diff);
+        titan.isTitan = true;
+        this.enemies.push(titan);
+        this.flash('⚡ THE TITAN HAS AWAKENED! ⚡');
+        this.cutscenePhase = 0;
+      }
+    }
 
     // Check soldier count achievements
     if (this.soldiers.length >= 5)  this._grantAchievement('soldier5');
@@ -746,18 +1475,24 @@ class Game {
     }
 
     const before = this.enemies.length;
+    let titanKilled = false;
     this.enemies = this.enemies.filter(e => {
       if (e.isDead()) {
         if (e.kind === 'dragon' || e.kind === 'dragonRider') this._grantAchievement('dragon_slayer');
+        if (e.isTitan) titanKilled = true;
         this.score++;
         this.totalKills++;
-        // Apply gold bonus multiplier (from +30% Gold upgrade)
         const goldEarned = Math.ceil(e.reward * this.goldBonus);
         this.money = Math.min(this.money + goldEarned, MAX_MONEY);
         return false;
       }
       return true;
     });
+    // Titan defeated → YOU WIN — the ultimate victory
+    if (titanKilled) {
+      this.flash('⚡ THE TITAN IS DEFEATED! VICTORY! ⚡');
+      setTimeout(() => this._onLevelComplete(), 1200);
+    }
     if (this.enemies.length < before) this._updateButtons();
 
     // Kill count achievements
@@ -801,8 +1536,12 @@ class Game {
     for (const e     of this.enemies)     e.draw(this.ctx, this.path);
     for (const p     of this.projectiles) p.draw(this.ctx);
 
+    this._drawCampHpBar();
+    this._drawCutscene();
     this._drawHUD();
     this._drawBreakOverlay();
+    this._drawStoryBanner();   // cinematic level-start overlay
+    this._drawWaveBanner();    // dramatic wave announcement
     this._drawFlash();
     this._drawHint();
     this._drawGameOver();
@@ -874,8 +1613,11 @@ class Game {
   }
 
   tryPlaceCamp(x, y) {
-    // Enforce camp limit (default 10, raised to 15 by gem_camps upgrade)
-    if (this.camps.length >= this.campLimit) { this.flash(`Camp limit reached! (${this.campLimit} max)`); return; }
+    // Enforce camp limit — level 100 gets 20 max, others use campLimit
+    const effectiveCampLimit = this.currentLevel?.id === 100 ? 20 : this.campLimit;
+    if (this.camps.length >= effectiveCampLimit) {
+      this.flash(`Camp limit reached! (${effectiveCampLimit} max)`); return;
+    }
     if (this.map.isOnPath(x, y)) { this.flash("Can't place camp on the path!"); return; }
     if (this.map.isOnFeature(x, y)) { this.flash("Too close to a tree or rock!"); return; }
 
@@ -921,7 +1663,8 @@ class Game {
     } else {
       // First click → select it (shows upgrade panel at bottom, aim line, range ring)
       this.selectedTower = clicked;
-      this.flash('Tower selected! Click again for 3D view • Upgrade panel below • Right-click=Sell');
+      this._updateButtons();
+      this.flash('Tower selected! Click again for 3D view • Space=Sell');
     }
     return true;
   }
@@ -1396,35 +2139,29 @@ class Game {
 
     // ── TREE-LINE SILHOUETTE ──
     ctx.save();
-    ctx.fillStyle = '#0f1e0a';
+    ctx.fillStyle = '#1a3a12';
     ctx.beginPath(); ctx.moveTo(0, horizon);
     for (let x = 0; x <= W; x += 10)
       ctx.lineTo(x, horizon - 28 + Math.sin(x*0.021)*22 + Math.sin(x*0.057)*11 + Math.sin(x*0.133)*6);
     ctx.lineTo(W, horizon); ctx.closePath(); ctx.fill();
     ctx.restore();
 
-    // ── GROUND base gradient ──
+    // ── GROUND base gradient — matches 2D grass color (#4a7c4e) ──
     const gg = ctx.createLinearGradient(0, horizon, 0, H);
-    gg.addColorStop(0,    '#1c2812');
-    gg.addColorStop(0.10, '#243014');
-    gg.addColorStop(0.35, '#2e3f18');
-    gg.addColorStop(0.65, '#283818');
-    gg.addColorStop(1,    '#1a2a0e');
+    gg.addColorStop(0,    '#3a6030');
+    gg.addColorStop(0.10, '#426836');
+    gg.addColorStop(0.35, '#4a7c4e');
+    gg.addColorStop(0.65, '#437040');
+    gg.addColorStop(1,    '#365a30');
     ctx.fillStyle = gg; ctx.fillRect(0, horizon, W, H - horizon);
 
-    // ── GROUND REFLECTION STRIP (morning dew near horizon) ──
-    const reflG = ctx.createLinearGradient(0, horizon, 0, horizon + 28);
-    reflG.addColorStop(0,   'rgba(120,170,220,0.12)');
-    reflG.addColorStop(1,   'rgba(120,170,220,0)');
-    ctx.fillStyle = reflG; ctx.fillRect(0, horizon, W, 28);
-
-    // ── GRASS TUFTS ──
+    // ── GRASS TUFTS — slightly darker than ground for contrast ──
     for (const gt of this._grassTufts) {
       const gp = proj(gt.wx, gt.wy);
       if (!gp || gp.x < -10 || gp.x > W+10) continue;
       const gs = gt.s * gp.sc * 1.4;
       if (gs < 0.5) continue;
-      ctx.fillStyle = 'rgba(18,34,8,0.55)';
+      ctx.fillStyle = 'rgba(25,55,15,0.55)';
       ctx.beginPath();
       ctx.ellipse(gp.x, gp.y, gs*1.8, gs*0.55, 0, 0, Math.PI*2);
       ctx.fill();
@@ -1576,15 +2313,14 @@ class Game {
         ctx.closePath(); ctx.fill();
       } else {
         const { e } = obj;
-        // Ogre is bigger; dragonRider also slightly bigger
-        const sizeScale = e.kind === 'ogre' ? 1.6 : 1.0;
-        const sz = e.size * p.sc * 1.8 * sizeScale;
+        // Scale: ogre and dragon are bigger
+        const sizeScale = e.kind === 'ogre' ? 1.7
+                        : (e.kind === 'dragon' || e.kind === 'dragonRider') ? 1.3
+                        : 1.0;
+        const sz = e.size * p.sc * 1.4 * sizeScale;
         if (sz < 2) continue;
         const gy = Math.min(p.y, openB);
-        const bh = sz * 2.2;
-
-        // Walking leg phase (stateless — derived from world pos + time)
-        const legPhase = Math.sin(e.x * 0.15 + now / 200);
+        const bh = sz * 2.2; // used for fog rect + click hitbox
 
         // ── Cast shadow ────────────────────────────────────────────────────
         ctx.save();
@@ -1600,426 +2336,41 @@ class Game {
         ctx.beginPath(); ctx.ellipse(p.x, gy, sz*0.7, sz*0.18, 0, 0, Math.PI*2); ctx.fill();
         ctx.restore();
 
-        // ── Shading helpers ────────────────────────────────────────────────
-        // bodyGrad: sun from top-left → shadow bottom-right
-        const makeBodyGrad = (x, y, w, h, light, dark) => {
-          const g = ctx.createLinearGradient(x - w*0.5, y - h, x + w*0.5, y);
-          g.addColorStop(0,   light);
-          g.addColorStop(0.4, light);
-          g.addColorStop(1,   dark);
-          return g;
-        };
+        // ── Billboard: render 2D Enemy.draw() at 3D screen-space coords ──────
+        // This gives the 3D view the same character art as 2D mode.
+        // We temporarily override e.x/y/size to screen coords, call e.draw(),
+        // then restore — a classic billboard sprite trick.
+        {
 
-        // ── Per-type body drawing ─────────────────────────────────────────
-        if (e.kind === 'goblin') {
-          // Animated legs
-          const l1 = legPhase * sz * 0.22, l2 = -legPhase * sz * 0.22;
-          ctx.save();
-          const legG = makeBodyGrad(p.x, gy, sz*0.35, bh*0.5, '#2a5a18', '#0e2208');
-          ctx.fillStyle = legG;
-          ctx.beginPath(); ctx.roundRect(p.x-sz*0.42+l1, gy-bh*0.5, sz*0.32, bh*0.52, sz*0.05); ctx.fill();
-          ctx.beginPath(); ctx.roundRect(p.x+sz*0.10+l2, gy-bh*0.5, sz*0.32, bh*0.52, sz*0.05); ctx.fill();
-          ctx.restore();
-          // Arms
-          ctx.strokeStyle = '#3a7a20'; ctx.lineWidth = Math.max(1.5, sz*0.22);
-          ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(p.x-sz*0.72, gy-bh+sz*0.15); ctx.lineTo(p.x-sz*0.28, gy-bh*0.6); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(p.x+sz*0.72, gy-bh+sz*0.15); ctx.lineTo(p.x+sz*0.28, gy-bh*0.6); ctx.stroke();
-          // Body gradient
-          ctx.save();
-          const bodyG = makeBodyGrad(p.x, gy-bh*0.35, sz*1.44, bh*0.65, '#4aaa2a', '#1a4a0a');
-          ctx.fillStyle = bodyG;
-          ctx.beginPath(); ctx.roundRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65, sz*0.12); ctx.fill();
-          ctx.restore();
-          // Head gradient
-          ctx.save();
-          const headG = ctx.createRadialGradient(p.x-sz*0.18, gy-bh-sz*0.72, 0, p.x, gy-bh-sz*0.55, sz*0.62);
-          headG.addColorStop(0,   '#6acc3a');
-          headG.addColorStop(0.6, '#3a8a18');
-          headG.addColorStop(1,   '#1a4a08');
-          ctx.fillStyle = headG;
-          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.55, sz*0.62, 0, Math.PI*2); ctx.fill();
-          ctx.restore();
-          // Ears (triangles on sides of head)
-          ctx.fillStyle = '#3a8a18';
-          ctx.beginPath(); ctx.moveTo(p.x-sz*0.62, gy-bh-sz*0.45); ctx.lineTo(p.x-sz*0.88, gy-bh-sz*0.78); ctx.lineTo(p.x-sz*0.52, gy-bh-sz*0.75); ctx.closePath(); ctx.fill();
-          ctx.beginPath(); ctx.moveTo(p.x+sz*0.62, gy-bh-sz*0.45); ctx.lineTo(p.x+sz*0.88, gy-bh-sz*0.78); ctx.lineTo(p.x+sz*0.52, gy-bh-sz*0.75); ctx.closePath(); ctx.fill();
-          // Spiky hair (5 triangles)
-          ctx.fillStyle = '#2a0e00';
-          for (let sp = -2; sp <= 2; sp++) {
-            const hx = p.x + sp * sz * 0.21;
-            ctx.beginPath();
-            ctx.moveTo(hx - sz*0.10, gy-bh-sz*0.88);
-            ctx.lineTo(hx, gy-bh-sz*(1.26 + Math.abs(sp)*0.08));
-            ctx.lineTo(hx + sz*0.10, gy-bh-sz*0.88);
-            ctx.closePath(); ctx.fill();
-          }
-          // Glowing orange-yellow eyes
-          ctx.save();
-          ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = sz*0.9;
-          ctx.fillStyle = '#ffee00';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.22, gy-bh-sz*0.60, sz*0.14, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.22, gy-bh-sz*0.60, sz*0.14, 0, Math.PI*2); ctx.fill();
-          ctx.restore();
-          ctx.fillStyle = '#1a0800';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.22, gy-bh-sz*0.60, sz*0.07, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.22, gy-bh-sz*0.60, sz*0.07, 0, Math.PI*2); ctx.fill();
-          // Tiny teeth
-          ctx.fillStyle = '#e8e8cc';
-          for (let t2 = -1; t2 <= 1; t2++) {
-            ctx.beginPath(); ctx.rect(p.x+t2*sz*0.14-sz*0.04, gy-bh-sz*0.44, sz*0.09, sz*0.09); ctx.fill();
-          }
-          // Specular highlight on head
-          ctx.fillStyle = 'rgba(200,255,180,0.30)';
-          ctx.beginPath(); ctx.ellipse(p.x-sz*0.18, gy-bh-sz*0.72, sz*0.22, sz*0.14, -0.4, 0, Math.PI*2); ctx.fill();
+        // Save real world coords
+        const savedX3d = e.x, savedY3d = e.y, savedSz3d = e.size;
 
-        } else if (e.kind === 'runner') {
-          ctx.save(); ctx.translate(p.x, gy); ctx.rotate(-0.18);
-          const rbh = bh * 0.9;
-          // Animated legs
-          const rl1 = legPhase * sz * 0.28, rl2 = -legPhase * sz * 0.28;
-          const legRG = makeBodyGrad(0, 0, sz*0.30, rbh*0.5, '#5a3010', '#1a0a00');
-          ctx.fillStyle = legRG;
-          ctx.beginPath(); ctx.roundRect(-sz*0.38+rl1, -rbh*0.5, sz*0.28, rbh*0.52, sz*0.04); ctx.fill();
-          ctx.beginPath(); ctx.roundRect(sz*0.10+rl2, -rbh*0.5, sz*0.28, rbh*0.52, sz*0.04); ctx.fill();
-          // Motion blur streaks
-          for (let mb = 1; mb <= 3; mb++) {
-            ctx.fillStyle = `rgba(120,70,20,${0.07*mb})`;
-            ctx.fillRect(sz*(0.2*mb), -rbh*0.85, sz*1.1, rbh*0.55);
-          }
-          // Arms
-          ctx.strokeStyle = '#9a5a18'; ctx.lineWidth = Math.max(1.5, sz*0.20);
-          ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(-sz*0.55, -rbh+sz*0.15); ctx.lineTo(-sz*0.22, -rbh*0.60); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(sz*0.55, -rbh+sz*0.15); ctx.lineTo(sz*0.22, -rbh*0.60); ctx.stroke();
-          // Narrow body
-          const rbG = makeBodyGrad(0, -rbh*0.5, sz*1.10, rbh*0.62, '#cc7a30', '#5a2808');
-          ctx.fillStyle = rbG;
-          ctx.beginPath(); ctx.roundRect(-sz*0.55, -rbh, sz*1.10, rbh*0.62, sz*0.10); ctx.fill();
-          // Head
-          const rhG = ctx.createRadialGradient(-sz*0.15, -rbh-sz*0.62, 0, 0, -rbh-sz*0.5, sz*0.55);
-          rhG.addColorStop(0, '#ee9a40'); rhG.addColorStop(1, '#602808');
-          ctx.fillStyle = rhG;
-          ctx.beginPath(); ctx.arc(0, -rbh-sz*0.5, sz*0.55, 0, Math.PI*2); ctx.fill();
-          // Glowing eyes
-          ctx.save(); ctx.shadowColor = '#ffaa44'; ctx.shadowBlur = sz*0.7;
-          ctx.fillStyle = '#ffaa44';
-          ctx.beginPath(); ctx.arc(-sz*0.18, -rbh-sz*0.54, sz*0.12, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(sz*0.18, -rbh-sz*0.54, sz*0.12, 0, Math.PI*2); ctx.fill();
-          ctx.restore();
-          // Specular
-          ctx.fillStyle = 'rgba(255,200,120,0.28)';
-          ctx.beginPath(); ctx.ellipse(-sz*0.15, -rbh-sz*0.64, sz*0.20, sz*0.12, -0.3, 0, Math.PI*2); ctx.fill();
-          ctx.restore();
+        // Set screen-space coords so the 2D draw lands at the right 3D position.
+        // Each type has a different "feet offset" — how far below e.y the feet land.
+        //   Knight types (goblin/runner/ogre/basic):  cy + 2.12*s  (from _drawKnight math)
+        //   Saboteur:                                 cy + 1.91*s  (from _drawSaboteur math)
+        //   Dragon:                                   cy + 1.48*s  (legs bottom: s*0.5+s*0.5+s*0.36+s*0.12)
+        const isDrag = e.kind === 'dragon' || e.kind === 'dragonRider';
+        const isSab  = e.kind === 'saboteur';
+        const feetF  = isDrag ? 1.48 : isSab ? 1.91 : 2.12;
 
-        } else if (e.kind === 'saboteur') {
-          // Flowing cape (bezier behind body)
-          ctx.save();
-          const capeG = ctx.createLinearGradient(p.x, gy-bh-sz*0.5, p.x, gy);
-          capeG.addColorStop(0, 'rgba(40,5,70,0.9)');
-          capeG.addColorStop(0.5, 'rgba(20,2,40,0.95)');
-          capeG.addColorStop(1, 'rgba(5,0,12,0.8)');
-          ctx.fillStyle = capeG;
-          ctx.beginPath();
-          ctx.moveTo(p.x-sz*0.28, gy-bh+sz*0.1);
-          ctx.bezierCurveTo(p.x-sz*1.1, gy-bh+sz*0.3, p.x-sz*1.2, gy-sz*0.1, p.x-sz*0.85, gy);
-          ctx.lineTo(p.x+sz*0.85, gy);
-          ctx.bezierCurveTo(p.x+sz*1.2, gy-sz*0.1, p.x+sz*1.1, gy-bh+sz*0.3, p.x+sz*0.28, gy-bh+sz*0.1);
-          ctx.closePath(); ctx.fill();
-          ctx.restore();
-          // Legs hidden under cape — minimal visible
-          const sabLG = makeBodyGrad(p.x, gy, sz*0.34, bh*0.5, '#3a1a50', '#150820');
-          ctx.fillStyle = sabLG;
-          ctx.beginPath(); ctx.roundRect(p.x-sz*0.42+legPhase*sz*0.12, gy-bh*0.48, sz*0.30, bh*0.48, sz*0.04); ctx.fill();
-          ctx.beginPath(); ctx.roundRect(p.x+sz*0.12-legPhase*sz*0.12, gy-bh*0.48, sz*0.30, bh*0.48, sz*0.04); ctx.fill();
-          // Arms
-          ctx.strokeStyle = '#6a3590'; ctx.lineWidth = Math.max(1.5, sz*0.22); ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(p.x-sz*0.72, gy-bh+sz*0.08); ctx.lineTo(p.x-sz*0.28, gy-bh*0.62); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(p.x+sz*0.72, gy-bh+sz*0.08); ctx.lineTo(p.x+sz*0.28, gy-bh*0.62); ctx.stroke();
-          // Body
-          const sabBG = makeBodyGrad(p.x, gy-bh*0.35, sz*1.30, bh*0.65, '#7a3aaa', '#2a0845');
-          ctx.fillStyle = sabBG;
-          ctx.beginPath(); ctx.roundRect(p.x-sz*0.65, gy-bh, sz*1.30, bh*0.65, sz*0.10); ctx.fill();
-          // Hood arc over head
-          ctx.fillStyle = '#1a0630';
-          ctx.beginPath();
-          ctx.arc(p.x, gy-bh-sz*0.55, sz*0.72, Math.PI, Math.PI*2);
-          ctx.closePath(); ctx.fill();
-          // Head under hood
-          const sabHG = ctx.createRadialGradient(p.x-sz*0.15, gy-bh-sz*0.70, 0, p.x, gy-bh-sz*0.55, sz*0.60);
-          sabHG.addColorStop(0, '#8a40c0'); sabHG.addColorStop(1, '#2a0845');
-          ctx.fillStyle = sabHG;
-          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.55, sz*0.60, 0, Math.PI*2); ctx.fill();
-          // Red glowing eyes
-          ctx.save(); ctx.shadowColor = '#ff2200'; ctx.shadowBlur = sz*1.2;
-          ctx.fillStyle = '#ff3300';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.20, gy-bh-sz*0.58, sz*0.13, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.20, gy-bh-sz*0.58, sz*0.13, 0, Math.PI*2); ctx.fill();
-          ctx.restore();
-          // Specular on head
-          ctx.fillStyle = 'rgba(200,120,255,0.22)';
-          ctx.beginPath(); ctx.ellipse(p.x-sz*0.16, gy-bh-sz*0.72, sz*0.20, sz*0.12, -0.4, 0, Math.PI*2); ctx.fill();
+        e.size = sz;
+        e.x    = p.x;
+        e.y    = gy - feetF * sz;   // feet land at gy
 
-        } else if (e.kind === 'ogre') {
-          const ow = sz * 1.8;
-          // Wide short legs
-          const oLG = makeBodyGrad(p.x, gy, sz*0.52, bh*0.45, '#4a5a30', '#1a2212');
-          ctx.fillStyle = oLG;
-          ctx.save();
-          ctx.beginPath(); ctx.roundRect(p.x-sz*0.65+legPhase*sz*0.15, gy-bh*0.45, sz*0.50, bh*0.46, sz*0.06); ctx.fill();
-          ctx.beginPath(); ctx.roundRect(p.x+sz*0.15-legPhase*sz*0.15, gy-bh*0.45, sz*0.50, bh*0.46, sz*0.06); ctx.fill();
-          ctx.restore();
-          // Huge arms with fist circles
-          ctx.strokeStyle = '#6a8040'; ctx.lineWidth = Math.max(4, sz*0.42); ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(p.x-ow/2, gy-bh+sz*0.15); ctx.lineTo(p.x-sz*0.82, gy-bh*0.68); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(p.x+ow/2, gy-bh+sz*0.15); ctx.lineTo(p.x+sz*0.82, gy-bh*0.68); ctx.stroke();
-          // Fist circles
-          ctx.fillStyle = '#5a7030';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.82, gy-bh*0.68, sz*0.28, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.82, gy-bh*0.68, sz*0.28, 0, Math.PI*2); ctx.fill();
-          // Wide mottled body (two overlapping gradient ellipses)
-          ctx.save();
-          const ob1 = makeBodyGrad(p.x, gy-bh*0.28, ow, bh*0.55, '#7a9050', '#2e4018');
-          ctx.fillStyle = ob1;
-          ctx.beginPath(); ctx.roundRect(p.x-ow/2, gy-bh, ow, bh*0.55, sz*0.14); ctx.fill();
-          // Mottled overlay
-          const ob2 = ctx.createRadialGradient(p.x+ow*0.2, gy-bh*0.6, 0, p.x, gy-bh*0.28, ow*0.6);
-          ob2.addColorStop(0,   'rgba(100,130,60,0.35)');
-          ob2.addColorStop(0.5, 'rgba(50,70,25,0.18)');
-          ob2.addColorStop(1,   'rgba(20,35,10,0)');
-          ctx.fillStyle = ob2;
-          ctx.beginPath(); ctx.roundRect(p.x-ow/2, gy-bh, ow, bh*0.55, sz*0.14); ctx.fill();
-          ctx.restore();
-          // Tiny head
-          const ohG = ctx.createRadialGradient(p.x-sz*0.14, gy-bh-sz*0.5, 0, p.x, gy-bh-sz*0.38, sz*0.52);
-          ohG.addColorStop(0, '#88a055'); ohG.addColorStop(1, '#2a3818');
-          ctx.fillStyle = ohG;
-          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.38, sz*0.52, 0, Math.PI*2); ctx.fill();
-          // Wrinkled brow (arc lines)
-          ctx.strokeStyle = 'rgba(20,30,10,0.5)'; ctx.lineWidth = Math.max(1, sz*0.08);
-          for (let wr = 0; wr < 3; wr++) {
-            ctx.beginPath();
-            ctx.arc(p.x, gy-bh-sz*0.60+wr*sz*0.08, sz*(0.28-wr*0.04), Math.PI*1.1, Math.PI*1.9);
-            ctx.stroke();
-          }
-          // Sunken red eyes
-          ctx.fillStyle = '#331010';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.20, gy-bh-sz*0.42, sz*0.16, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.20, gy-bh-sz*0.42, sz*0.16, 0, Math.PI*2); ctx.fill();
-          ctx.save(); ctx.shadowColor = '#ff2200'; ctx.shadowBlur = sz*0.8;
-          ctx.fillStyle = '#cc2200';
-          ctx.beginPath(); ctx.arc(p.x-sz*0.20, gy-bh-sz*0.44, sz*0.10, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(p.x+sz*0.20, gy-bh-sz*0.44, sz*0.10, 0, Math.PI*2); ctx.fill();
-          ctx.restore();
-          // Specular
-          ctx.fillStyle = 'rgba(180,220,120,0.22)';
-          ctx.beginPath(); ctx.ellipse(p.x-sz*0.14, gy-bh-sz*0.52, sz*0.24, sz*0.14, -0.3, 0, Math.PI*2); ctx.fill();
+        // Fake path so enemy faces right — gives a natural walking pose
+        const fpLen3d = Math.max(2, (e.waypoint ?? 1) + 2);
+        const fp3d = [];
+        for (let fi = 0; fi < fpLen3d; fi++) fp3d.push({ x: e.x + 1000, y: e.y });
 
-        } else if (e.kind === 'dragon') {
-          const dw = sz * 2.0;
-          // Wing triangles (curved)
-          ctx.save();
-          const wingG = ctx.createLinearGradient(p.x-dw, gy-bh, p.x, gy);
-          wingG.addColorStop(0, 'rgba(10,60,20,0.7)');
-          wingG.addColorStop(1, 'rgba(5,30,10,0.4)');
-          ctx.fillStyle = wingG;
-          ctx.beginPath();
-          ctx.moveTo(p.x-sz*0.55, gy-bh*0.7);
-          ctx.bezierCurveTo(p.x-dw*0.8, gy-bh*1.1, p.x-dw*0.9, gy-bh*0.3, p.x-dw*0.55, gy-bh*0.15);
-          ctx.lineTo(p.x-sz*0.55, gy-bh*0.4);
-          ctx.closePath(); ctx.fill();
-          ctx.fillStyle = wingG;
-          ctx.beginPath();
-          ctx.moveTo(p.x+sz*0.55, gy-bh*0.7);
-          ctx.bezierCurveTo(p.x+dw*0.8, gy-bh*1.1, p.x+dw*0.9, gy-bh*0.3, p.x+dw*0.55, gy-bh*0.15);
-          ctx.lineTo(p.x+sz*0.55, gy-bh*0.4);
-          ctx.closePath(); ctx.fill();
-          ctx.restore();
-          // Tail bezier
-          ctx.save();
-          ctx.strokeStyle = '#1a5a28'; ctx.lineWidth = Math.max(2, sz*0.28); ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(p.x-dw*0.5, gy-bh*0.4);
-          ctx.bezierCurveTo(p.x-dw*0.9, gy-bh*0.2, p.x-dw*1.1, gy-bh*0.6, p.x-dw*1.3, gy-bh*0.3);
-          ctx.stroke();
-          ctx.restore();
-          // Body iridescent
-          ctx.save();
-          const dbG = makeBodyGrad(p.x, gy-bh*0.55, dw*0.85, bh*0.6, '#5acc60', '#1a5028');
-          ctx.fillStyle = dbG;
-          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.8, 0.75);
-          ctx.beginPath(); ctx.arc(0, 0, sz*0.85, 0, Math.PI*2); ctx.fill(); ctx.restore();
-          // Shimmer overlay (time-varying)
-          const shimmer = ctx.createRadialGradient(
-            p.x + Math.cos(now*0.001)*sz*0.5, gy-bh*0.6 + Math.sin(now*0.0013)*sz*0.3, 0,
-            p.x, gy-bh*0.6, sz*1.2
-          );
-          shimmer.addColorStop(0,   `rgba(120,255,160,${0.2 + 0.12*Math.sin(now*0.002)})`);
-          shimmer.addColorStop(0.5, 'rgba(60,180,80,0.06)');
-          shimmer.addColorStop(1,   'rgba(20,100,40,0)');
-          ctx.fillStyle = shimmer;
-          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.8, 0.75);
-          ctx.beginPath(); ctx.arc(0, 0, sz*0.85, 0, Math.PI*2); ctx.fill(); ctx.restore();
-          ctx.restore();
-          // Spine ridges
-          ctx.fillStyle = '#1a5030';
-          for (let ri = -2; ri <= 1; ri++) {
-            const rx2 = p.x + ri * sz * 0.42 - sz*0.18;
-            ctx.beginPath();
-            ctx.moveTo(rx2-sz*0.10, gy-bh*0.78);
-            ctx.lineTo(rx2, gy-bh-sz*0.22);
-            ctx.lineTo(rx2+sz*0.10, gy-bh*0.78);
-            ctx.closePath(); ctx.fill();
-          }
-          // Head
-          const dhG = ctx.createRadialGradient(p.x+dw*0.18, gy-bh-sz*0.28, 0, p.x+dw*0.3, gy-bh-sz*0.15, sz*0.58);
-          dhG.addColorStop(0, '#7aee80'); dhG.addColorStop(1, '#1a5028');
-          ctx.fillStyle = dhG;
-          ctx.beginPath(); ctx.arc(p.x+dw*0.3, gy-bh-sz*0.15, sz*0.55, 0, Math.PI*2); ctx.fill();
-          // Glowing eye
-          ctx.save(); ctx.shadowColor = '#ffe000'; ctx.shadowBlur = sz*1.0;
-          ctx.fillStyle = '#ffe000';
-          ctx.beginPath(); ctx.arc(p.x+dw*0.3+sz*0.20, gy-bh-sz*0.22, sz*0.15, 0, Math.PI*2); ctx.fill();
-          ctx.restore();
-          ctx.fillStyle = '#000';
-          ctx.beginPath(); ctx.arc(p.x+dw*0.3+sz*0.20, gy-bh-sz*0.22, sz*0.07, 0, Math.PI*2); ctx.fill();
-          // Specular on body
-          ctx.fillStyle = 'rgba(180,255,200,0.25)';
-          ctx.beginPath(); ctx.ellipse(p.x-sz*0.3, gy-bh*0.8, sz*0.45, sz*0.20, -0.3, 0, Math.PI*2); ctx.fill();
+        e.draw(ctx, fp3d);   // ← draws body + status effects + HP bar, all in screen space
 
-        } else if (e.kind === 'dragonRider') {
-          const dw = sz * 2.0;
-          // Wing triangles
-          ctx.save();
-          const drWingG = ctx.createLinearGradient(p.x-dw, gy-bh, p.x, gy);
-          drWingG.addColorStop(0, 'rgba(50,0,0,0.7)');
-          drWingG.addColorStop(1, 'rgba(20,0,0,0.4)');
-          ctx.fillStyle = drWingG;
-          ctx.beginPath();
-          ctx.moveTo(p.x-sz*0.55, gy-bh*0.7);
-          ctx.bezierCurveTo(p.x-dw*0.8, gy-bh*1.1, p.x-dw*0.9, gy-bh*0.3, p.x-dw*0.55, gy-bh*0.15);
-          ctx.lineTo(p.x-sz*0.55, gy-bh*0.4);
-          ctx.closePath(); ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(p.x+sz*0.55, gy-bh*0.7);
-          ctx.bezierCurveTo(p.x+dw*0.8, gy-bh*1.1, p.x+dw*0.9, gy-bh*0.3, p.x+dw*0.55, gy-bh*0.15);
-          ctx.lineTo(p.x+sz*0.55, gy-bh*0.4);
-          ctx.closePath(); ctx.fill();
-          ctx.restore();
-          // Dragon body (dark red)
-          const drBG = makeBodyGrad(p.x, gy-bh*0.55, dw*0.85, bh*0.6, '#cc3322', '#3a0808');
-          ctx.fillStyle = drBG;
-          ctx.save(); ctx.translate(p.x, gy-bh*0.6); ctx.scale(1.8, 0.75);
-          ctx.beginPath(); ctx.arc(0, 0, sz*0.85, 0, Math.PI*2); ctx.fill(); ctx.restore();
-          // Dragon head
-          const drHG = ctx.createRadialGradient(p.x+dw*0.18, gy-bh-sz*0.28, 0, p.x+dw*0.3, gy-bh-sz*0.15, sz*0.58);
-          drHG.addColorStop(0, '#ee4433'); drHG.addColorStop(1, '#3a0808');
-          ctx.fillStyle = drHG;
-          ctx.beginPath(); ctx.arc(p.x+dw*0.3, gy-bh-sz*0.15, sz*0.55, 0, Math.PI*2); ctx.fill();
-          // Rider — dark armored humanoid
-          const rrx = p.x - sz*0.08, rry = gy-bh*0.80;
-          // Rider body (armored)
-          const rrBG = makeBodyGrad(rrx, rry, sz*0.38, sz*0.55, '#666677', '#22222e');
-          ctx.fillStyle = rrBG;
-          ctx.beginPath(); ctx.roundRect(rrx-sz*0.19, rry-sz*0.55, sz*0.38, sz*0.45, sz*0.04); ctx.fill();
-          // Rider head
-          const rrHG = ctx.createRadialGradient(rrx-sz*0.08, rry-sz*0.80, 0, rrx, rry-sz*0.70, sz*0.27);
-          rrHG.addColorStop(0, '#aaaacc'); rrHG.addColorStop(1, '#333344');
-          ctx.fillStyle = rrHG;
-          ctx.beginPath(); ctx.arc(rrx, rry-sz*0.70, sz*0.27, 0, Math.PI*2); ctx.fill();
-          // Helmet dark arc
-          ctx.fillStyle = '#333344';
-          ctx.beginPath(); ctx.arc(rrx, rry-sz*0.70, sz*0.27, Math.PI, Math.PI*2); ctx.fill();
-          // Red plume on helmet
-          ctx.save();
-          ctx.strokeStyle = '#cc2222'; ctx.lineWidth = Math.max(2, sz*0.16); ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(rrx, rry-sz*0.96);
-          ctx.bezierCurveTo(rrx-sz*0.18, rry-sz*1.18, rrx-sz*0.35, rry-sz*1.05, rrx-sz*0.30, rry-sz*0.88);
-          ctx.stroke();
-          ctx.restore();
-          // Lance
-          ctx.save();
-          ctx.strokeStyle = '#9a6a20'; ctx.lineWidth = Math.max(1.5, sz*0.13); ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(rrx+sz*0.19, rry-sz*0.50);
-          ctx.lineTo(rrx+sz*1.1, rry-sz*0.72);
-          ctx.stroke();
-          ctx.restore();
-          // Lance tip
-          ctx.fillStyle = '#ddddcc';
-          const ltx = rrx+sz*1.1, lty = rry-sz*0.72;
-          ctx.beginPath(); ctx.moveTo(ltx-sz*0.06, lty-sz*0.11); ctx.lineTo(ltx, lty+sz*0.11); ctx.lineTo(ltx+sz*0.14, lty-sz*0.02); ctx.closePath(); ctx.fill();
-          // Specular on dragon
-          ctx.fillStyle = 'rgba(255,100,80,0.22)';
-          ctx.beginPath(); ctx.ellipse(p.x-sz*0.3, gy-bh*0.8, sz*0.45, sz*0.20, -0.3, 0, Math.PI*2); ctx.fill();
+        // Restore world coords
+        e.x = savedX3d; e.y = savedY3d; e.size = savedSz3d;
+        } // end billboard block
 
-        } else {
-          // Generic fallback
-          const fbLG = makeBodyGrad(p.x, gy, sz*0.40, bh*0.52, '#444455', '#111118');
-          ctx.fillStyle = fbLG;
-          ctx.beginPath(); ctx.roundRect(p.x-sz*0.50, gy-bh*0.5, sz*0.38, bh*0.52, sz*0.04); ctx.fill();
-          ctx.beginPath(); ctx.roundRect(p.x+sz*0.12, gy-bh*0.5, sz*0.38, bh*0.52, sz*0.04); ctx.fill();
-          const fbBG = makeBodyGrad(p.x, gy-bh*0.35, sz*1.44, bh*0.65, e.color, '#111');
-          ctx.fillStyle = fbBG;
-          ctx.beginPath(); ctx.roundRect(p.x-sz*0.72, gy-bh, sz*1.44, bh*0.65, sz*0.10); ctx.fill();
-          const fbHG = ctx.createRadialGradient(p.x-sz*0.2, gy-bh-sz*0.75, 0, p.x, gy-bh-sz*0.6, sz*0.65);
-          fbHG.addColorStop(0, e.color); fbHG.addColorStop(1, '#111');
-          ctx.fillStyle = fbHG;
-          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
-        }
-
-        // ── Exponential distance fog overlay on enemy ──────────────────────
-        if (p.fwd > 80) {
-          const fogA = Math.min(0.72, 1 - Math.exp(-p.fwd / 350));
-          ctx.fillStyle = `rgba(78,92,72,${fogA})`;
-          ctx.fillRect(p.x-sz*0.82, gy-bh-sz*1.4, sz*1.64, bh + sz*1.4);
-        }
-
-        // HP bar
-        const bw = Math.max(sz*2.5, 22);
-        ctx.fillStyle = '#111'; ctx.fillRect(p.x-bw/2-1, gy-bh-sz*1.9-1, bw+2, 7);
-        ctx.fillStyle = e.hp/e.maxHp > 0.5 ? '#2f2' : '#f82';
-        ctx.fillRect(p.x-bw/2, gy-bh-sz*1.9, bw*(e.hp/e.maxHp), 5);
-        // ── Elemental status overlays ──────────────────────────────────────
-        if (e.slowTimer > 0) {
-          // ❄️ Ice: blue frost overlay
-          ctx.fillStyle = `rgba(100,200,255,${Math.min(0.55, e.slowTimer/150)})`;
-          ctx.fillRect(p.x-sz*0.72, gy-bh-sz*0.3, sz*1.44, bh*0.65);
-          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
-        }
-        if (e.burnTimer > 0) {
-          // 🔥 Fire: orange flicker overlay
-          const fl = 0.4 + 0.3 * Math.sin(Date.now() / 80);
-          ctx.fillStyle = `rgba(255,100,0,${fl * Math.min(0.7, e.burnTimer/180)})`;
-          ctx.fillRect(p.x-sz*0.72, gy-bh-sz*0.3, sz*1.44, bh*0.65);
-          ctx.beginPath(); ctx.arc(p.x, gy-bh-sz*0.6, sz*0.65, 0, Math.PI*2); ctx.fill();
-        }
-        if (e.shockTimer > 0) {
-          // ⚡ Lightning: yellow glow outline
-          ctx.strokeStyle = `rgba(255,255,0,${e.shockTimer/40})`;
-          ctx.lineWidth = sz * 0.25;
-          ctx.strokeRect(p.x-sz*0.72, gy-bh-sz*0.3, sz*1.44, bh*0.65);
-        }
-        if (e.stunTimer > 0) {
-          // 🪨 Earth: grey dizzy stars above head
-          const t = Date.now() / 200;
-          for (let i = 0; i < 3; i++) {
-            const a = t + (i / 3) * Math.PI * 2;
-            ctx.fillStyle = '#aaaaaa';
-            ctx.beginPath();
-            ctx.arc(p.x + Math.cos(a)*sz*0.8, gy-bh-sz*1.6 + Math.sin(a)*sz*0.3, sz*0.22, 0, Math.PI*2);
-            ctx.fill();
-          }
-        }
-        // Store for _shoot3D click detection
+        // Store for _shoot3D click detection (no fog on sprite — let the 2D art show clearly)
         e._3dx = p.x; e._3dy = gy - bh/2; e._3dr = Math.max(sz*1.3, 20);
-        // Atmospheric fog for far enemies
-        if (p.fwd > 200) {
-          const fogAlpha = Math.min(0.6, (p.fwd - 200) / 400);
-          ctx.fillStyle = `rgba(80,90,70,${fogAlpha})`;
-          ctx.fillRect(p.x-sz*0.72, gy-bh-sz*1.3, sz*1.44, bh + sz*1.3);
-        }
       }
     }
 
@@ -2413,11 +2764,135 @@ class Game {
 
   flash(msg) { this.flashMsg = msg; this.flashTimer = 120; }
 
+  _showLevelIntro(levelDef) {
+    // Hide the title screen
+    this.titleActive = false;
+    document.getElementById('title-screen').style.display = 'none';
+
+    const isFinal = levelDef.id === 100;
+
+    // Work out which towers / traps / camps are NEW this level vs. the previous one
+    const prev       = levelDef.id > 1 ? LEVELS[levelDef.id - 2] : null;
+    const prevTowers = prev ? prev.towers : [];
+    const prevTraps  = prev ? prev.traps  : [];
+    const prevCamps  = prev ? (prev.camps || []) : [];
+    const newTowers  = levelDef.towers.filter(t => !prevTowers.includes(t));
+    const newTraps   = levelDef.traps.filter(t => !prevTraps.includes(t));
+    const newCamps   = (levelDef.camps || []).filter(c => !prevCamps.includes(c));
+
+    // Ability descriptions shown on the intro card
+    const TOWER_INFO = {
+      basic:     { icon: '🏹', name: 'Archer Tower',    desc: 'Steady arrows, medium range. Cheap and reliable — your backbone.' },
+      sniper:    { icon: '🪨', name: 'Catapult',        desc: 'Hurls boulders at extreme range. Great for sniping tough enemies early.' },
+      rapid:     { icon: '🎯', name: 'Crossbow',        desc: 'Fires 3 bolts per second. Shreds fast runners before they slip through.' },
+      slow:      { icon: '🔮', name: 'Mage Tower',      desc: 'Magic orbs slow every enemy hit. Pairs perfectly with damage towers.' },
+      fire:      { icon: '🔥', name: 'Fire Tower',      desc: 'Fireballs leave burning damage over time. Melts ogres and dragons fast.' },
+      ice:       { icon: '❄️', name: 'Ice Tower',       desc: 'Freezes enemies solid. Frozen foes take bonus damage from all sources.' },
+      lightning: { icon: '⚡', name: 'Lightning Tower', desc: 'Chain lightning jumps to 3 nearby enemies at once. Wrecks groups.' },
+      earth:     { icon: '🪨', name: 'Earth Tower',     desc: 'Giant boulders with wide splash. Stuns everything in a huge area.' },
+    };
+    const TRAP_INFO = {
+      spike:     { icon: '🗡️', name: 'Spike Trap',  desc: 'Damages every enemy that steps over it. Stack on tight bends.' },
+      tar:       { icon: '🕳️', name: 'Tar Pit',     desc: 'Slows enemies to a crawl, giving towers extra firing time.' },
+      barricade: { icon: '🚧', name: 'Barricade',   desc: 'Blocks enemies and deals damage. Forces them to break through.' },
+      wall:      { icon: '🧱', name: 'Stone Wall',  desc: 'Heavy off-path barrier that soaks enormous amounts of damage.' },
+    };
+
+    const ENEMY_ICONS = { goblin:'👺', runner:'💨', saboteur:'🗡️', ogre:'👹', dragon:'🐲', dragonRider:'🐉', titan:'⚡' };
+
+    const CAMP_INFO = {
+      basic:  { icon: '⚔️',  name: 'Basic Camp',  desc: 'Spawns sword-fighters that attack enemies on the road.' },
+      archer: { icon: '🏹',  name: 'Archer Camp', desc: 'Ranged archers shoot enemies from a distance.' },
+      knight: { icon: '🛡️', name: 'Knight Camp',  desc: 'Heavy knights with shields — very hard to kill.' },
+      mage:   { icon: '🔮',  name: 'Mage Camp',   desc: 'Magic soldiers that deal high damage and slow enemies.' },
+      siege:  { icon: '💥',  name: 'Siege Camp',  desc: 'Siege warriors deal area damage — great against groups.' },
+    };
+
+    // Build "new unlocks" cards HTML
+    let unlocksHtml = '';
+    const allNew = [
+      ...newTowers.map(t => ({ ...TOWER_INFO[t], border: 'rgba(255,215,0,0.45)' })),
+      ...newTraps.map(t => ({ ...TRAP_INFO[t],   border: 'rgba(255,140,0,0.45)' })),
+      ...newCamps.map(c => ({ ...CAMP_INFO[c],   border: 'rgba(255,200,0,0.45)' })),
+    ];
+    if (allNew.length) {
+      unlocksHtml = `
+        <div style="margin-top:18px">
+          <div class="ts-section-title">🆕 New Unlocks This Level</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px">
+            ${allNew.map(u => `
+              <div style="background:rgba(255,255,255,0.05);border:1.5px solid ${u.border};border-radius:10px;padding:10px 14px;max-width:200px;text-align:left">
+                <div style="font-size:16px;margin-bottom:4px">${u.icon} <strong style="color:#ffd700">${u.name}</strong></div>
+                <div style="font-size:11px;color:rgba(200,220,255,0.72);line-height:1.45">${u.desc}</div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+
+    // Final-level warning banner
+    const finalBanner = isFinal ? `
+      <div style="margin-top:16px;padding:12px 16px;background:rgba(180,0,0,0.18);border:1.5px solid rgba(255,40,0,0.4);border-radius:10px;color:#ff9977;font-size:13px;line-height:1.7">
+        ⚠️ <strong>THE FINAL STAND</strong> — The world is on the edge of destruction.<br>
+        The map transforms into a cursed wasteland. Unlimited camps &amp; soldiers available.<br>
+        Destroy the <strong>Enemy Camp</strong> to awaken the <strong>TITAN</strong> — defeat it to win forever.
+      </div>` : '';
+
+    const btnStyle = isFinal
+      ? 'background:#cc1100;color:#fff;box-shadow:0 0 28px rgba(200,0,0,0.6)'
+      : 'background:#3bd17a;color:#000;box-shadow:0 0 20px rgba(59,209,122,0.4)';
+    const btnText  = isFinal ? '⚔ ENTER THE FINAL STAND ⚔' : `▶ START LEVEL ${levelDef.id}`;
+    const bgGrad   = isFinal
+      ? 'linear-gradient(160deg,#0d0005 0%,#1a0010 40%,#2d0020 100%)'
+      : 'linear-gradient(160deg,#0d1b2a 0%,#1b2838 40%,#1a2d1a 100%)';
+    const titleClr = isFinal ? '#ff4422' : '#ffd700';
+    const titleShd = isFinal ? '0 0 36px rgba(255,40,0,0.7)' : '0 0 28px rgba(255,215,0,0.5)';
+
+    // Build or reuse the overlay div
+    let panel = document.getElementById('level-intro');
+    if (!panel) { panel = document.createElement('div'); panel.id = 'level-intro'; document.body.appendChild(panel); }
+    panel.style.cssText = `position:fixed;top:0;left:0;right:0;bottom:0;background:${bgGrad};display:flex;align-items:center;justify-content:center;z-index:200;overflow-y:auto;font-family:sans-serif;color:#fff`;
+    panel.innerHTML = `
+      <div style="text-align:center;max-width:740px;padding:32px 20px;width:100%">
+        <div style="font-size:11px;font-weight:bold;letter-spacing:4px;color:rgba(255,255,255,0.38);text-transform:uppercase;margin-bottom:6px">Level ${levelDef.id}</div>
+        <div style="font-size:${isFinal ? 38 : 30}px;font-weight:900;color:${titleClr};letter-spacing:3px;text-shadow:${titleShd};margin-bottom:8px">${levelDef.name.toUpperCase()}</div>
+        <div style="color:rgba(255,255,255,0.55);font-size:14px;margin-bottom:20px;max-width:560px;margin-inline:auto">${levelDef.desc}</div>
+
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:18px">
+          <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 20px">
+            <div style="font-size:24px;font-weight:bold">${levelDef.waves}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;text-transform:uppercase">Waves</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 20px">
+            <div style="font-size:24px;font-weight:bold">${Math.round(levelDef.difficulty * 100)}%</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;text-transform:uppercase">Difficulty</div>
+          </div>
+        </div>
+
+        <div class="ts-section-title">Enemies</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:6px">
+          ${levelDef.enemies.map(e => `<span style="padding:4px 12px;background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.3);border-radius:20px;font-size:12px">${ENEMY_ICONS[e]||'👾'} ${ENEMIES[e]?.name || e}</span>`).join('')}
+        </div>
+
+        ${unlocksHtml}
+        ${finalBanner}
+
+        <button id="li-start" style="margin-top:22px;padding:14px 48px;font-size:18px;font-weight:bold;${btnStyle};border:none;border-radius:8px;cursor:pointer;letter-spacing:2px;transition:all 0.15s">
+          ${btnText}
+        </button>
+      </div>`;
+
+    document.getElementById('li-start').onclick = () => {
+      panel.style.display = 'none';
+      this.startLevel(levelDef);
+    };
+  }
+
   startLevel(levelDef) {
     this.currentLevel = levelDef;
     const variant = levelDef.mapVariant || 0;
     this.path = makePath(this.canvas.width, this.canvas.height, variant);
-    this.map  = new GameMap(this.path, this.canvas.width, this.canvas.height);
+    const isFinalLevel = levelDef.id === 100;
+    this.map  = new GameMap(this.path, this.canvas.width, this.canvas.height, isFinalLevel);
     const pathEnd = this.path[this.path.length - 1];
     this.castleArcher.x = pathEnd.x - 42;
     this.castleArcher.y = pathEnd.y - 38;
@@ -2451,6 +2926,12 @@ class Game {
     this.selectedTower = null;
     this.workers = 0; this.workerTimer = 0;
     this.towerPlaceCount = 0; // reset tower count for this game
+    this.enemyCampHp    = 50000;
+    this.enemyCampMaxHp = 50000;
+    this.titanSpawned   = false;
+    this.cutsceneTimer  = 0;
+    this.cutscenePhase  = 0;
+    this._cutsceneActors = [];
 
     // Reset power-up state for new level
     this.rageTimer = 0; this.shieldTimer = 0; this.timeSlowTimer = 0; this.poisonTimer = 0; this.berserkTimer = 0;
@@ -2464,6 +2945,13 @@ class Game {
     // Reset tower _savedFireRate flags
     for (const t of this.towers) t._savedFireRate = null;
 
+    // Kick off the opening story banner
+    this.storyBannerTimer = 360;  // 6 seconds
+    this.storyBannerTitle = levelDef.name.toUpperCase();
+    this.storyBannerText  = levelDef.desc;
+    this.waveBannerTimer  = 0;
+    this._lastAnnouncedWave = 0;
+
     this.waveManager.setLevel(levelDef);
     this.selectedType = 'camp_basic'; // default to camp tab for clarity
     // Actually default to first tower type
@@ -2474,6 +2962,7 @@ class Game {
 
     // Apply consumable loadout queued from the gem shop
     this._pendingTriggers = [];
+    this.activeLoadout = [];
     this._applyConsumables();
 
     // Apply pending wheel reward (from daily spin)
@@ -2549,7 +3038,7 @@ class Game {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
     // Version badge — helps confirm the right code is loaded
-    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v31';
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v40';
 
     // Draw map background
     this._drawTitleBg();
@@ -2558,40 +3047,97 @@ class Game {
     levelsDiv.innerHTML = '';
     for (const lvl of LEVELS) {
       const locked = lvl.id > maxUnlocked;
+      const theme = lvl.theme;
       const btn = document.createElement('button');
       btn.className = 'ts-lvl-btn' + (locked ? ' locked' : ' unlocked') +
                       (this.selectedLevelId === lvl.id && !locked ? ' selected' : '');
       btn.dataset.lvlId = lvl.id;
       btn.title = `${lvl.name}: ${lvl.desc} (${lvl.waves} waves)`;
-      btn.innerHTML = `<div class="lv-num">LV${lvl.id}</div>
-        <div class="lv-name">${lvl.name.replace(/ \d+$/, '')}</div>
-        ${locked ? '<div style="font-size:12px">🔒</div>' : ''}`;
-      if (!locked) {
+
+      const glowStyle = !locked ? `box-shadow: 0 0 8px ${theme.glow}, inset 0 0 12px rgba(0,0,0,0.4);` : '';
+      const borderClr = locked ? '#333' : theme.border;
+      const bgStyle   = locked ? 'background:#111' : `background:${theme.bg}`;
+
+      btn.style.cssText = `${bgStyle};border:2px solid ${borderClr};border-radius:6px;padding:0;margin:2px;cursor:${locked ? 'default' : 'pointer'};width:72px;height:76px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:all 0.15s;overflow:hidden;${glowStyle}`;
+
+      if (locked) {
+        btn.innerHTML = `
+          <div style="font-size:9px;color:#555;letter-spacing:1px;text-transform:uppercase">LV${lvl.id}</div>
+          <div style="font-size:18px;opacity:0.3">🔒</div>
+          <div style="font-size:8px;color:#333;letter-spacing:1px">LOCKED</div>`;
+      } else {
+        const isSelected = this.selectedLevelId === lvl.id;
+        const numClr = lvl.id === 100 ? '#ffaa00' : '#fff';
+        btn.innerHTML = `
+          <div style="font-size:8px;color:rgba(255,255,255,0.38);letter-spacing:1.5px">LV</div>
+          <div style="font-size:${lvl.id >= 100 ? 18 : lvl.id >= 10 ? 20 : 22}px;font-weight:900;color:${numClr};text-shadow:0 0 8px ${theme.glow};line-height:1">${lvl.id}</div>
+          <div style="font-size:16px;line-height:1;margin:1px 0">${theme.icon}</div>
+          <div style="font-size:6px;font-weight:bold;color:${theme.border};letter-spacing:1px;text-transform:uppercase;text-align:center;padding:0 2px;line-height:1.2;max-width:68px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${theme.word}</div>`;
+        btn.onmouseenter = () => {
+          if (!isSelected) btn.style.transform = 'scale(1.1)';
+        };
+        btn.onmouseleave = () => { btn.style.transform = ''; };
         btn.onclick = () => {
           this.selectedLevelId = lvl.id;
-          document.querySelectorAll('.ts-lvl-btn').forEach(b =>
-            b.classList.toggle('selected', parseInt(b.dataset.lvlId) === lvl.id));
+          document.querySelectorAll('.ts-lvl-btn').forEach(b => {
+            b.classList.toggle('selected', parseInt(b.dataset.lvlId) === lvl.id);
+            b.style.transform = '';
+          });
           document.getElementById('ts-play-btn').textContent = `▶ PLAY LEVEL ${lvl.id}`;
         };
       }
       levelsDiv.appendChild(btn);
     }
 
+    // ── Advancement list — vertical rows grouped by category ──────────────
     const achDiv = document.getElementById('ts-achievements');
     achDiv.innerHTML = '';
-    for (const ach of ACHIEVEMENTS) {
-      const div = document.createElement('div');
-      div.className = 'ts-ach' + (achUnlocked.includes(ach.id) ? ' unlocked' : '');
-      div.textContent = `${ach.icon} ${ach.name}`;
-      div.title = ach.desc;
-      achDiv.appendChild(div);
+    achDiv.style.cssText = 'width:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:0';
+
+    const groups = [
+      { label: '⚔ Progression',  ids: ['first_win','soldier','warrior','champion','legend','veteran','endure','master','unstoppable','mythic','ancient'] },
+      { label: '💀 Combat',       ids: ['dragon_slayer','wave5','kill100','kill500','no_damage','nuke','freeze'] },
+      { label: '🏗 Builder',      ids: ['fortified','tower10','miner','camp5','all_towers','soldier5','soldier15'] },
+      { label: '✨ Special',      ids: ['rich','upgrade_max','shop_buyer','daily_spin','general'] },
+    ];
+
+    for (const group of groups) {
+      const groupAchs = ACHIEVEMENTS.filter(a => group.ids.includes(a.id));
+      if (!groupAchs.length) continue;
+      const unlockedCount = groupAchs.filter(a => achUnlocked.includes(a.id)).length;
+
+      // Group header
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 10px 4px;margin-top:10px;border-bottom:1px solid rgba(255,255,255,0.1)';
+      header.innerHTML = `
+        <span style="font-size:11px;font-weight:bold;letter-spacing:2px;color:rgba(255,255,255,0.45);text-transform:uppercase">${group.label}</span>
+        <span style="font-size:10px;color:rgba(255,215,0,0.55)">${unlockedCount}/${groupAchs.length}</span>`;
+      achDiv.appendChild(header);
+
+      for (const ach of groupAchs) {
+        const done = achUnlocked.includes(ach.id);
+        const row = document.createElement('div');
+        row.style.cssText = `display:flex;align-items:center;gap:10px;padding:7px 10px;
+          border-bottom:1px solid rgba(255,255,255,0.04);
+          background:${done ? 'rgba(255,215,0,0.05)' : 'transparent'};
+          opacity:${done ? '1' : '0.38'};
+          transition:opacity 0.2s`;
+        row.innerHTML = `
+          <span style="font-size:18px;width:24px;text-align:center">${ach.icon}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:bold;color:${done ? '#ffd700' : '#bbb'};white-space:nowrap">${ach.name}</div>
+            <div style="font-size:10px;color:rgba(200,200,200,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ach.desc}</div>
+          </div>
+          <span style="font-size:14px;flex-shrink:0">${done ? '✅' : '🔒'}</span>`;
+        achDiv.appendChild(row);
+      }
     }
 
     const playBtn = document.getElementById('ts-play-btn');
     playBtn.textContent = `▶ PLAY LEVEL ${this.selectedLevelId}`;
     playBtn.onclick = () => {
       const lvl = LEVELS.find(l => l.id === this.selectedLevelId);
-      if (lvl) this.startLevel(lvl);
+      if (lvl) this._showLevelIntro(lvl);
     };
 
     // Show gem balance and legend title
@@ -2713,22 +3259,25 @@ class Game {
 
     this.typeKeys.forEach(key => {
       if (!allowedTowers.includes(key)) return;
-      const btn = document.createElement('button');
-      btn.id = 'btn-' + key;
+      // Parse e.g. '1 Archer $50' → name='Archer', cost='$50'
+      const rawLabel = TYPES[key].label;
+      const costMatch = rawLabel.match(/\$\d+/);
+      const cost = costMatch ? costMatch[0] : '';
+      const name = rawLabel.replace(/^[\w]\s+/, '').replace(/\$\d+.*$/, '').trim();
+      const btn = _makeTileBtn('btn-' + key, key, name, cost);
       btn.className = 'btn' + (key === this.selectedType ? ' selected' : '');
-      btn.textContent = TYPES[key].label;
-      btn.style.background = TYPES[key].color;
       btn.onclick = () => this._selectType(key);
       ui.appendChild(btn);
     });
 
     this.trapKeys.forEach(key => {
       if (!allowedTraps.includes(key)) return;
-      const btn = document.createElement('button');
-      btn.id = 'btn-trap_' + key;
+      const rawLabel = TRAPS[key].label;
+      const costMatch = rawLabel.match(/\$\d+/);
+      const cost = costMatch ? costMatch[0] : '';
+      const name = rawLabel.replace(/^[\w]\s+/, '').replace(/\$\d+.*$/, '').trim();
+      const btn = _makeTileBtn('btn-trap_' + key, key, name, cost);
       btn.className = 'btn' + ('trap_' + key === this.selectedType ? ' selected' : '');
-      btn.textContent = TRAPS[key].label;
-      btn.style.background = TRAPS[key].color;
       btn.style.outline = '2px solid #ff8800';
       btn.onclick = () => this._selectType('trap_' + key);
       ui.appendChild(btn);
@@ -2736,22 +3285,22 @@ class Game {
 
     // No mine button — mines are pre-placed only (players can't buy them)
 
-    // 5 camp type buttons (one per camp type)
+    // Camp buttons — only show camps unlocked for this level
+    const allowedCamps = this.currentLevel ? this.currentLevel.camps : Object.keys(CAMP_TYPES);
     for (const [typeName, cfg] of Object.entries(CAMP_TYPES)) {
-      const btn = document.createElement('button');
-      btn.id = 'btn-camp_' + typeName;
+      if (!allowedCamps.includes(typeName)) continue; // not unlocked yet
+      const rawLabel = cfg.label;
+      const costMatch = rawLabel.match(/\$\d+/);
+      const cost = costMatch ? costMatch[0] : '';
+      const name = rawLabel.replace(/\$\d+.*$/, '').trim();
+      const btn = _makeTileBtn('btn-camp_' + typeName, 'camp_' + typeName, name, cost);
       btn.className = 'btn' + (this.selectedType === 'camp_' + typeName ? ' selected' : '');
-      btn.style.background = cfg.color;
       btn.style.outline = '2px solid #ffd700';
-      btn.textContent = cfg.label;
       btn.onclick = () => this._selectType('camp_' + typeName);
       ui.appendChild(btn);
     }
 
-    const wBtn = document.createElement('button');
-    wBtn.id = 'btn-worker';
-    wBtn.className = 'btn';
-    wBtn.style.background = '#7a4a1a';
+    const wBtn = _makeTileBtn('btn-worker', 'worker', 'Worker', '$35');
     wBtn.onclick = () => this.hireWorker();
     ui.appendChild(wBtn);
 
@@ -2781,6 +3330,17 @@ class Game {
     helpBtn.title = 'Help (H)';
     helpBtn.onclick = () => { this.helpOpen = !this.helpOpen; };
     ui.appendChild(helpBtn);
+
+    // Sell button — only visible when a tower is selected
+    const sellBtn = document.createElement('button');
+    sellBtn.id = 'btn-sell';
+    sellBtn.className = 'btn';
+    sellBtn.style.background = '#8b1a1a';
+    sellBtn.style.color = '#ffd700';
+    sellBtn.style.display = 'none';
+    sellBtn.title = 'Sell selected tower (Space)';
+    sellBtn.onclick = () => { if (this.selectedTower && !this.paused) this.sellTower(this.selectedTower); };
+    ui.appendChild(sellBtn);
 
     this._updateButtons();
   }
@@ -2813,12 +3373,23 @@ class Game {
       if (!btn) continue;
       const atLimit = this.camps.length >= this.campLimit;
       btn.style.opacity = (this.money >= cfg.cost && !atLimit) ? '0.9' : '0.35';
-      btn.textContent = `${cfg.label} (${this.camps.length}/${this.campLimit})`;
+      btn.textContent = `${cfg.label} (${this.camps.length})`;
     }
     const wBtn = document.getElementById('btn-worker');
     if (wBtn) {
       wBtn.style.opacity = this.money >= 35 && this.workers < 5 ? '0.9' : '0.35';
       wBtn.textContent = `W Worker $35 (${this.workers}/5)`;
+    }
+    // Sell button — show only when a tower is selected
+    const sellBtn = document.getElementById('btn-sell');
+    if (sellBtn) {
+      if (this.selectedTower) {
+        const refund = Math.floor(this.selectedTower.cost / 2);
+        sellBtn.textContent = `💰 SELL ($${refund})`;
+        sellBtn.style.display = '';
+      } else {
+        sellBtn.style.display = 'none';
+      }
     }
   }
 
@@ -2858,6 +3429,22 @@ class Game {
       if (this.wheelOpen) { this._handleWheelClick(x, y); return; }
 
       if (this.gameOver || this.levelComplete || this.titleActive) return;
+      if (this.paused) return; // can't place or select anything while paused
+
+      // Check loadout USE button clicks
+      if (this._loadoutBtnBounds) {
+        for (const b of this._loadoutBtnBounds) {
+          if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+            const idx = this.activeLoadout.indexOf(b.id);
+            if (idx !== -1) {
+              this._fireTrigger(b.id);
+              this.activeLoadout.splice(idx, 1);
+              this.flash(`${b.id.replace('pow_','').replace('sp_','').toUpperCase()} activated!`);
+            }
+            return;
+          }
+        }
+      }
 
       // 3D view: exit button or shoot — but suppress if user was rotating camera
       if (this.viewMode === '3d') {
@@ -2905,6 +3492,7 @@ class Game {
     this.canvas.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (this.gameOver || this.levelComplete || this.titleActive) return;
+      if (this.paused) return; // can't sell while paused
       if (this.viewMode === '3d-soldier') { this._toggleBlock3DSoldier(); return; }
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
@@ -2912,6 +3500,15 @@ class Game {
       if (tower) { this.sellTower(tower); return; }
       const trap = this.traps.find(t => Math.hypot(t.x-x, t.y-y) < 22);
       if (trap) { this.sellTrap(trap); return; }
+      const camp = this.camps.find(c => Math.hypot(c.x-x, c.y-y) < 30);
+      if (camp) {
+        const refund = Math.floor(camp.campType.cost / 2);
+        this.money = Math.min(this.money + refund, MAX_MONEY);
+        this.camps = this.camps.filter(c2 => c2 !== camp);
+        this.flash(`Camp sold for $${refund}`);
+        this._updateButtons();
+        return;
+      }
       const mine = this.mines.find(m => Math.hypot(m.x-x, m.y-y) < 22);
       if (mine) {
         const refund = Math.floor(MINE.cost / 2);
@@ -2936,14 +3533,19 @@ class Game {
         }
         if (this.viewMode === '3d-soldier') { this._exit3DSoldier(); return; }
         if (this.viewMode === '3d') { this._exit3D(); return; }
-        this.selectedTower = null; return;
+        this.selectedTower = null; this._updateButtons(); return;
       }
       if (e.code === 'Space' && this.viewMode === '3d-soldier') { e.preventDefault(); this.viewSoldier?.jump(); return; }
+      // Space sells the selected tower (if one is selected); otherwise toggles pause
       if (e.code === 'Space' && !this.titleActive && !this.gameOver && !this.levelComplete && this.viewMode !== '3d' && this.viewMode !== '3d-soldier') {
         e.preventDefault();
-        this.paused = !this.paused;
-        const btn = document.getElementById('btn-pause');
-        if (btn) btn.textContent = this.paused ? '▶' : '⏸';
+        if (this.selectedTower && !this.paused) {
+          this.sellTower(this.selectedTower);
+        } else {
+          this.paused = !this.paused;
+          const btn = document.getElementById('btn-pause');
+          if (btn) btn.textContent = this.paused ? '▶' : '⏸';
+        }
         return;
       }
       if ((e.key === 'h' || e.key === 'H') && !this.titleActive) { this.helpOpen = !this.helpOpen; return; }
@@ -3011,6 +3613,327 @@ class Game {
     this.ctx.moveTo(this.selectedTower.x, this.selectedTower.y);
     this.ctx.lineTo(this.mouse.x, this.mouse.y);
     this.ctx.stroke(); this.ctx.setLineDash([]);
+  }
+
+  _drawCampHpBar() {
+    if (this.currentLevel?.id !== 100) return; // only on the final level
+    if (this.titanSpawned && this.cutscenePhase === 0) return; // titan already out, hide bar
+    const sp = this.path[0];
+    const barW = 100, barH = 8;
+    const bx = sp.x - 5, by = sp.y - 80;
+    const pct = Math.max(0, this.enemyCampHp / this.enemyCampMaxHp);
+    // Background
+    this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    this.ctx.fillRect(bx - 2, by - 2, barW + 4, barH + 4);
+    // Health fill — green → yellow → red
+    const hue = Math.floor(pct * 120);
+    this.ctx.fillStyle = `hsl(${hue},90%,45%)`;
+    this.ctx.fillRect(bx, by, barW * pct, barH);
+    // Label
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = 'bold 9px sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`CAMP  ${Math.ceil(this.enemyCampHp).toLocaleString()} / ${this.enemyCampMaxHp.toLocaleString()}`, bx + barW/2, by - 4);
+    this.ctx.textAlign = 'left';
+  }
+
+  _drawCutscene() {
+    if (this.currentLevel?.id !== 100 || this.cutscenePhase === 0) return;
+    const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
+    const p = this.cutscenePhase === 1 ? 1 - this.cutsceneTimer / 240 : 1;
+    const t = Date.now() / 1000;
+
+    // Dark overlay
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(0.88, p * 1.4)})`;
+    ctx.fillRect(0, 0, W, H);
+
+    // Screen shake in phase 2
+    const shake = this.cutscenePhase >= 2 ? Math.sin(t * 20) * (this.cutscenePhase === 2 ? 7 : 3) : 0;
+    if (shake) { ctx.save(); ctx.translate(shake, shake * 0.4); }
+
+    const titanAlpha = this.cutscenePhase === 1 ? p : 1;
+    // Titan rises up from below in phase 1
+    const riseOffset = this.cutscenePhase === 1 ? H * 0.22 * (1 - p) : 0;
+
+    ctx.save();
+    ctx.globalAlpha = titanAlpha;
+    ctx.translate(0, riseOffset);
+
+    const tx = W / 2, ty = H * 0.78;
+    const sc = Math.min(W, H) * 0.0028;
+
+    // ── Draw the Titan ─────────────────────────────────────────────────────
+    const self = this;
+    function drawTitanBody(ctx, tx, ty, s, t) {
+      // Ground shockwave / impact glow
+      const impactGrad = ctx.createRadialGradient(tx, ty, 0, tx, ty, s * 85);
+      impactGrad.addColorStop(0,   `rgba(150,0,0,${0.5 + 0.15*Math.sin(t*3)})`);
+      impactGrad.addColorStop(0.5, 'rgba(60,0,30,0.2)');
+      impactGrad.addColorStop(1,   'transparent');
+      ctx.fillStyle = impactGrad;
+      ctx.beginPath(); ctx.ellipse(tx, ty, s*90, s*20, 0, 0, Math.PI*2); ctx.fill();
+
+      // Ground cracks
+      for (let i = 0; i < 8; i++) {
+        const a = (i/8)*Math.PI*2;
+        const len = s*(30 + Math.sin(t*1.5+i)*8);
+        ctx.strokeStyle = `rgba(180,40,0,${0.4+0.2*Math.sin(t*2+i)})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(tx + Math.cos(a)*s*6, ty + Math.sin(a)*s*3);
+        ctx.lineTo(tx + Math.cos(a)*len, ty + Math.sin(a)*len*0.4);
+        ctx.stroke();
+      }
+
+      // LEGS
+      const legW = s*20, legH = s*85;
+      const legY = ty - legH;
+      for (const [lx, flip] of [[tx - s*16, 1],[tx + s*6, -1]]) {
+        const lg = ctx.createLinearGradient(lx, 0, lx+legW, 0);
+        lg.addColorStop(0, flip>0?'#0a0a14':'#18152e');
+        lg.addColorStop(0.5, '#1e1a30');
+        lg.addColorStop(1, flip>0?'#18152e':'#0a0a14');
+        ctx.fillStyle = lg;
+        ctx.fillRect(lx, legY, legW, legH);
+        // Crack glow
+        ctx.strokeStyle = `rgba(150,0,255,${0.35+0.2*Math.sin(t*2.5+flip)})`; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(lx+legW*(flip>0?0.3:0.6),legY+legH*0.1); ctx.lineTo(lx+legW*(flip>0?0.5:0.4),legY+legH*0.5); ctx.lineTo(lx+legW*(flip>0?0.25:0.65),legY+legH*0.75); ctx.stroke();
+      }
+
+      // TORSO
+      const torsoW = s*70, torsoH = s*95;
+      const torsoX = tx - torsoW/2, torsoY = legY - torsoH;
+      const tg = ctx.createLinearGradient(torsoX, 0, torsoX+torsoW, 0);
+      tg.addColorStop(0,'#06050f'); tg.addColorStop(0.25,'#12102a');
+      tg.addColorStop(0.5,'#1a1535'); tg.addColorStop(0.75,'#12102a'); tg.addColorStop(1,'#06050f');
+      ctx.fillStyle = tg; ctx.fillRect(torsoX, torsoY, torsoW, torsoH);
+      ctx.strokeStyle='rgba(80,40,180,0.25)'; ctx.lineWidth=2; ctx.strokeRect(torsoX,torsoY,torsoW,torsoH);
+      // Chest cracks glowing
+      ctx.strokeStyle=`rgba(160,40,255,${0.5+0.3*Math.sin(t*2.5)})`; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(tx-s*4,torsoY+torsoH*0.2); ctx.lineTo(tx+s*7,torsoY+torsoH*0.45); ctx.lineTo(tx-s*2,torsoY+torsoH*0.65); ctx.lineTo(tx+s*10,torsoY+torsoH*0.85); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(tx-s*18,torsoY+torsoH*0.3); ctx.lineTo(tx-s*7,torsoY+torsoH*0.55); ctx.stroke();
+
+      // SHOULDERS & SPIKES
+      const shW = s*26, shH = s*20;
+      for (const [shX,flip] of [[torsoX-shW*0.55,1],[torsoX+torsoW-shW*0.45,-1]]) {
+        const sg = ctx.createLinearGradient(shX,0,shX+shW,0);
+        sg.addColorStop(0,flip>0?'#08060e':'#141230'); sg.addColorStop(1,flip>0?'#141230':'#08060e');
+        ctx.fillStyle=sg;
+        ctx.beginPath(); ctx.roundRect(shX,torsoY+s*4,shW,shH,s*3); ctx.fill();
+        ctx.strokeStyle='rgba(80,40,180,0.3)'; ctx.lineWidth=1.5; ctx.stroke();
+        for (let sp=0;sp<3;sp++){
+          const sx=shX+(sp+0.5)*shW/3;
+          ctx.fillStyle='#0c0a18';
+          ctx.beginPath(); ctx.moveTo(sx-s*2.5,torsoY+s*4); ctx.lineTo(sx,torsoY-s*5); ctx.lineTo(sx+s*2.5,torsoY+s*4); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle=`rgba(100,0,255,0.3)`; ctx.lineWidth=0.8; ctx.stroke();
+        }
+      }
+
+      // ARMS — one raised for swatting (phase 2), one at side
+      const armW = s*15, armH = s*80;
+      for (const [axPos, side] of [[torsoX-shW*0.4, 'left'],[torsoX+torsoW-s*15+shW*0.05,'right']]) {
+        const isSwatArm = side === 'right';
+        const swatLift  = isSwatArm && self.cutscenePhase >= 2 ? Math.sin(t*3)*s*25 : 0;
+        const ag = ctx.createLinearGradient(axPos,0,axPos+armW,0);
+        ag.addColorStop(0,side==='left'?'#080610':'#141030'); ag.addColorStop(1,side==='left'?'#141030':'#080610');
+        ctx.fillStyle=ag;
+        ctx.beginPath(); ctx.roundRect(axPos, torsoY+s*20-swatLift, armW, armH, s*3); ctx.fill();
+        // Glow veins
+        ctx.strokeStyle=`rgba(180,0,255,${0.25+0.15*Math.sin(t*2+(side==='left'?0:1))})`; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(axPos+armW*0.5,torsoY+s*25-swatLift); ctx.bezierCurveTo(axPos+armW*0.3,torsoY+s*55-swatLift,axPos+armW*0.6,torsoY+s*70-swatLift,axPos+armW*0.5,torsoY+s*95-swatLift); ctx.stroke();
+        // Claws
+        const clawY = torsoY+s*20-swatLift+armH;
+        for (let c=0;c<4;c++){
+          const cx2=axPos+(c+0.5)*armW/4;
+          ctx.fillStyle='#0a0814';
+          ctx.beginPath(); ctx.moveTo(cx2-s*2,clawY); ctx.lineTo(cx2+(c%2===0?-s*4:s*3),clawY+s*12); ctx.lineTo(cx2+s*2,clawY); ctx.closePath(); ctx.fill();
+        }
+        // SWAT IMPACT FLASH on phase 2
+        if (isSwatArm && self.cutscenePhase === 2) {
+          const impactAlpha = 0.5 + 0.5 * Math.abs(Math.sin(t * 3));
+          ctx.fillStyle = `rgba(255,80,0,${impactAlpha * 0.4})`;
+          ctx.beginPath(); ctx.ellipse(axPos+armW/2, clawY, s*25, s*10, 0, 0, Math.PI*2); ctx.fill();
+        }
+      }
+
+      // NECK
+      ctx.fillStyle='#0f0d1e'; ctx.fillRect(tx-s*8,torsoY-s*18,s*16,s*20);
+
+      // ── ROUND HEAD — movie titan style ──────────────────────────────────
+      const headR = s * 30;   // radius of the round skull
+      const headCX = tx;
+      const headCY = torsoY - s*18 - headR * 0.82;
+
+      // Head glow aura
+      const headAura = ctx.createRadialGradient(headCX, headCY, headR*0.5, headCX, headCY, headR*2.2);
+      headAura.addColorStop(0, 'transparent');
+      headAura.addColorStop(0.6, `rgba(60,0,120,${0.15+0.08*Math.sin(t*2)})`);
+      headAura.addColorStop(1, 'transparent');
+      ctx.fillStyle = headAura;
+      ctx.beginPath(); ctx.arc(headCX, headCY, headR*2.2, 0, Math.PI*2); ctx.fill();
+
+      // Skull — round, slightly squashed
+      const headGrad = ctx.createRadialGradient(headCX-headR*0.3, headCY-headR*0.3, headR*0.1, headCX, headCY, headR);
+      headGrad.addColorStop(0, '#1e1835');
+      headGrad.addColorStop(0.5, '#14102a');
+      headGrad.addColorStop(1, '#06050f');
+      ctx.fillStyle = headGrad;
+      ctx.beginPath(); ctx.ellipse(headCX, headCY, headR, headR*0.92, 0, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle='rgba(80,30,160,0.35)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(headCX, headCY, headR, headR*0.92, 0, 0, Math.PI*2); ctx.stroke();
+
+      // Crown spikes — 5 irregular spikes
+      const spikeAngles = [-0.55,-0.28,0,0.28,0.55]; // radians from top
+      for (const sa of spikeAngles) {
+        const baseA = -Math.PI/2 + sa;
+        const spH = headR * (0.55 + Math.abs(sa) * 0.1);
+        const bx1 = headCX + Math.cos(baseA - 0.12) * headR * 0.88;
+        const by1 = headCY + Math.sin(baseA - 0.12) * headR * 0.88;
+        const bx2 = headCX + Math.cos(baseA + 0.12) * headR * 0.88;
+        const by2 = headCY + Math.sin(baseA + 0.12) * headR * 0.88;
+        const tipX = headCX + Math.cos(baseA) * (headR + spH);
+        const tipY = headCY + Math.sin(baseA) * (headR + spH);
+        ctx.fillStyle = '#0a0818';
+        ctx.beginPath(); ctx.moveTo(bx1,by1); ctx.lineTo(tipX,tipY); ctx.lineTo(bx2,by2); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle=`rgba(90,0,200,${0.35+0.15*Math.sin(t*2+sa*3)})`; ctx.lineWidth=1; ctx.stroke();
+      }
+
+      // Brow ridge — heavy
+      ctx.fillStyle='#0a0818';
+      ctx.beginPath(); ctx.ellipse(headCX, headCY-headR*0.2, headR*0.85, headR*0.28, 0, Math.PI, Math.PI*2); ctx.fill();
+
+      // EYES — glowing crimson, large and slightly down-turned
+      for (const [ex, ey] of [[headCX-headR*0.38, headCY-headR*0.1],[headCX+headR*0.38, headCY-headR*0.1]]) {
+        // Socket
+        ctx.fillStyle='#000';
+        ctx.beginPath(); ctx.ellipse(ex, ey, headR*0.22, headR*0.16, 0, 0, Math.PI*2); ctx.fill();
+        // Glow corona
+        const eyeG = ctx.createRadialGradient(ex, ey, 0, ex, ey, headR*0.35);
+        eyeG.addColorStop(0, `rgba(255,30,0,${0.8+0.2*Math.sin(t*4)})`);
+        eyeG.addColorStop(0.5, `rgba(200,0,40,${0.4+0.15*Math.sin(t*4)})`);
+        eyeG.addColorStop(1, 'transparent');
+        ctx.fillStyle=eyeG;
+        ctx.beginPath(); ctx.ellipse(ex, ey, headR*0.35, headR*0.28, 0, 0, Math.PI*2); ctx.fill();
+        // Iris
+        ctx.fillStyle=`rgb(${200+Math.floor(55*Math.sin(t*5))},0,0)`;
+        ctx.beginPath(); ctx.ellipse(ex, ey, headR*0.18, headR*0.14, 0, 0, Math.PI*2); ctx.fill();
+        // Vertical slit pupil
+        ctx.fillStyle='#000';
+        ctx.beginPath(); ctx.ellipse(ex, ey, headR*0.04, headR*0.12, 0, 0, Math.PI*2); ctx.fill();
+      }
+
+      // NOSE — two nostrils, low on the round face
+      ctx.fillStyle='rgba(0,0,0,0.8)';
+      ctx.beginPath(); ctx.ellipse(headCX-headR*0.12, headCY+headR*0.22, headR*0.08, headR*0.06, -0.3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(headCX+headR*0.12, headCY+headR*0.22, headR*0.08, headR*0.06, 0.3, 0, Math.PI*2); ctx.fill();
+
+      // MOUTH — wide grin with rows of teeth
+      const mouthY = headCY + headR * 0.55;
+      const mouthW = headR * 0.78;
+      ctx.fillStyle='#000';
+      ctx.beginPath(); ctx.ellipse(headCX, mouthY, mouthW, headR*0.2, 0, 0, Math.PI); ctx.fill();
+      // Bottom teeth (jagged)
+      for (let i=-4;i<=4;i++){
+        const tx2 = headCX + i * mouthW/4.5;
+        ctx.fillStyle = i%2===0?'#ccccaa':'#bbbb99';
+        ctx.beginPath(); ctx.moveTo(tx2-mouthW/10,mouthY); ctx.lineTo(tx2,mouthY+headR*0.16); ctx.lineTo(tx2+mouthW/10,mouthY); ctx.closePath(); ctx.fill();
+      }
+      // Top teeth (smaller)
+      for (let i=-3;i<=3;i++){
+        const tx2 = headCX + i * mouthW/3.5;
+        ctx.fillStyle='#ccccaa';
+        ctx.beginPath(); ctx.moveTo(tx2-mouthW/12,mouthY); ctx.lineTo(tx2,mouthY-headR*0.12); ctx.lineTo(tx2+mouthW/12,mouthY); ctx.closePath(); ctx.fill();
+      }
+
+      // Dark energy aura around whole titan
+      const aura = ctx.createRadialGradient(tx, torsoY+torsoH*0.4, s*15, tx, torsoY+torsoH*0.4, s*110);
+      aura.addColorStop(0,'transparent');
+      aura.addColorStop(0.55,`rgba(50,0,100,${0.12+0.07*Math.sin(t*2)})`);
+      aura.addColorStop(1,'transparent');
+      ctx.fillStyle=aura;
+      ctx.beginPath(); ctx.ellipse(tx,torsoY+torsoH*0.4,s*110,s*150,0,0,Math.PI*2); ctx.fill();
+
+      // Rising dark particles
+      for (let pi=0;pi<12;pi++){
+        const pt2=(t*0.7+pi*0.22)%1;
+        const px2=tx+Math.sin(pi*2.1+t)*s*35;
+        const py2=(torsoY+torsoH)-pt2*s*180;
+        const pa=pt2<0.2?pt2/0.2:pt2>0.8?(1-pt2)/0.2:1;
+        ctx.fillStyle=`rgba(${pi%2===0?160:90},0,${pi%2===0?40:180},${pa*0.55})`;
+        ctx.beginPath(); ctx.arc(px2,py2,s*(1.3+Math.sin(pi+t*2)*0.8),0,Math.PI*2); ctx.fill();
+      }
+    }
+
+    drawTitanBody(ctx, tx, ty, sc, t);
+    ctx.restore(); // restore globalAlpha / riseOffset
+
+    // ── Draw flung soldiers ─────────────────────────────────────────────────
+    if (this.cutscenePhase >= 2) {
+      for (const a of this._cutsceneActors) {
+        if (a.dead && a.kind !== 'strong') continue;
+        ctx.save();
+        ctx.globalAlpha = a.alpha;
+        if (a.kind === 'weak') {
+          // Small circle with blood-red flash
+          ctx.fillStyle = a.bounced ? 'rgba(180,0,0,0.4)' : '#c09030';
+          ctx.beginPath(); ctx.arc(a.x, a.y, 5, 0, Math.PI*2); ctx.fill();
+        } else {
+          // Armored soldier silhouette — simple stick figure
+          const hit = a.hp < 3;
+          ctx.fillStyle = hit ? '#ff4444' : '#8899aa';
+          ctx.fillRect(a.x-4, a.y-8, 8, 10); // torso
+          ctx.beginPath(); ctx.arc(a.x, a.y-12, 5, 0, Math.PI*2); ctx.fill(); // head
+          ctx.strokeStyle = hit ? '#ff6666' : '#667788'; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.moveTo(a.x-8,a.y-4); ctx.lineTo(a.x+8,a.y-4); ctx.stroke(); // arms
+          ctx.beginPath(); ctx.moveTo(a.x,a.y+2); ctx.lineTo(a.x-5,a.y+14); ctx.stroke(); // left leg
+          ctx.beginPath(); ctx.moveTo(a.x,a.y+2); ctx.lineTo(a.x+5,a.y+14); ctx.stroke(); // right leg
+          if (hit) {
+            // Damage flash
+            ctx.fillStyle='rgba(255,0,0,0.4)';
+            ctx.beginPath(); ctx.arc(a.x, a.y-6, 8, 0, Math.PI*2); ctx.fill();
+          }
+        }
+        // Speed trail
+        if (!a.dead && (Math.abs(a.vx) > 1 || Math.abs(a.vy) > 1)) {
+          ctx.strokeStyle = `rgba(255,120,0,${a.alpha * 0.4})`;
+          ctx.lineWidth=2;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(a.x - a.vx*4, a.y - a.vy*4); ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    // ── Cinematic text ──────────────────────────────────────────────────────
+    ctx.save();
+    ctx.textAlign = 'center';
+
+    if (this.cutscenePhase === 1) {
+      ctx.shadowColor='#ff0000'; ctx.shadowBlur=50;
+      ctx.fillStyle=`rgba(255,30,0,${p})`;
+      ctx.font=`bold ${Math.floor(W*0.058)}px sans-serif`;
+      ctx.fillText('THE CAMP FALLS!', W/2, H*0.10);
+      ctx.shadowColor='#ffaa00'; ctx.shadowBlur=18;
+      ctx.fillStyle=`rgba(255,200,50,${p})`;
+      ctx.font=`bold ${Math.floor(W*0.026)}px sans-serif`;
+      ctx.fillText('Something stirs beneath the ruins...', W/2, H*0.17);
+    }
+
+    if (this.cutscenePhase === 2) {
+      ctx.shadowColor='#cc00ff'; ctx.shadowBlur=55;
+      const pulse = 0.88 + 0.12*Math.sin(t*6);
+      ctx.fillStyle=`rgb(${200+Math.floor(55*Math.sin(t*5))},0,${200+Math.floor(55*Math.sin(t*4))})`;
+      ctx.font=`bold ${Math.floor(W*0.056*pulse)}px sans-serif`;
+      ctx.fillText('⚡ THE TITAN AWAKENS! ⚡', W/2, H*0.09);
+      ctx.shadowColor='#ff2200'; ctx.shadowBlur=25;
+      ctx.fillStyle='#ffcc44';
+      ctx.font=`bold ${Math.floor(W*0.022)}px sans-serif`;
+      ctx.fillText('Soldiers are crushed like insects.', W/2, H*0.17);
+      ctx.fillStyle='rgba(255,80,80,0.85)';
+      ctx.fillText('Destroy it — or the world falls.', W/2, H*0.215);
+    }
+
+    ctx.shadowBlur=0; ctx.restore();
+    if (shake) ctx.restore();
   }
 
   _drawHUD() {
@@ -3085,6 +4008,47 @@ class Game {
     } else {
       this._upgradePanelBounds = null;
     }
+
+    // Active loadout items — USE buttons shown during gameplay
+    if (this.activeLoadout.length > 0) {
+      const ITEM_ICONS = {
+        pow_airstrike:'✈️', pow_meteor:'☄️', pow_freeze:'❄️',
+        pow_lightning:'⚡', pow_poison:'☠️', sp_nuke:'💣', sp_berserk:'😤'
+      };
+      const ITEM_NAMES = {
+        pow_airstrike:'AIRSTRIKE', pow_meteor:'METEOR', pow_freeze:'FREEZE',
+        pow_lightning:'LIGHTNING', pow_poison:'POISON', sp_nuke:'NUKE', sp_berserk:'BERSERK'
+      };
+      this._loadoutBtnBounds = [];
+      const btnW = 68, btnH = 36, gap = 6;
+      const totalW = this.activeLoadout.length * (btnW + gap) - gap;
+      let bx = this.canvas.width / 2 - totalW / 2;
+      const by = this.canvas.height - 58;
+      for (let i = 0; i < this.activeLoadout.length; i++) {
+        const id = this.activeLoadout[i];
+        // Button background
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.strokeStyle = '#ffcc00';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(bx, by, btnW, btnH, 6); ctx.fill(); ctx.stroke();
+        // Icon + label
+        ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(ITEM_ICONS[id] || '⚡', bx + 18, by + 24);
+        ctx.font = 'bold 9px sans-serif';
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillText(ITEM_NAMES[id] || id.toUpperCase(), bx + btnW*0.62, by + 15);
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.font = '8px sans-serif';
+        ctx.fillText('CLICK TO USE', bx + btnW*0.62, by + 27);
+        ctx.textAlign = 'left';
+        // Store bounds for click detection
+        this._loadoutBtnBounds.push({ id, x: bx, y: by, w: btnW, h: btnH });
+        bx += btnW + gap;
+      }
+    } else {
+      this._loadoutBtnBounds = [];
+    }
   }
 
   // Check if a click lands on the upgrade button panel
@@ -3121,6 +4085,105 @@ class Game {
     this.ctx.font = 'bold 22px sans-serif'; this.ctx.textAlign = 'center';
     this.ctx.fillText(this.flashMsg, this.canvas.width/2, this.canvas.height/2);
     this.ctx.textAlign = 'left';
+  }
+
+  // ── Opening story banner — cinematic text overlay at level start ──────────
+  _drawStoryBanner() {
+    if (this.storyBannerTimer <= 0) return;
+    const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
+    const total = 360;
+    const t = this.storyBannerTimer;
+    // Fade in during first 60 frames, hold, fade out during last 80 frames
+    const alpha = t > total - 60  ? (total - t) / 60       // fade in
+                : t < 80          ? t / 80                  // fade out
+                : 1;                                        // hold
+
+    // Cinematic letterbox bars top + bottom
+    const barH = H * 0.16;
+    ctx.fillStyle = `rgba(0,0,0,${alpha * 0.92})`;
+    ctx.fillRect(0, 0, W, barH);
+    ctx.fillRect(0, H - barH, W, barH);
+
+    // Semi-dark strip behind title text
+    const stripH = 90;
+    const stripY = H * 0.40;
+    const stripGrad = ctx.createLinearGradient(0, stripY, 0, stripY + stripH);
+    stripGrad.addColorStop(0, `rgba(0,0,0,0)`);
+    stripGrad.addColorStop(0.3, `rgba(0,0,0,${alpha * 0.72})`);
+    stripGrad.addColorStop(0.7, `rgba(0,0,0,${alpha * 0.72})`);
+    stripGrad.addColorStop(1, `rgba(0,0,0,0)`);
+    ctx.fillStyle = stripGrad;
+    ctx.fillRect(0, stripY, W, stripH);
+
+    ctx.save();
+    ctx.textAlign = 'center';
+
+    // Level number — small letterspaced label
+    ctx.fillStyle = `rgba(200,180,100,${alpha * 0.6})`;
+    ctx.font = `bold ${Math.floor(W * 0.016)}px sans-serif`;
+    ctx.letterSpacing = '4px';
+    ctx.fillText(`— LEVEL ${this.currentLevel?.id ?? ''} —`, W / 2, H * 0.42);
+    ctx.letterSpacing = '0px';
+
+    // Level name — large dramatic title
+    const isFinal = this.currentLevel?.id === 100;
+    ctx.shadowColor = isFinal ? '#ff2200' : '#ffcc44';
+    ctx.shadowBlur  = 28 * alpha;
+    ctx.fillStyle   = `rgba(${isFinal ? '255,80,40' : '255,215,80'},${alpha})`;
+    ctx.font = `900 ${Math.floor(W * 0.048)}px sans-serif`;
+    ctx.fillText(this.storyBannerTitle, W / 2, H * 0.485);
+    ctx.shadowBlur = 0;
+
+    // Description text — wrap into two lines if needed
+    ctx.fillStyle = `rgba(210,210,230,${alpha * 0.82})`;
+    ctx.font = `${Math.floor(W * 0.020)}px sans-serif`;
+    const words = this.storyBannerText.split(' ');
+    let line1 = '', line2 = '';
+    // Simple split: first ~half the words on line 1
+    const half = Math.ceil(words.length / 2);
+    // But break at punctuation/em-dash if possible
+    let splitAt = half;
+    for (let i = 2; i < words.length - 1; i++) {
+      if (words[i].endsWith('.') || words[i].endsWith('—') || words[i].endsWith(',')) { splitAt = i + 1; break; }
+    }
+    line1 = words.slice(0, splitAt).join(' ');
+    line2 = words.slice(splitAt).join(' ');
+    ctx.fillText(line1, W / 2, H * 0.535);
+    if (line2) ctx.fillText(line2, W / 2, H * 0.562);
+
+    ctx.restore();
+  }
+
+  // ── Wave announcement banner — dramatic text when each wave begins ─────────
+  _drawWaveBanner() {
+    if (this.waveBannerTimer <= 0) return;
+    const ctx = this.ctx, W = this.canvas.width;
+    const total = 150;
+    const t = this.waveBannerTimer;
+    const alpha = t > total - 30 ? (total - t) / 30
+                : t < 40         ? t / 40
+                : 1;
+    const wave = this._lastAnnouncedWave;
+    const isFinal = this.currentLevel?.id === 100;
+    const color = isFinal ? `rgba(255,60,40,${alpha})` : `rgba(255,220,60,${alpha})`;
+    const glowColor = isFinal ? '#ff2200' : '#ffaa00';
+
+    ctx.save();
+    ctx.textAlign = 'center';
+
+    // Wave number — small label
+    ctx.fillStyle = `rgba(200,200,200,${alpha * 0.55})`;
+    ctx.font = `bold ${Math.floor(W * 0.018)}px sans-serif`;
+    ctx.fillText(`WAVE  ${wave}`, W / 2, 58);
+
+    // Dramatic message — punchy line
+    ctx.shadowColor = glowColor; ctx.shadowBlur = 18 * alpha;
+    ctx.fillStyle = color;
+    ctx.font = `900 ${Math.floor(W * 0.038)}px sans-serif`;
+    ctx.fillText(this.waveBannerText, W / 2, 92);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
   }
 
   _drawHint() {
@@ -3323,7 +4386,7 @@ class Game {
         case 'pow_poison':
         case 'sp_nuke':
         case 'sp_berserk':
-          this._pendingTriggers.push(id); break;
+          this.activeLoadout.push(id); break;   // player clicks USE button during gameplay
         // ── Clone: duplicate first tower ─────────────────────────────────────
         case 'sp_clone': {
           const src = this.towers[0];
