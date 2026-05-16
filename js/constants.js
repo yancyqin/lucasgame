@@ -14,12 +14,13 @@ export const TYPES = {
 // Reward/HP ratio: harder enemies pay out more per HP point
 // Castle HP is 10 000; castleDamage controls how many enemies it takes to lose
 export const ENEMIES = {
-  goblin:      { kind: 'goblin',      color: '#7799bb', speed: 1.0, hp: 8,   size: 10, reward: 4,  castleDamage: 5   },
-  runner:      { kind: 'runner',      color: '#c09030', speed: 2.5, hp: 5,   size: 8,  reward: 5,  castleDamage: 4   },
-  saboteur:    { kind: 'saboteur',    color: '#4a2268', speed: 1.8, hp: 18,  size: 9,  reward: 7,  castleDamage: 8   },
-  ogre:        { kind: 'ogre',        color: '#445566', speed: 0.8, hp: 55,  size: 18, reward: 12, castleDamage: 25  },
-  dragon:      { kind: 'dragon',      color: '#2ea84a', speed: 1.4, hp: 160, size: 24, reward: 20, castleDamage: 120 },
-  dragonRider: { kind: 'dragonRider', color: '#8b0000', speed: 0.9, hp: 320, size: 28, reward: 35, castleDamage: 280 },
+  goblin:      { kind: 'goblin',      name: 'Dark Knight',   color: '#7799bb', speed: 1.0, hp: 8,   size: 10, reward: 4,  castleDamage: 5   },
+  runner:      { kind: 'runner',      name: 'Scout',         color: '#c09030', speed: 2.5, hp: 5,   size: 8,  reward: 5,  castleDamage: 4   },
+  saboteur:    { kind: 'saboteur',    name: 'Trap Wrecker',  color: '#4a2268', speed: 1.8, hp: 18,  size: 9,  reward: 7,  castleDamage: 8   },
+  ogre:        { kind: 'ogre',        name: 'Giant',         color: '#445566', speed: 0.8, hp: 55,  size: 18, reward: 12, castleDamage: 25  },
+  dragon:      { kind: 'dragon',      name: 'Forest Dragon', color: '#2ea84a', speed: 1.2, hp: 130, size: 24, reward: 20, castleDamage: 120 },
+  dragonRider: { kind: 'dragonRider', name: 'Death Rider',   color: '#8b0000', speed: 0.75, hp: 260, size: 28, reward: 35, castleDamage: 280 },
+  titan:       { kind: 'titan',       name: 'Ancient Titan', color: '#1a0a2e', speed: 0.28, hp: 100000, size: 72, reward: 500, castleDamage: 999 },
 };
 
 // 8 distinct path shapes. All start at x=0, end at x=W.
@@ -88,8 +89,12 @@ const ALL_TRAPS   = ['spike', 'tar', 'barricade', 'wall'];
 const TRAP_AT     = [1, 2, 3, 4];
 const ALL_ENEMIES = ['goblin', 'runner', 'saboteur', 'ogre', 'dragon', 'dragonRider'];
 const ENEMY_AT    = [1, 1, 5, 10, 18, 30];
+// Camps unlock gradually — you need to prove yourself before you can raise an army
+const ALL_CAMPS   = ['basic', 'archer', 'knight', 'mage', 'siege'];
+const CAMP_AT     = [3, 8, 16, 26, 42];  // unlock levels
 
 function _levelName(id) {
+  if (id === 100) return 'The Final Stand';
   const special = { 1:'Beginner', 2:'Soldier', 3:'Warrior', 4:'Champion', 5:'Legend' };
   if (special[id]) return special[id];
   const tiers  = ['Veteran','Expert','Master','Grandmaster','Mythic','Godlike','Eternal','Legendary','Infernal','Ancient'];
@@ -98,20 +103,46 @@ function _levelName(id) {
 }
 
 function _levelDesc(id) {
-  if (id === 1) return 'Archers & Spikes only';
-  if (id === 2) return 'Catapults & Tar unlocked';
-  if (id === 3) return 'Crossbow & Barricades unlocked';
-  if (id === 4) return 'Mage & Walls unlocked';
-  if (id === 5) return 'All towers — Dragon Riders!';
-  if (id <= 7)  return 'Fire towers available';
-  if (id <= 14) return 'Fire & Ice towers';
-  if (id <= 24) return 'Lightning strikes!';
-  if (id <= 39) return 'Earth-shattering power';
-  if (id <= 60) return 'Dragon Rider hordes';
-  return 'Ancient evil awakens!';
+  if (id === 100) return 'The ancient evil has reached its peak. Destroy the enemy camp to awaken the TITAN — and end this once and for all.';
+  if (id === 1)  return 'Goblin scouts have breached the outer woods. Build your first defenses — the war has begun.';
+  if (id === 2)  return 'The goblins brought catapults. Strike them from range before they reach the walls.';
+  if (id === 3)  return 'Fast raiders slip past slow fire — crossbows were forged for exactly this.';
+  if (id === 4)  return 'Enemy sorcerers enchant the horde. Your mage towers must counter their dark magic.';
+  if (id === 5)  return 'A goblin warlord rides a dragon at the front lines. All towers must hold.';
+  if (id === 6)  return 'The horde regroups after their defeat. Shadow runners now lead the charge.';
+  if (id === 7)  return 'Assassins cloak themselves in purple smoke — they are coming for your traps.';
+  if (id === 8)  return 'Reinforcements pour through the mountain pass. The raids grow relentless.';
+  if (id === 9)  return 'The enemy general has been spotted. Darkness gathers on the horizon.';
+  if (id === 10) return 'Stone Ogres emerge from the caverns. They shrug off arrows like raindrops.';
+  if (id <= 14)  return 'The Ogre warlords press deeper. The walls crack under their iron fists.';
+  if (id <= 17)  return 'Fire towers now burn through ogre armor. But the skies are darkening...';
+  if (id === 18) return 'The first dragon sighting. Towers everywhere burn to the ground.';
+  if (id <= 24)  return 'Dragon flights circle the battlements. The sky itself is your enemy now.';
+  if (id <= 29)  return 'Every wave brings more dragons. Ice is the only thing that slows them.';
+  if (id === 30) return 'Death Riders appear — armored soldiers mounted on blood-red dragons. Nothing survives their charge.';
+  if (id <= 39)  return 'The Death Riders lead every assault. Lightning is the only force that pierces their scales.';
+  if (id <= 49)  return 'The ancient war machine mobilizes. Earth-shattering boulders are your last hope.';
+  if (id <= 59)  return 'Dragon armies blacken the horizon. The kingdom fights for its life.';
+  if (id <= 69)  return 'Ancient powers stir beneath the ruins. The enemy grows bold.';
+  if (id <= 79)  return 'The world bleeds. Only your towers stand between civilization and oblivion.';
+  if (id <= 89)  return 'The final army marches. Each wave is worse than anything before.';
+  return 'The darkness closes in. The TITAN stirs below the earth. Make your stand.';
+}
+
+function _levelTheme(id) {
+  if (id === 100) return { bg: 'linear-gradient(135deg,#0d0005,#1a0010)', border: '#8b0000', icon: '⚡', word: 'FINAL STAND', glow: 'rgba(200,0,0,0.6)' };
+  if (id >= 80)   return { bg: 'linear-gradient(135deg,#120010,#1e0018)', border: '#aa0055', icon: '🌑', word: 'OBLIVION', glow: 'rgba(150,0,80,0.5)' };
+  if (id >= 60)   return { bg: 'linear-gradient(135deg,#0a0010,#150020)', border: '#6600cc', icon: '🐉', word: 'ANCIENT WAR', glow: 'rgba(100,0,200,0.4)' };
+  if (id >= 40)   return { bg: 'linear-gradient(135deg,#1a0505,#2a0a0a)', border: '#880000', icon: '🐲', word: 'DRAGON LORDS', glow: 'rgba(180,0,0,0.4)' };
+  if (id >= 30)   return { bg: 'linear-gradient(135deg,#1a0808,#240a0a)', border: '#aa3300', icon: '🔥', word: 'DEATH RIDERS', glow: 'rgba(200,50,0,0.4)' };
+  if (id >= 18)   return { bg: 'linear-gradient(135deg,#0a1a05,#0f2208)', border: '#226600', icon: '🐲', word: 'DRAGON WARS', glow: 'rgba(30,150,0,0.4)' };
+  if (id >= 10)   return { bg: 'linear-gradient(135deg,#150f0a,#20140a)', border: '#6b3a10', icon: '💀', word: 'SIEGE', glow: 'rgba(100,50,0,0.4)' };
+  if (id >= 5)    return { bg: 'linear-gradient(135deg,#1a1028,#221535)', border: '#6a22bb', icon: '🗡️', word: 'SHADOW WAR', glow: 'rgba(100,0,200,0.4)' };
+  return               { bg: 'linear-gradient(135deg,#0a1a0a,#0f2010)', border: '#2a6a2a', icon: '⚔️', word: 'THE RAID', glow: 'rgba(0,100,0,0.4)' };
 }
 
 function _waveCount(id) {
+  if (id === 100) return 30; // extra long final battle
   if (id <=  5) return [5,6,7,8,9][id-1] || 9;
   if (id <= 10) return 10;
   if (id <= 20) return 12;
@@ -127,12 +158,15 @@ export function generateLevels(count = 100) {
       id,
       name:       _levelName(id),
       desc:       _levelDesc(id),
+      theme:      _levelTheme(id),
       waves:      _waveCount(id),
       towers:     ALL_TOWERS.filter((_, i) => TOWER_AT[i] <= id),
       traps:      ALL_TRAPS.filter((_,  i) => TRAP_AT[i]  <= id),
       enemies:    ALL_ENEMIES.filter((_,i) => ENEMY_AT[i] <= id),
+      camps:      id === 100 ? ALL_CAMPS : ALL_CAMPS.filter((_,i) => CAMP_AT[i] <= id),
       mapVariant: (id - 1) % 8,
-      difficulty: 1 + (id - 1) * 0.06,   // +6% per level; level 100 ≈ 7×
+      difficulty: id === 100 ? 12 : 1 + (id - 1) * 0.06,   // Final Stand is 12× hardness
+      enemySlow: id === 100 ? 0.6 : 1,
     });
   }
   return levels;

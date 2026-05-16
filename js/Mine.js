@@ -1,4 +1,4 @@
-import { MINE } from './constants.js?v=31';
+import { MINE } from './constants.js?v=39';
 
 export class Mine {
   constructor(x, y) {

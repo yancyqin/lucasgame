@@ -1,5 +1,5 @@
-import { TYPES, distance } from './constants.js?v=31';
-import { Projectile } from './Projectile.js?v=31';
+import { TYPES, distance } from './constants.js?v=39';
+import { Projectile } from './Projectile.js?v=39';
 
 export class Tower {
   constructor(x, y, typeKey) {
@@ -104,13 +104,101 @@ export class Tower {
     }
 
     if (this.fireTimer > 0) {
-      const p = this.fireTimer/10;
-      const fc = ({slow:'#cc66ff',sniper:'#aaa',fire:'#ff6600',ice:'#aaeeff',lightning:'#ffffff',earth:'#886644'})[this.typeKey] || '#ffe080';
-      const tipX = this.x+Math.cos(angle)*28, tipY = (this.y-5)+Math.sin(angle)*28;
-      ctx.save(); ctx.globalAlpha = p*0.85; ctx.shadowColor = fc; ctx.shadowBlur = 16;
-      ctx.fillStyle = fc;
-      ctx.beginPath(); ctx.arc(tipX,tipY,9*p,0,Math.PI*2); ctx.fill();
-      ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.restore();
+      const p = this.fireTimer / 10;  // 1.0 → 0.0 as it fades
+      const tipX = this.x + Math.cos(angle) * 28;
+      const tipY = (this.y - 5) + Math.sin(angle) * 28;
+      ctx.save();
+      ctx.globalAlpha = p;
+
+      if (this.typeKey === 'fire') {
+        // 🔥 Flame burst — 5 orange/red tongues radiating forward
+        ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 18 * p;
+        for (let i = -2; i <= 2; i++) {
+          const a = angle + i * 0.28;
+          const len = (14 + Math.abs(i) * 4) * p;
+          ctx.strokeStyle = i === 0 ? '#ffcc00' : '#ff4400';
+          ctx.lineWidth = Math.max(2, 5 * p - Math.abs(i));
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(tipX + Math.cos(a) * len, tipY + Math.sin(a) * len);
+          ctx.stroke();
+        }
+
+      } else if (this.typeKey === 'ice') {
+        // ❄ Ice shards — 6 crystal spikes radiating in a star
+        ctx.shadowColor = '#88ddff'; ctx.shadowBlur = 14 * p;
+        ctx.strokeStyle = '#aaeeff'; ctx.lineWidth = Math.max(1.5, 3 * p); ctx.lineCap = 'round';
+        for (let i = 0; i < 6; i++) {
+          const a = angle + (i / 6) * Math.PI * 2;
+          const len = 14 * p;
+          ctx.beginPath();
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(tipX + Math.cos(a) * len, tipY + Math.sin(a) * len);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#ddf8ff';
+        ctx.beginPath(); ctx.arc(tipX, tipY, 5 * p, 0, Math.PI * 2); ctx.fill();
+
+      } else if (this.typeKey === 'lightning') {
+        // ⚡ Spark burst — jagged yellow lightning spikes
+        ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 20 * p;
+        ctx.strokeStyle = '#ffff44'; ctx.lineWidth = Math.max(1, 2.5 * p); ctx.lineCap = 'round';
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const mid = 8 * p, end = 14 * p;
+          ctx.beginPath();
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(tipX + Math.cos(a) * mid + Math.cos(a + 0.8) * 3, tipY + Math.sin(a) * mid + Math.sin(a + 0.8) * 3);
+          ctx.lineTo(tipX + Math.cos(a) * end, tipY + Math.sin(a) * end);
+          ctx.stroke();
+        }
+
+      } else if (this.typeKey === 'earth') {
+        // 🪨 Dust cloud — expanding brown circle + dirt chips
+        ctx.shadowColor = '#886644'; ctx.shadowBlur = 10 * p;
+        ctx.fillStyle = `rgba(120,80,30,${p * 0.6})`;
+        ctx.beginPath(); ctx.arc(tipX, tipY, 16 * (1.1 - p), 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#aa7744';
+        for (let i = 0; i < 5; i++) {
+          const a = angle + (i / 5) * Math.PI * 2;
+          const r = 10 * p;
+          ctx.beginPath(); ctx.arc(tipX + Math.cos(a) * r, tipY + Math.sin(a) * r, 2.5 * p, 0, Math.PI * 2); ctx.fill();
+        }
+
+      } else if (this.typeKey === 'slow') {
+        // 💜 Magic sparkles — rotating purple orbs
+        ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 14 * p;
+        ctx.fillStyle = '#dd66ff';
+        for (let i = 0; i < 5; i++) {
+          const a = angle + (i / 5) * Math.PI * 2 + (1 - p) * Math.PI;
+          const r = 12 * p;
+          ctx.beginPath(); ctx.arc(tipX + Math.cos(a) * r, tipY + Math.sin(a) * r, 3.5 * p, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(tipX, tipY, 4 * p, 0, Math.PI * 2); ctx.fill();
+
+      } else if (this.typeKey === 'rapid') {
+        // 🏹 Triple arrow streaks
+        ctx.shadowColor = '#ffaa44'; ctx.shadowBlur = 10 * p;
+        ctx.strokeStyle = '#ffcc66'; ctx.lineWidth = Math.max(1, 3 * p); ctx.lineCap = 'round';
+        for (const spread of [-0.22, 0, 0.22]) {
+          const a = angle + spread;
+          ctx.beginPath();
+          ctx.moveTo(tipX - Math.cos(a) * 8 * p, tipY - Math.sin(a) * 8 * p);
+          ctx.lineTo(tipX + Math.cos(a) * 16 * p, tipY + Math.sin(a) * 16 * p);
+          ctx.stroke();
+        }
+
+      } else {
+        // Default: glowing muzzle flash
+        const fc = this.typeKey === 'sniper' ? '#ccddcc' : '#ffe080';
+        ctx.shadowColor = fc; ctx.shadowBlur = 16 * p;
+        ctx.fillStyle = fc;
+        ctx.beginPath(); ctx.arc(tipX, tipY, 9 * p, 0, Math.PI * 2); ctx.fill();
+      }
+
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.lineCap = 'butt'; ctx.restore();
     }
 
     const hpFrac = this.hp/this.maxHp;
