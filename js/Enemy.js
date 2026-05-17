@@ -139,6 +139,13 @@ export class Enemy {
           // Damage per enemy type — stronger enemies hit harder; titan swats like flies
           const dmg = { goblin:4, runner:3, saboteur:10, ogre:18, dragon:30, dragonRider:50, titan:120 }[this.kind] ?? 4;
           this.soldierTarget.takeDamage(dmg);
+          // Titan scythe: stun + blast the soldier away
+          if (this.kind === 'titan') {
+            const dist = Math.hypot(sx - this.x, sy - this.y) || 1;
+            this.soldierTarget.stunTimer = 55;
+            this.soldierTarget.pushVx = ((sx - this.x) / dist) * 14;
+            this.soldierTarget.pushVy = ((sy - this.y) / dist) * 14;
+          }
           this.soldierAtkTimer = 50;
         }
       }
@@ -192,7 +199,9 @@ export class Enemy {
     const facing = Math.atan2(wp.y - this.y, wp.x - this.x);
     const bc = this.hitTimer > 0 ? '#fff' : this.slowTimer > 0 ? '#bb66ff' : this.color;
 
-    if (this.kind === 'dragon' || this.kind === 'dragonRider') {
+    if (this.kind === 'titan') {
+      this._drawTitan(ctx, facing, bc);
+    } else if (this.kind === 'dragon' || this.kind === 'dragonRider') {
       this._drawDragon(ctx, facing, bc);
     } else if (this.kind === 'saboteur') {
       this._drawSaboteur(ctx, facing, bc);
@@ -319,6 +328,175 @@ export class Enemy {
   }
 
   // ── Drawing: knights ──────────────────────────────────────────────────────
+
+  // ── Drawing: Ancient Titan ──────────────────────────────────────────────
+  _drawTitan(ctx, facing, bc) {
+    const s = this.size;          // s = 72 — very large
+    const cx = this.x, cy = this.y;
+    const hit = this.hitTimer > 0;
+    const t   = Date.now() / 1000;
+
+    // Colour palette — dark void-purple with sickly green glow on hit
+    const bodyCol  = hit ? '#ccffcc' : '#1a0a2e';
+    const armorCol = hit ? '#ffffff' : '#2d1050';
+    const skinCol  = hit ? '#ffffff' : '#3a1a5a';
+
+    // Proportions — knight skeleton but bigger and heavier
+    const headR    = s * 0.38;
+    const headCY   = cy - s * 0.72;
+    const torsoTop = headCY + headR + s * 0.04;
+    const torsoH   = s * 1.05;
+    const torsoW   = s * 1.00;
+    const hipY     = torsoTop + torsoH;
+    const legW     = s * 0.38;
+    const thighH   = s * 0.80;
+    const shinH    = s * 0.70;
+    const phase    = Math.sin(t * 1.4) * s * 0.18;
+
+    // ── DARK AURA ───────────────────────────────────────────────────────────
+    const aura = 0.18 + 0.08 * Math.sin(t * 2.5);
+    ctx.save();
+    const ag = ctx.createRadialGradient(cx, cy, s * 0.2, cx, cy, s * 1.8);
+    ag.addColorStop(0, `rgba(80,0,160,${aura})`);
+    ag.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = ag;
+    ctx.beginPath(); ctx.arc(cx, cy, s * 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // ── LEGS ────────────────────────────────────────────────────────────────
+    ctx.fillStyle = armorCol;
+    const lx = cx - legW * 0.9;
+    ctx.fillRect(lx, hipY, legW, thighH);
+    ctx.fillRect(lx + phase * 0.3, hipY + thighH, legW, shinH);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(lx + phase * 0.3 - legW * 0.3, hipY + thighH + shinH - 3, legW * 1.55, legW * 0.55);
+
+    const rx = cx + legW * 0.5;
+    ctx.fillStyle = armorCol;
+    ctx.fillRect(rx, hipY, legW, thighH);
+    ctx.fillRect(rx - phase * 0.3, hipY + thighH, legW, shinH);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(rx - phase * 0.3 - legW * 0.3, hipY + thighH + shinH - 3, legW * 1.55, legW * 0.55);
+
+    // ── TORSO ───────────────────────────────────────────────────────────────
+    ctx.fillStyle = bodyCol;
+    ctx.fillRect(cx - torsoW / 2, torsoTop, torsoW, torsoH);
+    if (!hit) {
+      // Ribcage lines
+      ctx.strokeStyle = 'rgba(120,0,200,0.45)'; ctx.lineWidth = 2;
+      for (let i = 1; i <= 4; i++) {
+        const ry = torsoTop + torsoH * (i / 5);
+        ctx.beginPath(); ctx.moveTo(cx - torsoW * 0.42, ry); ctx.lineTo(cx + torsoW * 0.42, ry); ctx.stroke();
+      }
+    }
+    ctx.strokeStyle = 'rgba(80,0,160,0.6)'; ctx.lineWidth = 2;
+    ctx.strokeRect(cx - torsoW / 2, torsoTop, torsoW, torsoH);
+
+    // Shoulder pads
+    ctx.fillStyle = armorCol;
+    ctx.beginPath(); ctx.arc(cx - torsoW / 2, torsoTop + s * 0.12, s * 0.28, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + torsoW / 2, torsoTop + s * 0.12, s * 0.28, 0, Math.PI * 2); ctx.fill();
+
+    // ── SCYTHE ARM ──────────────────────────────────────────────────────────
+    let scytheFacing = facing;
+    if (this.attackTimer > 0) {
+      const p = 1 - this.attackTimer / 14;
+      scytheFacing = this.attackAngle - 1.1 + p * 2.2;   // big wide swing arc
+    }
+    const armW = s * 0.28;
+    const uAL  = s * 0.65;
+    const fAL  = s * 0.55;
+
+    ctx.save();
+    ctx.translate(cx, torsoTop + s * 0.22);
+    ctx.rotate(scytheFacing);
+
+    // Upper arm
+    ctx.fillStyle = armorCol;
+    ctx.fillRect(0, -armW / 2, uAL, armW);
+    // Forearm
+    ctx.fillRect(uAL, -armW / 2, fAL, armW);
+
+    if (!hit) {
+      ctx.translate(uAL + fAL, 0);
+
+      // ── Scythe handle ────────────────────────────────────────────────────
+      const hLen = s * 3.4;
+      ctx.strokeStyle = '#2a1a0a'; ctx.lineWidth = s * 0.13; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-s * 0.3, 0); ctx.lineTo(hLen, -s * 0.15); ctx.stroke();
+      // Handle wrap bands
+      ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = s * 0.06;
+      for (let i = 0; i < 4; i++) {
+        const bx2 = (hLen / 5) * (i + 1);
+        ctx.beginPath(); ctx.moveTo(bx2, -s * 0.18); ctx.lineTo(bx2, s * 0.18); ctx.stroke();
+      }
+
+      // ── Scythe blade (large crescent) ────────────────────────────────────
+      ctx.translate(hLen, -s * 0.15);
+      ctx.save();
+      // Outer blade arc
+      ctx.strokeStyle = hit ? '#fff' : '#ccc'; ctx.lineWidth = s * 0.22; ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.arc(-s * 0.5, 0, s * 1.05, -Math.PI * 0.72, Math.PI * 0.08); ctx.stroke();
+      // Inner edge (darker, sharper)
+      ctx.strokeStyle = hit ? '#aaffaa' : '#666'; ctx.lineWidth = s * 0.09;
+      ctx.beginPath(); ctx.arc(-s * 0.5, 0, s * 0.78, -Math.PI * 0.68, Math.PI * 0.05); ctx.stroke();
+      // Blade tip glow
+      ctx.fillStyle = hit ? '#fff' : '#8800ff';
+      ctx.beginPath(); ctx.arc(-s * 0.5, -s * 1.02, s * 0.14, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    ctx.lineCap = 'butt';
+    ctx.restore();
+
+    // ── OFF HAND (left arm, no weapon) ──────────────────────────────────────
+    ctx.save();
+    ctx.translate(cx, torsoTop + s * 0.22);
+    ctx.rotate(facing + Math.PI * 0.75);
+    ctx.fillStyle = armorCol;
+    ctx.fillRect(0, -armW / 2, uAL, armW);
+    ctx.fillRect(uAL, -armW / 2, fAL * 0.7, armW);
+    ctx.restore();
+
+    // ── NECK + HEAD ──────────────────────────────────────────────────────────
+    ctx.fillStyle = skinCol;
+    ctx.fillRect(cx - s * 0.16, headCY + headR - 3, s * 0.32, s * 0.26);
+
+    // Head
+    ctx.fillStyle = bodyCol;
+    ctx.beginPath(); ctx.arc(cx, headCY, headR, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = hit ? '#0f0' : 'rgba(120,0,200,0.7)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, headCY, headR, 0, Math.PI * 2); ctx.stroke();
+
+    if (!hit) {
+      // Crown horns
+      ctx.fillStyle = '#3d0070';
+      const hornPts = [[-headR*0.55, -headR*0.6], [0, -headR*0.9], [headR*0.55, -headR*0.6]];
+      for (const [hx, hy] of hornPts) {
+        ctx.beginPath();
+        ctx.moveTo(cx + hx - headR*0.18, headCY + hy + headR*0.5);
+        ctx.lineTo(cx + hx, headCY + hy - headR*0.55);
+        ctx.lineTo(cx + hx + headR*0.18, headCY + hy + headR*0.5);
+        ctx.closePath(); ctx.fill();
+      }
+      // Eyes — glowing slits
+      ctx.fillStyle = `rgba(180,0,255,${0.8 + 0.2 * Math.sin(t * 3)})`;
+      ctx.fillRect(cx + headR*0.12, headCY - headR*0.18, headR*0.42, headR*0.22);
+      ctx.fillRect(cx - headR*0.54, headCY - headR*0.18, headR*0.42, headR*0.22);
+    }
+
+    // ── SCYTHE SWING ARC ────────────────────────────────────────────────────
+    if (this.attackTimer > 0) {
+      const p = this.attackTimer / 14;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(this.attackAngle);
+      ctx.strokeStyle = `rgba(160,0,255,${p * 0.9})`; ctx.lineWidth = 6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, 0, s * 3.6, -1.0, 1.0); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${p * 0.35})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, s * 2.8, -0.8, 0.8); ctx.stroke();
+      ctx.lineCap = 'butt'; ctx.restore();
+    }
+  }
 
   _drawKnight(ctx, facing, bc) {
     const s = this.size;

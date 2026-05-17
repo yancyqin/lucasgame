@@ -675,6 +675,9 @@ class Soldier {
     this.jumpVel = 0;
     this.swingTimer = 0;
     this.hitTimer = 0;
+    this.stunTimer = 0;   // knocked back/stunned by titan scythe
+    this.pushVx = 0;      // knockback velocity X
+    this.pushVy = 0;      // knockback velocity Y
     this._3dx = null; this._3dy = null; this._3dr = 0;
   }
 
@@ -683,6 +686,16 @@ class Soldier {
     if (this.attackTimer > 0) this.attackTimer--;
     if (this.swingTimer > 0) this.swingTimer--;
     if (this.blockTimer > 0) { this.blockTimer--; if (this.blockTimer <= 0) this.blocking = false; }
+
+    // Titan knockback — soldier tumbles away and can't fight while stunned
+    if (this.stunTimer > 0) {
+      this.stunTimer--;
+      this.x += this.pushVx;
+      this.y += this.pushVy;
+      this.pushVx *= 0.82;  // friction slows the tumble
+      this.pushVy *= 0.82;
+      return;               // can't move or attack while airborne
+    }
     // Jump physics
     if (this.jumpVel !== 0 || this.jumpHeight > 0) {
       this.jumpHeight += this.jumpVel;
@@ -771,6 +784,22 @@ class Soldier {
     const hf = this.hp / this.maxHp;
     ctx.fillStyle = hf > 0.5 ? '#2f8' : hf > 0.25 ? '#fa0' : '#f44';
     ctx.fillRect(this.x-bw/2, this.y-26-jy, bw*hf, 3);
+
+    // Titan stun — spinning stars above head
+    if (this.stunTimer > 0) {
+      const t = Date.now() / 180;
+      ctx.save();
+      for (let i = 0; i < 3; i++) {
+        const a = t + (i * Math.PI * 2 / 3);
+        const sx2 = this.x + Math.cos(a) * 9;
+        const sy2 = this.y - 30 - jy + Math.sin(a) * 4;
+        ctx.fillStyle = i === 0 ? '#ffee00' : i === 1 ? '#ff8800' : '#ff4488';
+        ctx.beginPath();
+        ctx.arc(sx2, sy2, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   // ── BASIC SOLDIER (blue armour, sword) ───────────────────────────────────────
