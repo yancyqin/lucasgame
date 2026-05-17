@@ -20,7 +20,7 @@ export const ENEMIES = {
   ogre:        { kind: 'ogre',        name: 'Giant',         color: '#445566', speed: 0.8, hp: 55,  size: 18, reward: 12, castleDamage: 25  },
   dragon:      { kind: 'dragon',      name: 'Forest Dragon', color: '#2ea84a', speed: 1.2, hp: 130, size: 24, reward: 20, castleDamage: 120 },
   dragonRider: { kind: 'dragonRider', name: 'Death Rider',   color: '#8b0000', speed: 0.75, hp: 260, size: 28, reward: 35, castleDamage: 280 },
-  titan:       { kind: 'titan',       name: 'Ancient Titan', color: '#1a0a2e', speed: 0.28, hp: 100000, size: 72, reward: 500, castleDamage: 999 },
+  titan:       { kind: 'titan',       name: 'Ancient Titan', color: '#1a0a2e', speed: 0.28, hp: 100000, size: 72, reward: 500, castleDamage: 999, isTitan: true },
 };
 
 // 8 distinct path shapes. All start at x=0, end at x=W.

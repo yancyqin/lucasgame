@@ -30,6 +30,12 @@ export class Enemy {
     // Soldier combat
     this.soldierTarget    = null;
     this.soldierAtkTimer  = 0;   // cooldown between hits on a soldier
+    // Titan multi-attack system
+    this.titanAtkCooldown = 120; // first attack is quick
+    this.titanAtkCycle    = 0;   // 0=slash, 1=fireball, 2=shockwave
+    this.titanJumpOffset  = 0;   // visual Y offset during jump
+    this.titanJumpVel     = 0;
+    this.titanShockwaveR  = 0;   // expanding ring radius (0 = inactive)
     // Gate siege state
     this.atGate = false;
     this.gateAttackTimer = 30;
@@ -43,6 +49,68 @@ export class Enemy {
     if (this.stunTimer  > 0) { this.stunTimer--; return; }
     if (this.burnTimer > 0) { this.burnTimer--; this.hp -= 0.08; if (this.burnTimer % 20 === 0) this.hitTimer = 6; }
     if (this.shockTimer > 0) this.shockTimer--;
+
+    // Titan: cycle through 3 special attacks
+    if (this.kind === 'titan') {
+      if (this.titanAtkCooldown > 0) this.titanAtkCooldown--;
+      // Jump physics (shockwave attack)
+      if (this.titanJumpOffset !== 0 || this.titanJumpVel !== 0) {
+        this.titanJumpOffset -= this.titanJumpVel;
+        this.titanJumpVel -= 0.8;
+        if (this.titanJumpOffset >= 0) {
+          // Landed — shockwave
+          this.titanJumpOffset = 0; this.titanJumpVel = 0;
+          this.titanShockwaveR = 1;
+          const shockR = this.size * 4.5;
+          for (const s of soldiers) {
+            if (distance(this, s) < shockR) {
+              s.takeDamage(90);
+              const dd = Math.hypot(s.x-this.x, s.y-this.y) || 1;
+              s.stunTimer = 50; s.pushVx = ((s.x-this.x)/dd)*12; s.pushVy = ((s.y-this.y)/dd)*12;
+            }
+          }
+          for (const t of towers) {
+            if (distance(this, t) < shockR * 0.7) t.takeDamage(120);
+          }
+        }
+      }
+      if (this.titanShockwaveR > 0) this.titanShockwaveR += 5;
+      if (this.titanShockwaveR > this.size * 5) this.titanShockwaveR = 0;
+
+      if (this.titanAtkCooldown <= 0) {
+        this.titanAtkCooldown = 200; // ~3.3s between attacks at 60fps
+        const cycle = this.titanAtkCycle;
+        this.titanAtkCycle = (this.titanAtkCycle + 1) % 3;
+
+        if (cycle === 0) {
+          // ── Wide slash: hits soldiers AND nearby towers ──
+          this.attackTimer = 18; this.attackAngle = Math.atan2(path[Math.min(this.waypoint, path.length-1)].y - this.y, path[Math.min(this.waypoint, path.length-1)].x - this.x);
+          const slashR = this.size * 3.2;
+          for (const s of soldiers) {
+            if (distance(this, s) < slashR) {
+              s.takeDamage(120);
+              const dd = Math.hypot(s.x-this.x, s.y-this.y) || 1;
+              s.stunTimer = 45; s.pushVx = ((s.x-this.x)/dd)*10; s.pushVy = ((s.y-this.y)/dd)*10;
+            }
+          }
+          for (const t of towers) {
+            if (distance(this, t) < slashR) t.takeDamage(80);
+          }
+        } else if (cycle === 1) {
+          // ── Dark fireball: aimed at nearest tower ──
+          const tgt = towers.sort((a,b) => distance(this,a)-distance(this,b))[0];
+          if (tgt) {
+            const dx = tgt.x - this.x, dy = tgt.y - this.y;
+            const dd = Math.hypot(dx, dy) || 1;
+            projectiles.push(new Projectile({ x: this.x, y: this.y, vx: (dx/dd)*6, vy: (dy/dd)*6, damage: 220, darkFireball: true }));
+          }
+        } else {
+          // ── Shockwave jump: launch titan upward ──
+          this.titanJumpVel = 18;
+          this.titanJumpOffset = -1; // kick off physics
+        }
+      }
+    }
 
     // Siege mode: stop moving, attack the castle periodically
     if (this.atGate) {
@@ -309,6 +377,7 @@ export class Enemy {
       const a = ang + sp * 0.3;
       projectiles.push(new Projectile({ x: this.x, y: this.y, vx: Math.cos(a)*5, vy: Math.sin(a)*5, damage: this.kind === 'dragonRider' ? 3 : 2, fromEnemy: true, fire: true }));
     }
+    this.attackTimer = 22;
     this.fireTimer = 180 + Math.floor(Math.random() * 90);
   }
 
@@ -332,7 +401,7 @@ export class Enemy {
   // ── Drawing: Ancient Titan ──────────────────────────────────────────────
   _drawTitan(ctx, facing, bc) {
     const s = this.size;          // s = 72 — very large
-    const cx = this.x, cy = this.y;
+    const cx = this.x, cy = this.y + (this.titanJumpOffset || 0);
     const hit = this.hitTimer > 0;
     const t   = Date.now() / 1000;
 
@@ -396,6 +465,47 @@ export class Enemy {
     ctx.fillStyle = armorCol;
     ctx.beginPath(); ctx.arc(cx - torsoW / 2, torsoTop + s * 0.12, s * 0.28, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(cx + torsoW / 2, torsoTop + s * 0.12, s * 0.28, 0, Math.PI * 2); ctx.fill();
+
+    // ── CHAINS with skulls ───────────────────────────────────────────────────
+    if (!hit) {
+      ctx.save();
+      // Three diagonal chains across torso
+      const chainDefs = [
+        { x1: cx - torsoW*0.48, y1: torsoTop + torsoH*0.1,  x2: cx + torsoW*0.48, y2: torsoTop + torsoH*0.45 },
+        { x1: cx - torsoW*0.48, y1: torsoTop + torsoH*0.45, x2: cx + torsoW*0.48, y2: torsoTop + torsoH*0.8  },
+        { x1: cx - torsoW*0.4,  y1: torsoTop + torsoH*0.75, x2: cx + torsoW*0.2,  y2: torsoTop + torsoH*0.15 },
+      ];
+      for (const ch of chainDefs) {
+        const len = Math.hypot(ch.x2-ch.x1, ch.y2-ch.y1);
+        const steps = Math.floor(len / (s * 0.28));
+        const ang = Math.atan2(ch.y2-ch.y1, ch.x2-ch.x1);
+        ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = s * 0.07;
+        ctx.beginPath(); ctx.moveTo(ch.x1, ch.y1); ctx.lineTo(ch.x2, ch.y2); ctx.stroke();
+        for (let i = 0; i <= steps; i++) {
+          const t3 = i / steps;
+          const lx2 = ch.x1 + (ch.x2-ch.x1)*t3;
+          const ly2 = ch.y1 + (ch.y2-ch.y1)*t3;
+          ctx.save(); ctx.translate(lx2, ly2); ctx.rotate(ang);
+          ctx.strokeStyle = '#555'; ctx.lineWidth = s * 0.055;
+          ctx.beginPath(); ctx.ellipse(0, 0, s*0.11, s*0.07, 0, 0, Math.PI*2); ctx.stroke();
+          ctx.restore();
+          // Every 3rd link is a skull
+          if (i % 3 === 1) {
+            ctx.save(); ctx.translate(lx2, ly2);
+            const sk = s * 0.13;
+            ctx.fillStyle = '#e8d8a0';
+            ctx.beginPath(); ctx.arc(0, -sk*0.1, sk, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(-sk*0.35, -sk*0.25, sk*0.28, sk*0.3);
+            ctx.fillRect( sk*0.07, -sk*0.25, sk*0.28, sk*0.3);
+            ctx.strokeStyle = '#c8b880'; ctx.lineWidth = 0.8;
+            ctx.beginPath(); ctx.arc(0, -sk*0.1, sk, 0, Math.PI*2); ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
+      ctx.restore();
+    }
 
     // ── SCYTHE ARM ──────────────────────────────────────────────────────────
     let scytheFacing = facing;
@@ -495,6 +605,17 @@ export class Enemy {
       ctx.strokeStyle = `rgba(255,255,255,${p * 0.35})`; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(0, 0, s * 2.8, -0.8, 0.8); ctx.stroke();
       ctx.lineCap = 'butt'; ctx.restore();
+    }
+
+    // Expanding shockwave ring on landing
+    if (this.titanShockwaveR > 0) {
+      const alpha = Math.max(0, 1 - this.titanShockwaveR / (this.size * 5));
+      ctx.save();
+      ctx.strokeStyle = `rgba(160,0,255,${alpha * 0.85})`; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.arc(cx, cy, this.titanShockwaveR, 0, Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.3})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, this.titanShockwaveR * 0.7, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -1000,6 +1121,33 @@ export class Enemy {
         ctx.beginPath(); ctx.moveTo(s+22,-4); ctx.lineTo(s+34,0); ctx.lineTo(s+22,4); ctx.closePath(); ctx.fill();
       }
 
+      ctx.restore();
+    }
+
+    // Fire breath when attacking
+    if (this.attackTimer > 0 || (this.fireTimer !== undefined && this.fireTimer < 10)) {
+      ctx.save();
+      const breathAng = facing;
+      const headX = this.x + Math.cos(facing) * s * 1.1;
+      const headY = this.y + Math.sin(facing) * s * 1.1;
+      const p2 = this.attackTimer > 0 ? this.attackTimer / 22 : 0.5;
+      const breathLen = s * (2.2 + p2 * 2.0);
+      const grad = ctx.createLinearGradient(headX, headY, headX + Math.cos(breathAng)*breathLen, headY + Math.sin(breathAng)*breathLen);
+      if (this.kind === 'dragonRider') {
+        grad.addColorStop(0, `rgba(255,60,0,${p2*0.9})`);
+        grad.addColorStop(0.5, `rgba(255,140,0,${p2*0.6})`);
+        grad.addColorStop(1, 'rgba(255,200,0,0)');
+      } else {
+        grad.addColorStop(0, `rgba(0,200,80,${p2*0.9})`);
+        grad.addColorStop(0.5, `rgba(100,255,0,${p2*0.6})`);
+        grad.addColorStop(1, 'rgba(200,255,100,0)');
+      }
+      ctx.strokeStyle = grad; ctx.lineWidth = s * 0.45; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(headX, headY);
+      ctx.lineTo(headX + Math.cos(breathAng)*breathLen, headY + Math.sin(breathAng)*breathLen);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
       ctx.restore();
     }
   }

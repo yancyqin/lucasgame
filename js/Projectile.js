@@ -3,7 +3,7 @@ import { distance } from './constants.js?v=39';
 export class Projectile {
   constructor({ x, y, target, speed, vx, vy, damage, slows, fromEnemy, fire, manual, boulder, arrow, magic,
                 fireball, iceOrb, iceSlows, lightningBolt, chain, chainRadius, earthBoulder, splash, splashRadius, stuns, burns, shocks,
-                magicOrb }) {
+                magicOrb, darkFireball }) {
     this.x = x; this.y = y;
     this.target = target; this.speed = speed;
     this.vx = vx; this.vy = vy;
@@ -24,6 +24,7 @@ export class Projectile {
     this.chainRadius  = chainRadius || 120;
     this.earthBoulder = earthBoulder;
     this.magicOrb     = magicOrb;
+    this.darkFireball = darkFireball;
     this.splash       = splash;
     this.splashRadius = splashRadius || 40;
     this.stuns        = stuns || 0;
@@ -38,6 +39,16 @@ export class Projectile {
       if (this._outOfBounds()) { this.dead = true; return; }
       const hit = towers.find(t => distance(this, t) < 18);
       if (hit) { hit.takeDamage(this.damage); this.dead = true; }
+    } else if (this.darkFireball) {
+      this.x += this.vx; this.y += this.vy;
+      if (this._outOfBounds()) { this.dead = true; return; }
+      // Hits towers
+      const hitTower = towers.find(t => distance(this, t) < t.size + 14);
+      if (hitTower) { hitTower.takeDamage(this.damage); this.dead = true; return; }
+      // Also hurts soldiers (passed via enemies array which includes soldiers when titan fires)
+      const hitEnemy = enemies.find(e => !e.isTitan && distance(this, e) < (e.size || 8) + 10);
+      if (hitEnemy) { hitEnemy.takeDamage(this.damage * 0.5); this.dead = true; return; }
+      return;
     } else if (this.manual) {
       this.x += this.vx; this.y += this.vy;
       if (this._outOfBounds()) { this.dead = true; return; }
@@ -58,7 +69,7 @@ export class Projectile {
   }
 
   _onHit(target, enemies) {
-    target.takeDamage(this.damage);
+    target.takeDamage(target.isTitan ? this.damage * 2 : this.damage);
     if (this.slows)    target.slowTimer = 80;
     if (this.iceSlows) target.slowTimer = 220;
     if (this.stuns > 0) target.stunTimer = this.stuns;
@@ -139,6 +150,27 @@ export class Projectile {
         ctx.stroke();
       }
       ctx.globalAlpha = 1; ctx.restore();
+    } else if (this.darkFireball) {
+      const t2 = Date.now() / 200;
+      ctx.save();
+      ctx.shadowColor = '#aa00ff'; ctx.shadowBlur = 28;
+      ctx.fillStyle = '#0a0015';
+      ctx.beginPath(); ctx.arc(this.x, this.y, 11, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#7700cc';
+      ctx.beginPath(); ctx.arc(this.x, this.y, 8, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#cc44ff';
+      ctx.beginPath(); ctx.arc(this.x, this.y, 5, 0, Math.PI*2); ctx.fill();
+      // Void tendrils
+      ctx.strokeStyle = 'rgba(180,0,255,0.7)'; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 6; i++) {
+        const a = t2 + (i / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(this.x + Math.cos(a)*8, this.y + Math.sin(a)*8);
+        ctx.lineTo(this.x + Math.cos(a)*16, this.y + Math.sin(a)*16);
+        ctx.stroke();
+      }
+      ctx.restore();
     } else if (this.fireball) {
       ctx.save();
       ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 22;
