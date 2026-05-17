@@ -113,15 +113,17 @@ export class Enemy {
 
     // Soldier combat — enemies stop and fight any soldier that gets in their way
     if (this.soldierAtkTimer > 0) this.soldierAtkTimer--;
+    // Detection radius scales with enemy size so large enemies (titan) can reach soldiers
+    const solDetectRange = Math.max(65, this.size + 10);
     // Drop stale soldier target (dead or too far away)
     if (this.soldierTarget && (this.soldierTarget.isDead() ||
-        Math.hypot(this.soldierTarget.x - this.x, this.soldierTarget.y - this.y) > 110)) {
+        Math.hypot(this.soldierTarget.x - this.x, this.soldierTarget.y - this.y) > solDetectRange + 50)) {
       this.soldierTarget = null;
     }
     // Pick up a new nearby soldier target
     if (!this.soldierTarget) {
       this.soldierTarget = soldiers.find(s => !s.isDead() &&
-        Math.hypot(s.x - this.x, s.y - this.y) < 65) || null;
+        Math.hypot(s.x - this.x, s.y - this.y) < solDetectRange) || null;
     }
     if (this.soldierTarget) {
       const sx = this.soldierTarget.x, sy = this.soldierTarget.y;
@@ -134,8 +136,8 @@ export class Enemy {
         // In melee range — swing and deal damage
         this.triggerAttack(sx, sy);
         if (this.soldierAtkTimer <= 0) {
-          // Damage per enemy type — stronger enemies hit harder
-          const dmg = { goblin:4, runner:3, saboteur:10, ogre:18, dragon:30, dragonRider:50 }[this.kind] ?? 4;
+          // Damage per enemy type — stronger enemies hit harder; titan swats like flies
+          const dmg = { goblin:4, runner:3, saboteur:10, ogre:18, dragon:30, dragonRider:50, titan:120 }[this.kind] ?? 4;
           this.soldierTarget.takeDamage(dmg);
           this.soldierAtkTimer = 50;
         }
