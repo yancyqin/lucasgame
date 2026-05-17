@@ -3,11 +3,12 @@ import { distance } from './constants.js?v=39';
 // GameMap owns the terrain: path, terrain features, and structures.
 // isFinalLevel = true → medieval wasteland theme; false → normal green battlefield.
 export class GameMap {
-  constructor(path, W, H, isFinalLevel = false) {
+  constructor(path, W, H, isFinalLevel = false, isCloudLevel = false) {
     this.path = path;
     this.W = W;
     this.H = H;
     this.isFinalLevel = isFinalLevel;
+    this.isCloudLevel = isCloudLevel;
 
     // Normal battlefield features
     this.grassTufts = this._generateGrass();
@@ -41,9 +42,74 @@ export class GameMap {
   }
 
   draw(ctx) {
-    if (this.isFinalLevel) { this._drawWasteland(ctx); } else { this._drawBattlefield(ctx); }
+    if (this.isCloudLevel) { this._drawCloudLevel(ctx); }
+    else if (this.isFinalLevel) { this._drawWasteland(ctx); }
+    else { this._drawBattlefield(ctx); }
     this._drawCampStructures(ctx);
     this._drawCastle(ctx);
+  }
+
+  // ── Cloud / Dragon Island level ──────────────────────────────────────────────
+  _drawCloudLevel(ctx) {
+    // Sky blue gradient background
+    const grad = ctx.createLinearGradient(0, 0, 0, this.H);
+    grad.addColorStop(0, '#c0e8ff');
+    grad.addColorStop(1, '#e8f4ff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, this.W, this.H);
+
+    // Fluffy cloud puffs scattered across the map
+    const t = Date.now() / 8000;
+    const cloudSeeds = [
+      [0.1, 0.15, 60], [0.3, 0.08, 45], [0.55, 0.18, 70], [0.75, 0.10, 50],
+      [0.9, 0.22, 55], [0.2, 0.82, 65], [0.5, 0.75, 50], [0.8, 0.88, 45],
+      [0.15, 0.45, 40], [0.65, 0.55, 60], [0.85, 0.50, 35],
+    ];
+    for (const [fx, fy, size] of cloudSeeds) {
+      const px = this.W * fx + Math.sin(t + fx * 10) * 8;
+      const py = this.H * fy;
+      if (this.isOnPath(px, py)) continue;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      // Draw multi-circle cloud puff
+      for (const [ox, oy, r] of [
+        [0, 0, size * 0.7], [-size * 0.55, size * 0.2, size * 0.55],
+        [size * 0.55, size * 0.2, size * 0.50], [0, size * 0.18, size * 0.60],
+        [-size * 0.28, -size * 0.2, size * 0.42], [size * 0.28, -size * 0.2, size * 0.42],
+      ]) {
+        ctx.beginPath(); ctx.arc(px + ox, py + oy, r, 0, Math.PI * 2); ctx.fill();
+      }
+      // Soft shadow underneath
+      ctx.fillStyle = 'rgba(100,160,210,0.12)';
+      ctx.save(); ctx.translate(px, py + size * 0.4); ctx.scale(1, 0.25);
+      ctx.beginPath(); ctx.arc(0, 0, size * 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    // Rocks (floating island stones)
+    this._drawRocks(ctx);
+
+    // Enemy camp dirt ground
+    const sp = this.path[0];
+    ctx.fillStyle = '#2d1205'; ctx.fillRect(sp.x, sp.y - 54, 92, 112);
+    ctx.fillStyle = '#3a1a08'; ctx.fillRect(sp.x + 5, sp.y - 48, 82, 100);
+
+    // Path — slightly lighter blue-grey to suggest cloud walkway
+    this._drawPath(ctx, '#aaccee', '#bbddee', '#cceeff', '#ddeeff');
+
+    // Path ruts (soft blue)
+    ctx.strokeStyle = 'rgba(100,150,200,0.18)'; ctx.lineWidth = 1;
+    for (let seg = 0; seg < this.path.length - 1; seg++) {
+      const a = this.path[seg], b = this.path[seg + 1];
+      for (let t2 = 0.04; t2 < 1.0; t2 += 0.10) {
+        const px = a.x + (b.x - a.x) * t2, py = a.y + (b.y - a.y) * t2;
+        const perp = Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2;
+        const len = 7 + Math.sin(t2 * 19 + seg) * 4;
+        ctx.beginPath();
+        ctx.moveTo(px + Math.cos(perp)*len, py + Math.sin(perp)*len);
+        ctx.lineTo(px - Math.cos(perp)*len*0.5, py - Math.sin(perp)*len*0.5);
+        ctx.stroke();
+      }
+    }
   }
 
   // ── Normal green battlefield (levels 1-99) ───────────────────────────────────

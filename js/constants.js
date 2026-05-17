@@ -21,6 +21,7 @@ export const ENEMIES = {
   dragon:      { kind: 'dragon',      name: 'Forest Dragon', color: '#2ea84a', speed: 1.2, hp: 130, size: 24, reward: 20, castleDamage: 120 },
   dragonRider: { kind: 'dragonRider', name: 'Death Rider',   color: '#8b0000', speed: 0.75, hp: 260, size: 28, reward: 35, castleDamage: 280 },
   titan:       { kind: 'titan',       name: 'Ancient Titan', color: '#1a0a2e', speed: 0.28, hp: 100000, size: 72, reward: 500, castleDamage: 999, isTitan: true },
+  elderDragonRider: { kind: 'elderDragonRider', name: 'Elder Dragon Rider', color: '#0a0020', speed: 0.22, hp: 120000, size: 88, reward: 1000, castleDamage: 999 },
 };
 
 // 8 distinct path shapes. All start at x=0, end at x=W.
@@ -169,6 +170,22 @@ export function generateLevels(count = 100) {
       enemySlow: id === 100 ? 0.6 : 1,
     });
   }
+  levels.push({
+    id: 101,
+    secret: true,
+    name: 'Dragon Island',
+    desc: 'A forgotten island in the clouds. The Elder Dragon Rider sleeps here — wake it at your peril.',
+    theme: { bg: 'linear-gradient(135deg,#e8f4ff,#c0e8ff)', border: '#4488cc', icon: '🐲', word: 'SECRET', glow: 'rgba(0,150,255,0.5)' },
+    waves: 15,
+    towers: ALL_TOWERS,
+    traps: ALL_TRAPS,
+    enemies: ['dragon', 'dragonRider', 'dragon', 'dragonRider', 'dragon'],
+    camps: ALL_CAMPS,
+    mapVariant: 2,
+    difficulty: 8,
+    enemySlow: 0.8,
+    breakTimer: 600,
+  });
   return levels;
 }
 

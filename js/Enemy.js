@@ -51,8 +51,8 @@ export class Enemy {
     if (this.burnTimer > 0) { this.burnTimer--; this.hp -= 0.08; if (this.burnTimer % 20 === 0) this.hitTimer = 6; }
     if (this.shockTimer > 0) this.shockTimer--;
 
-    // Titan: cycle through 3 special attacks
-    if (this.kind === 'titan') {
+    // Titan: cycle through 3 special attacks (shared by elderDragonRider)
+    if (this.kind === 'titan' || this.kind === 'elderDragonRider') {
       // ── Regen: 10% max HP every 4 seconds (240 frames) ──────────────────
       this.titanRegenTimer++;
       if (this.titanRegenTimer >= 240) {
@@ -217,10 +217,10 @@ export class Enemy {
         this.triggerAttack(sx, sy);
         if (this.soldierAtkTimer <= 0) {
           // Damage per enemy type — stronger enemies hit harder; titan swats like flies
-          const dmg = { goblin:4, runner:3, saboteur:10, ogre:18, dragon:30, dragonRider:50, titan:120 }[this.kind] ?? 4;
+          const dmg = { goblin:4, runner:3, saboteur:10, ogre:18, dragon:30, dragonRider:50, titan:120, elderDragonRider:150 }[this.kind] ?? 4;
           this.soldierTarget.takeDamage(dmg);
           // Titan scythe: stun + blast the soldier away + lifesteal
-          if (this.kind === 'titan') {
+          if (this.kind === 'titan' || this.kind === 'elderDragonRider') {
             const dist = Math.hypot(sx - this.x, sy - this.y) || 1;
             this.soldierTarget.stunTimer = 55;
             this.soldierTarget.pushVx = ((sx - this.x) / dist) * 14;
@@ -281,7 +281,9 @@ export class Enemy {
     const facing = Math.atan2(wp.y - this.y, wp.x - this.x);
     const bc = this.hitTimer > 0 ? '#fff' : this.slowTimer > 0 ? '#bb66ff' : this.color;
 
-    if (this.kind === 'titan') {
+    if (this.kind === 'elderDragonRider') {
+      this._drawElderDragonRider(ctx, facing, bc);
+    } else if (this.kind === 'titan') {
       this._drawTitan(ctx, facing, bc);
     } else if (this.kind === 'dragon' || this.kind === 'dragonRider') {
       this._drawDragon(ctx, facing, bc);
@@ -924,6 +926,241 @@ export class Enemy {
       ctx.strokeStyle = `rgba(180,100,255,${p * 0.9})`; ctx.lineWidth = 3; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.arc(0, 0, s * 2.2, -0.55, 0.55); ctx.stroke();
       ctx.lineCap = 'butt'; ctx.restore();
+    }
+  }
+
+  // ── Drawing: Elder Dragon Rider ──────────────────────────────────────────
+  _drawElderDragonRider(ctx, facing, bc) {
+    const s = this.size;          // s = 88
+    const hit = this.hitTimer > 0;
+    const t = Date.now() / 1000;
+
+    // Dark aura (larger than titan's)
+    const aura = 0.22 + 0.1 * Math.sin(t * 2.2);
+    ctx.save();
+    const ag = ctx.createRadialGradient(this.x, this.y, s * 0.1, this.x, this.y, s * 2.2);
+    ag.addColorStop(0, `rgba(0,80,200,${aura})`);
+    ag.addColorStop(0.5, `rgba(80,0,160,${aura * 0.5})`);
+    ag.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = ag;
+    ctx.beginPath(); ctx.arc(this.x, this.y, s * 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // ── Dragon body (scaled-up dragon, dark blue/black) ──────────────────────
+    const dragonColor = hit ? '#ccccff' : '#0a0020';
+    const dragonDark  = hit ? '#ffffff' : '#1a0040';
+    const dragonMid   = hit ? '#ffffff' : '#2a0060';
+
+    ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(facing);
+
+    // Tail
+    ctx.strokeStyle = dragonColor; ctx.lineWidth = s * 0.42; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-s*0.7, 0);
+    ctx.bezierCurveTo(-s*1.4, s*0.8, -s*2.7, -s*0.5, -s*3.1, s*0.2);
+    ctx.stroke();
+    ctx.lineWidth = 1; ctx.lineCap = 'butt';
+    ctx.fillStyle = dragonDark;
+    ctx.beginPath(); ctx.moveTo(-s*2.75,s*0.08); ctx.lineTo(-s*3.52,-s*0.24); ctx.lineTo(-s*3.15,s*0.40); ctx.closePath(); ctx.fill();
+
+    // Body
+    ctx.save(); ctx.scale(1.15, 0.72);
+    ctx.fillStyle = dragonColor;
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.7, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,50,150,0.6)'; ctx.lineWidth = 2/0.72;
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.7, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+
+    // Spine ridges — purple tips
+    if (!hit) {
+      ctx.fillStyle = '#3a0070';
+      for (let i = -2; i <= 2; i++) {
+        const px2 = i * s * 0.27;
+        ctx.beginPath(); ctx.moveTo(px2-s*0.08,-s*0.44); ctx.lineTo(px2,-s*0.66); ctx.lineTo(px2+s*0.08,-s*0.44); ctx.closePath(); ctx.fill();
+      }
+    }
+
+    // Wings — dark blue with purple tips
+    ctx.fillStyle = dragonDark; ctx.globalAlpha = 0.88;
+    ctx.beginPath();
+    ctx.moveTo(-s*0.13,-s*0.36);
+    ctx.bezierCurveTo(-s*0.40,-s*1.32,-s*1.55,-s*1.76,-s*1.92,-s*0.92);
+    ctx.bezierCurveTo(-s*1.44,-s*0.25,-s*0.72,-s*0.09,-s*0.13,-s*0.36);
+    ctx.fill();
+    ctx.fillStyle = '#4400aa'; ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.arc(-s*1.4, -s*1.4, s*0.22, 0, Math.PI*2); ctx.fill();
+
+    ctx.globalAlpha = 0.88; ctx.fillStyle = dragonDark;
+    ctx.beginPath();
+    ctx.moveTo(s*0.23,-s*0.36);
+    ctx.bezierCurveTo(s*0.52,-s*1.30,s*1.52,-s*1.72,s*1.86,-s*0.88);
+    ctx.bezierCurveTo(s*1.36,-s*0.20,s*0.72,-s*0.06,s*0.23,-s*0.36);
+    ctx.fill();
+    ctx.fillStyle = '#4400aa'; ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.arc(s*1.38, -s*1.36, s*0.22, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Chains draped across body
+    if (!hit) {
+      ctx.save();
+      const chainDefs2 = [
+        { x1: -s*0.5, y1: -s*0.3, x2: s*0.5, y2: s*0.1 },
+        { x1: -s*0.3, y1: s*0.1,  x2: s*0.6, y2: -s*0.2 },
+      ];
+      for (const ch of chainDefs2) {
+        ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = s * 0.06;
+        ctx.beginPath(); ctx.moveTo(ch.x1, ch.y1); ctx.lineTo(ch.x2, ch.y2); ctx.stroke();
+        const len = Math.hypot(ch.x2-ch.x1, ch.y2-ch.y1);
+        const steps = Math.floor(len / (s * 0.22));
+        for (let i = 0; i <= steps; i++) {
+          const t3 = i / steps;
+          const lx2 = ch.x1 + (ch.x2-ch.x1)*t3;
+          const ly2 = ch.y1 + (ch.y2-ch.y1)*t3;
+          if (i % 3 === 1) {
+            ctx.save(); ctx.translate(lx2, ly2);
+            const sk = s * 0.10;
+            ctx.fillStyle = '#e8d8a0';
+            ctx.beginPath(); ctx.arc(0, -sk*0.1, sk, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(-sk*0.28, -sk*0.22, sk*0.22, sk*0.24);
+            ctx.fillRect( sk*0.06, -sk*0.22, sk*0.22, sk*0.24);
+            ctx.restore();
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    // Legs
+    const lc2 = dragonDark, fw2 = s*0.32, fh2 = s*0.11;
+    const lw2 = s*0.16, lh2 = s*0.36, sh2 = s*0.26;
+    [[-s*0.47,-s*0.03],[-s*0.22,s*0.01],[s*0.20,s*0.01],[s*0.45,-s*0.03]].forEach(([lx2,ox2]) => {
+      ctx.fillStyle = lc2;
+      ctx.fillRect(lx2-lw2/2, s*0.36, lw2, lh2);
+      ctx.fillRect(lx2-lw2/2+ox2, s*0.36+lh2, lw2, sh2);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(lx2-lw2/2+ox2-s*0.07, s*0.36+lh2+sh2-s*0.02, fw2, fh2);
+    });
+
+    // Neck
+    ctx.fillStyle = dragonColor;
+    ctx.beginPath();
+    ctx.moveTo(s*0.63,-s*0.20); ctx.quadraticCurveTo(s*1.12,-s*0.48,s*1.28,-s*0.04);
+    ctx.quadraticCurveTo(s*1.12,s*0.27,s*0.63,s*0.20); ctx.closePath(); ctx.fill();
+
+    // Dragon head
+    ctx.save();
+    ctx.translate(s*1.48,0); ctx.rotate(-0.12); ctx.scale(s*0.42,s*0.32);
+    ctx.fillStyle = dragonColor;
+    ctx.beginPath(); ctx.arc(0,0,1,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Snout
+    ctx.save();
+    ctx.translate(s*1.88,s*0.05); ctx.rotate(0.22); ctx.scale(s*0.24,s*0.16);
+    ctx.fillStyle = dragonDark;
+    ctx.beginPath(); ctx.arc(0,0,1,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Eye — glowing purple for elder
+    ctx.fillStyle = hit ? '#ff00ff' : `rgba(180,0,255,${0.85 + 0.15*Math.sin(t*3)})`;
+    ctx.beginPath(); ctx.arc(s*1.36,-s*0.13,s*0.11,0,Math.PI*2); ctx.fill();
+
+    // Horns — larger, purple tipped
+    ctx.fillStyle = dragonDark;
+    ctx.beginPath(); ctx.moveTo(s*1.30,-s*0.28); ctx.lineTo(s*1.14,-s*0.62); ctx.lineTo(s*1.42,-s*0.30); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s*1.48,-s*0.26); ctx.lineTo(s*1.58,-s*0.62); ctx.lineTo(s*1.66,-s*0.24); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#8800ff';
+    ctx.beginPath(); ctx.arc(s*1.14,-s*0.62,s*0.05,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s*1.58,-s*0.62,s*0.05,0,Math.PI*2); ctx.fill();
+
+    ctx.restore(); // end dragon body transform
+
+    // ── Titan rider on dragon's back ────────────────────────────────────────
+    const riderScale = 0.38;
+    const riderX = this.x + Math.cos(facing) * s * 0.0;
+    const riderY = this.y + Math.sin(facing) * s * 0.0 - s * 0.55;
+
+    ctx.save(); ctx.translate(riderX, riderY); ctx.scale(riderScale, riderScale);
+
+    const rs = s; // rider draw size (will be scaled down)
+    const headR = rs * 0.28;
+    const headCY = -rs * 0.52;
+    const torsoTop = headCY + headR + rs * 0.03;
+    const torsoH = rs * 0.75;
+    const torsoW = rs * 0.72;
+
+    // Rider torso
+    ctx.fillStyle = hit ? '#ccffcc' : '#1a0a2e';
+    ctx.fillRect(-torsoW/2, torsoTop, torsoW, torsoH);
+    // Shoulder pads
+    ctx.fillStyle = hit ? '#fff' : '#2d1050';
+    ctx.beginPath(); ctx.arc(-torsoW/2, torsoTop + rs*0.09, rs*0.20, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(torsoW/2, torsoTop + rs*0.09, rs*0.20, 0, Math.PI*2); ctx.fill();
+
+    // Rider scythe arm (facing direction)
+    const scytheFacing2 = this.attackTimer > 0
+      ? this.attackAngle - 1.1 + (1 - this.attackTimer/14) * 2.2
+      : facing;
+    const armW2 = rs * 0.20, uAL2 = rs * 0.46, fAL2 = rs * 0.38;
+    ctx.save(); ctx.translate(0, torsoTop + rs*0.16); ctx.rotate(scytheFacing2);
+    ctx.fillStyle = hit ? '#fff' : '#2d1050';
+    ctx.fillRect(0, -armW2/2, uAL2+fAL2, armW2);
+    if (!hit) {
+      ctx.translate(uAL2+fAL2, 0);
+      const hLen2 = rs * 2.5;
+      ctx.strokeStyle = '#2a1a0a'; ctx.lineWidth = rs*0.10; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-rs*0.2, 0); ctx.lineTo(hLen2, -rs*0.10); ctx.stroke();
+      ctx.translate(hLen2, -rs*0.10);
+      ctx.strokeStyle = hit ? '#fff' : '#ccc'; ctx.lineWidth = rs*0.16; ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.arc(-rs*0.36, 0, rs*0.75, -Math.PI*0.70, Math.PI*0.06); ctx.stroke();
+      // Blade glow purple
+      ctx.fillStyle = hit ? '#fff' : '#8800ff';
+      ctx.beginPath(); ctx.arc(-rs*0.36, -rs*0.74, rs*0.10, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.lineCap = 'butt'; ctx.restore();
+
+    // Rider neck + head
+    ctx.fillStyle = hit ? '#ffffff' : '#1a0a2e';
+    ctx.fillRect(-rs*0.12, headCY + headR - 2, rs*0.24, rs*0.18);
+    ctx.beginPath(); ctx.arc(0, headCY, headR, 0, Math.PI*2); ctx.fill();
+    if (!hit) {
+      // Crown horns
+      ctx.fillStyle = '#3d0070';
+      for (const [hx2, hy2] of [[-headR*0.4, -headR*0.45], [0, -headR*0.65], [headR*0.4, -headR*0.45]]) {
+        ctx.beginPath();
+        ctx.moveTo(hx2 - headR*0.13, headCY + hy2 + headR*0.36);
+        ctx.lineTo(hx2, headCY + hy2 - headR*0.40);
+        ctx.lineTo(hx2 + headR*0.13, headCY + hy2 + headR*0.36);
+        ctx.closePath(); ctx.fill();
+      }
+      // Purple glowing eyes
+      ctx.fillStyle = `rgba(180,0,255,${0.85 + 0.15*Math.sin(t*3)})`;
+      ctx.fillRect(headR*0.09, headCY - headR*0.13, headR*0.30, headR*0.16);
+      ctx.fillRect(-headR*0.39, headCY - headR*0.13, headR*0.30, headR*0.16);
+    }
+    ctx.restore(); // end rider scale transform
+
+    // ── Scythe swing arc ────────────────────────────────────────────────────
+    if (this.attackTimer > 0) {
+      const p = this.attackTimer / 14;
+      ctx.save(); ctx.translate(this.x, this.y + (this.titanJumpOffset || 0)); ctx.rotate(this.attackAngle);
+      ctx.strokeStyle = `rgba(100,0,255,${p * 0.9})`; ctx.lineWidth = 6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, 0, s * 2.8, -1.0, 1.0); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${p * 0.35})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, s * 2.2, -0.8, 0.8); ctx.stroke();
+      ctx.lineCap = 'butt'; ctx.restore();
+    }
+
+    // Shockwave ring
+    if (this.titanShockwaveR > 0) {
+      const alpha = Math.max(0, 1 - this.titanShockwaveR / (this.size * 5));
+      ctx.save();
+      ctx.strokeStyle = `rgba(100,0,255,${alpha * 0.85})`; ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.titanShockwaveR, 0, Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = `rgba(0,100,255,${alpha * 0.4})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.titanShockwaveR * 0.7, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
     }
   }
 

@@ -726,11 +726,11 @@ class Soldier {
           // Siege: hits every enemy within melee reach
           for (const e of enemies) {
             if (Math.hypot(e.x-this.x, e.y-this.y) < 62)
-              e.takeDamage(this.damage);
+              e.takeDamage(e.isTitan ? this.damage * 0.5 : this.damage);
           }
         } else {
           // archer / basic / knight: single target
-          this.target.takeDamage(this.damage);
+          this.target.takeDamage(this.target.isTitan ? this.damage * 0.5 : this.damage);
         }
         this.attackTimer = this.attackRate;
         this.swingTimer  = 14;
@@ -1195,6 +1195,8 @@ class Game {
     // ── Gem currency ───────────────────────────────────────────────────────────
     // Gems are rare — earned from level completions, achievements, and daily wheel
     this.gems = parseInt(localStorage.getItem('td_gems') || '0');
+    this.titanKills = parseInt(localStorage.getItem('td_titanKills') || '0');
+    this.elderSpawned = false;
 
     this._buildTitleScreen();
     this._setupInput();
@@ -1372,8 +1374,8 @@ class Game {
             camp.campType,  // stats (hp, dmg, ranged, magic, aoe flags)
             camp.typeName   // name so draw() knows which style to use
           );
-          // Level 100: Final Stand soldiers are elite warriors (strong but not godlike)
-          if (this.currentLevel?.id === 100) {
+          // Level 100/101: Final Stand soldiers are elite warriors (strong but not godlike)
+          if (this.currentLevel?.id === 100 || this.currentLevel?.id === 101) {
             sol.hp     *= 8;
             sol.maxHp  *= 8;
             sol.damage *= 7;
@@ -1393,7 +1395,7 @@ class Game {
     this.soldiers = this.soldiers.filter(s => !s.isDead());
 
     // Final level only: soldiers at waypoint 0 attack the enemy camp → titan boss
-    if (this.currentLevel?.id === 100 && !this.titanSpawned) {
+    if ((this.currentLevel?.id === 100 || this.currentLevel?.id === 101) && !this.titanSpawned) {
       for (const s of this.soldiers) {
         if (s.waypoint === 0 && s.attackTimer === 0 && this.enemyCampHp > 1) {
           this.enemyCampHp -= s.damage;
@@ -1411,7 +1413,7 @@ class Game {
       }
     }
     // Cutscene countdown (final level only)
-    if (this.currentLevel?.id === 100 && this.cutscenePhase > 0) {
+    if ((this.currentLevel?.id === 100 || this.currentLevel?.id === 101) && this.cutscenePhase > 0) {
       this.cutsceneTimer--;
       // Init actors when phase 2 first starts
       if (this.cutscenePhase === 1 && this.cutsceneTimer === 120 && this._cutsceneActors.length === 0) {
@@ -1461,10 +1463,11 @@ class Game {
         this.titanSpawned = true;
         this.paused = false;
         const diff = this.currentLevel.difficulty;
-        const titan = new Enemy('titan', this.path[0].x - 40, this.path[0].y, diff);
+        const bossKind = this.currentLevel.id === 101 ? 'elderDragonRider' : 'titan';
+        const titan = new Enemy(bossKind, this.path[0].x - 40, this.path[0].y, diff);
         titan.isTitan = true;
         this.enemies.push(titan);
-        this.flash('⚡ THE TITAN HAS AWAKENED! ⚡');
+        this.flash(this.currentLevel.id === 101 ? '🐲 THE ELDER DRAGON RIDER AWAKENS! 🐲' : '⚡ THE TITAN HAS AWAKENED! ⚡');
         this.cutscenePhase = 0;
       }
     }
@@ -1533,7 +1536,27 @@ class Game {
     // Titan defeated → YOU WIN — the ultimate victory
     if (titanKilled) {
       this.flash('⚡ THE TITAN IS DEFEATED! VICTORY! ⚡');
+      this.titanKills++;
+      localStorage.setItem('td_titanKills', String(this.titanKills));
+      if (this.titanKills >= 3) {
+        const saved = parseInt(localStorage.getItem('td_maxLevel') || '1');
+        if (saved < 101) localStorage.setItem('td_maxLevel', '101');
+        this.flash('🐲 DRAGON ISLAND UNLOCKED!');
+      }
       setTimeout(() => this._onLevelComplete(), 1200);
+    }
+    // Dragon Island: when enemies are almost dead, spawn the Elder Dragon Rider
+    if (this.currentLevel?.id === 101 && !this.elderSpawned && this.titanSpawned && this.enemies.length > 0) {
+      const weakest = this.enemies.reduce((a, b) => a.hp < b.hp ? a : b);
+      if (weakest.hp <= 1 && weakest.kind !== 'elderDragonRider') {
+        this.elderSpawned = true;
+        const elder = new Enemy('elderDragonRider', this.path[0].x, this.path[0].y, this.currentLevel.difficulty);
+        elder.isTitan = true;
+        this.enemies.push(elder);
+        this.flash('⚡ THE ELDER DRAGON RIDER AWAKENS! ⚡');
+        this.waveBannerText = 'THE ELDER DRAGON RIDER — ANCIENT EVIL INCARNATE!';
+        this.waveBannerTimer = 200;
+      }
     }
     if (this.enemies.length < before) this._updateButtons();
 
@@ -1657,7 +1680,7 @@ class Game {
 
   tryPlaceCamp(x, y) {
     // Enforce camp limit — level 100 gets 20 max, others use campLimit
-    const effectiveCampLimit = this.currentLevel?.id === 100 ? 20 : this.campLimit;
+    const effectiveCampLimit = (this.currentLevel?.id === 100 || this.currentLevel?.id === 101) ? 20 : this.campLimit;
     if (this.camps.length >= effectiveCampLimit) {
       this.flash(`Camp limit reached! (${effectiveCampLimit} max)`); return;
     }
@@ -2935,7 +2958,8 @@ class Game {
     const variant = levelDef.mapVariant || 0;
     this.path = makePath(this.canvas.width, this.canvas.height, variant);
     const isFinalLevel = levelDef.id === 100;
-    this.map  = new GameMap(this.path, this.canvas.width, this.canvas.height, isFinalLevel);
+    const isCloudLevel = levelDef.id === 101;
+    this.map  = new GameMap(this.path, this.canvas.width, this.canvas.height, isFinalLevel, isCloudLevel);
     const pathEnd = this.path[this.path.length - 1];
     this.castleArcher.x = pathEnd.x - 42;
     this.castleArcher.y = pathEnd.y - 38;
@@ -2972,6 +2996,7 @@ class Game {
     this.enemyCampHp    = 50000;
     this.enemyCampMaxHp = 50000;
     this.titanSpawned   = false;
+    this.elderSpawned   = false;
     this.cutsceneTimer  = 0;
     this.cutscenePhase  = 0;
     this._cutsceneActors = [];
@@ -3110,12 +3135,14 @@ class Game {
           <div style="font-size:8px;color:#333;letter-spacing:1px">LOCKED</div>`;
       } else {
         const isSelected = this.selectedLevelId === lvl.id;
-        const numClr = lvl.id === 100 ? '#ffaa00' : '#fff';
+        const numClr = lvl.id === 100 ? '#ffaa00' : lvl.id === 101 ? '#00ddff' : '#fff';
+        const secretBorder = lvl.id === 101 ? 'border:2px solid #ffd700;' : '';
+        btn.style.cssText += secretBorder;
         btn.innerHTML = `
-          <div style="font-size:8px;color:rgba(255,255,255,0.38);letter-spacing:1.5px">LV</div>
-          <div style="font-size:${lvl.id >= 100 ? 18 : lvl.id >= 10 ? 20 : 22}px;font-weight:900;color:${numClr};text-shadow:0 0 8px ${theme.glow};line-height:1">${lvl.id}</div>
-          <div style="font-size:16px;line-height:1;margin:1px 0">${theme.icon}</div>
-          <div style="font-size:6px;font-weight:bold;color:${theme.border};letter-spacing:1px;text-transform:uppercase;text-align:center;padding:0 2px;line-height:1.2;max-width:68px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${theme.word}</div>`;
+          <div style="font-size:8px;color:rgba(255,255,255,0.38);letter-spacing:1.5px">${lvl.id === 101 ? '✦' : 'LV'}</div>
+          <div style="font-size:${lvl.id >= 100 ? 18 : lvl.id >= 10 ? 20 : 22}px;font-weight:900;color:${numClr};text-shadow:0 0 8px ${theme.glow};line-height:1">${lvl.id === 101 ? '🐲' : lvl.id}</div>
+          <div style="font-size:${lvl.id === 101 ? 8 : 16}px;line-height:1;margin:1px 0;color:${lvl.id === 101 ? '#ffd700' : 'inherit'};font-weight:${lvl.id === 101 ? 'bold' : 'normal'}">${lvl.id === 101 ? 'DRAGON ISLE' : theme.icon}</div>
+          <div style="font-size:6px;font-weight:bold;color:${lvl.id === 101 ? '#ffd700' : theme.border};letter-spacing:1px;text-transform:uppercase;text-align:center;padding:0 2px;line-height:1.2;max-width:68px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${theme.word}</div>`;
         btn.onmouseenter = () => {
           if (!isSelected) btn.style.transform = 'scale(1.1)';
         };
@@ -3659,29 +3686,59 @@ class Game {
   }
 
   _drawCampHpBar() {
-    if (this.currentLevel?.id !== 100) return; // only on the final level
-    if (this.titanSpawned && this.cutscenePhase === 0) return; // titan already out, hide bar
+    if (!this.currentLevel || (this.currentLevel.id !== 100 && this.currentLevel.id !== 101)) return;
+    if (this.titanSpawned && this.cutscenePhase === 0) return;
+
     const sp = this.path[0];
-    const barW = 100, barH = 8;
-    const bx = sp.x - 5, by = sp.y - 80;
     const pct = Math.max(0, this.enemyCampHp / this.enemyCampMaxHp);
-    // Background
-    this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    this.ctx.fillRect(bx - 2, by - 2, barW + 4, barH + 4);
-    // Health fill — green → yellow → red
-    const hue = Math.floor(pct * 120);
-    this.ctx.fillStyle = `hsl(${hue},90%,45%)`;
-    this.ctx.fillRect(bx, by, barW * pct, barH);
-    // Label
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = 'bold 9px sans-serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(`CAMP  ${Math.ceil(this.enemyCampHp).toLocaleString()} / ${this.enemyCampMaxHp.toLocaleString()}`, bx + barW/2, by - 4);
-    this.ctx.textAlign = 'left';
+
+    if (this.currentLevel.id === 101) {
+      // Dragon egg
+      const ex = sp.x, ey = sp.y - 55;
+      const ctx = this.ctx;
+      ctx.save();
+      // Egg shape
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, 22, 30, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#1a0a2e'; ctx.fill();
+      // Crack overlay based on HP
+      const crackAmt = 1 - pct;
+      if (crackAmt > 0.2) {
+        ctx.strokeStyle = `rgba(0,200,255,${crackAmt})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(ex-4, ey-10); ctx.lineTo(ex+2, ey); ctx.lineTo(ex-3, ey+8); ctx.stroke();
+        if (crackAmt > 0.5) {
+          ctx.beginPath(); ctx.moveTo(ex+6, ey-8); ctx.lineTo(ex-2, ey+5); ctx.stroke();
+        }
+      }
+      // Glow based on HP remaining
+      const glow = 0.3 + pct * 0.5;
+      ctx.shadowColor = `rgba(0,200,100,${glow})`; ctx.shadowBlur = 18;
+      ctx.strokeStyle = `rgba(0,180,80,${glow})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.ellipse(ex, ey, 22, 30, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.shadowBlur = 0;
+      // HP label
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(`${Math.ceil(this.enemyCampHp).toLocaleString()}`, ex, ey + 45);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    } else {
+      // Original camp HP bar (level 100)
+      const barW = 100, barH = 8;
+      const bx = sp.x - 5, by = sp.y - 80;
+      const ctx = this.ctx;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(bx - 2, by - 2, barW + 4, barH + 4);
+      const hue = Math.floor(pct * 120);
+      ctx.fillStyle = `hsl(${hue},90%,45%)`;
+      ctx.fillRect(bx, by, barW * pct, barH);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(`CAMP  ${Math.ceil(this.enemyCampHp).toLocaleString()} / ${this.enemyCampMaxHp.toLocaleString()}`, bx + barW/2, by - 4);
+      ctx.textAlign = 'left';
+    }
   }
 
   _drawCutscene() {
-    if (this.currentLevel?.id !== 100 || this.cutscenePhase === 0) return;
+    if ((this.currentLevel?.id !== 100 && this.currentLevel?.id !== 101) || this.cutscenePhase === 0) return;
     const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
     const p = this.cutscenePhase === 1 ? 1 - this.cutsceneTimer / 240 : 1;
     const t = Date.now() / 1000;
@@ -4733,10 +4790,11 @@ class Game {
       const canAfford = this.gems >= item.cost;
       const div = document.createElement('div');
       div.className = 'gem-item' + (owned ? ' owned' : canAfford ? '' : ' cant-afford');
-      div.innerHTML = `<div class="gi-icon">${item.icon}</div><div class="gi-name">${item.name}</div><div class="gi-cost">${owned ? '✓ OWNED' : '💎 ' + item.cost}</div><div class="gi-desc">${item.desc}</div>`;
+      div.innerHTML = `<canvas class="gi-icon-canvas" width="40" height="40" style="display:block;margin:0 auto 2px"></canvas><div class="gi-name">${item.name}</div><div class="gi-cost">${owned ? '✓ OWNED' : '💎 ' + item.cost}</div><div class="gi-desc">${item.desc}</div>`;
       div.title = item.desc;
       if (!owned) div.onclick = () => this._buyGemItem(item);
       container.appendChild(div);
+      this._drawGemItemIcon(div.querySelector('.gi-icon-canvas'), item.id);
     }
 
     addSection('📦 Level Loadout — buy to use next level (stackable)');
@@ -4746,15 +4804,391 @@ class Game {
       const div = document.createElement('div');
       div.className = 'gem-item' + (canAfford ? '' : ' cant-afford');
       if (count > 0) div.style.borderColor = '#ffd700';
-      div.innerHTML = `<div class="gi-icon">${item.icon}${count > 0 ? `<span style="font-size:10px;color:#ffd700;font-weight:bold"> ×${count}</span>` : ''}</div><div class="gi-name">${item.name}</div><div class="gi-cost">💎 ${item.cost}</div><div class="gi-desc">${item.desc}</div>`;
+      div.innerHTML = `<canvas class="gi-icon-canvas" width="40" height="40" style="display:block;margin:0 auto 2px"></canvas>${count > 0 ? `<span style="font-size:10px;color:#ffd700;font-weight:bold;display:block;text-align:center">×${count}</span>` : ''}<div class="gi-name">${item.name}</div><div class="gi-cost">💎 ${item.cost}</div><div class="gi-desc">${item.desc}</div>`;
       div.title = item.desc;
       div.onclick = () => this._buyGemItem(item);
       container.appendChild(div);
+      this._drawGemItemIcon(div.querySelector('.gi-icon-canvas'), item.id);
     }
 
     // Update gem balance display
     const bal = document.getElementById('gem-balance');
     if (bal) bal.textContent = `💎 ${this.gems} Gem${this.gems !== 1 ? 's' : ''}`;
+  }
+
+  // Draw a small thematic canvas icon for a gem shop item
+  _drawGemItemIcon(canvas, itemId) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = 40, H = 40, cx = 20, cy = 20;
+    ctx.clearRect(0, 0, W, H);
+    switch (itemId) {
+      case 'gem_gold': {
+        // Stack of 3 gold coins
+        const positions = [[cx-4, cy+6], [cx+2, cy+2], [cx-2, cy-4]];
+        for (const [px, py] of positions) {
+          ctx.fillStyle = '#aa8800'; ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#ffe55c'; ctx.beginPath(); ctx.arc(px-2, py-2, 3, 0, Math.PI*2); ctx.fill();
+        }
+        break;
+      }
+      case 'gem_castle': {
+        // Grey castle
+        ctx.fillStyle = '#777'; ctx.fillRect(8, 16, 24, 16);
+        ctx.fillStyle = '#999'; ctx.fillRect(9, 17, 22, 14);
+        for (let i = 0; i < 4; i++) { ctx.fillStyle = '#666'; ctx.fillRect(8 + i*7, 10, 5, 8); }
+        ctx.fillStyle = '#333'; ctx.fillRect(15, 24, 10, 8);
+        break;
+      }
+      case 'gem_miners': {
+        // Pickaxe
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(-Math.PI/4);
+        ctx.strokeStyle = '#6b3a10'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(12, 0); ctx.stroke();
+        ctx.fillStyle = '#aaa';
+        ctx.beginPath(); ctx.moveTo(8, -6); ctx.lineTo(16, -6); ctx.lineTo(14, 4); ctx.lineTo(6, 4); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        break;
+      }
+      case 'gem_soldiers': {
+        // Crossed swords
+        ctx.save(); ctx.translate(cx, cy);
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-14, -14); ctx.lineTo(14, 14); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(14, -14); ctx.lineTo(-14, 14); ctx.stroke();
+        ctx.fillStyle = '#888';
+        ctx.beginPath(); ctx.arc(-14, -14, 3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(14, -14, 3, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+        break;
+      }
+      case 'gem_headstart': {
+        // Up arrow with star
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath(); ctx.moveTo(cx, cy-14); ctx.lineTo(cx+8, cy-2); ctx.lineTo(cx+4, cy-2);
+        ctx.lineTo(cx+4, cy+8); ctx.lineTo(cx-4, cy+8); ctx.lineTo(cx-4, cy-2); ctx.lineTo(cx-8, cy-2); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffee44';
+        ctx.beginPath(); ctx.arc(cx, cy-16, 5, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'gem_fastfire': {
+        // Lightning bolt
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath(); ctx.moveTo(cx+4, cy-16); ctx.lineTo(cx-6, cy+2); ctx.lineTo(cx+2, cy+2);
+        ctx.lineTo(cx-4, cy+16); ctx.lineTo(cx+6, cy-2); ctx.lineTo(cx-2, cy-2); ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'gem_dragon': {
+        // Dragon head — green circle with horns
+        ctx.fillStyle = '#2ea84a'; ctx.beginPath(); ctx.arc(cx, cy+2, 12, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#1a6b30';
+        ctx.beginPath(); ctx.moveTo(cx-6, cy-8); ctx.lineTo(cx-10, cy-18); ctx.lineTo(cx-2, cy-10); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(cx+6, cy-8); ctx.lineTo(cx+10, cy-18); ctx.lineTo(cx+2, cy-10); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffe000'; ctx.beginPath(); ctx.arc(cx-4, cy, 2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx+4, cy, 2, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'gem_goldbonus': {
+        // Coins with green plus
+        ctx.fillStyle = '#aa8800'; ctx.beginPath(); ctx.arc(cx-5, cy+2, 9, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(cx-5, cy+2, 8, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#22aa44'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('+', cx+10, cy+8); ctx.textAlign = 'left';
+        break;
+      }
+      case 'gem_camps': {
+        // Brown tent shape
+        ctx.fillStyle = '#8b5e2a';
+        ctx.beginPath(); ctx.moveTo(cx, cy-14); ctx.lineTo(cx+16, cy+12); ctx.lineTo(cx-16, cy+12); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#6b3a10';
+        ctx.beginPath(); ctx.moveTo(cx, cy-14); ctx.lineTo(cx+2, cy+12); ctx.lineTo(cx-2, cy+12); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#333'; ctx.fillRect(cx-3, cy+4, 6, 8);
+        break;
+      }
+      case 'gem_legend': {
+        // 5-point gold star
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+          const a = (i * Math.PI * 2 / 5) - Math.PI / 2;
+          const b = a + Math.PI / 5;
+          if (i === 0) ctx.moveTo(cx + Math.cos(a)*14, cy + Math.sin(a)*14);
+          else ctx.lineTo(cx + Math.cos(a)*14, cy + Math.sin(a)*14);
+          ctx.lineTo(cx + Math.cos(b)*6, cy + Math.sin(b)*6);
+        }
+        ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'ally_dragon': {
+        // Green dragon silhouette
+        ctx.fillStyle = '#2ea84a';
+        ctx.beginPath(); ctx.ellipse(cx, cy+4, 14, 9, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx+14, cy, 7, 0, Math.PI*2); ctx.fill();
+        // Wings
+        ctx.fillStyle = '#1a6b30'; ctx.globalAlpha = 0.8;
+        ctx.beginPath(); ctx.moveTo(cx-2, cy-2); ctx.lineTo(cx-16, cy-14); ctx.lineTo(cx+4, cy-4); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'ally_knight': {
+        // Knight helmet — grey dome with visor
+        ctx.fillStyle = '#8899aa'; ctx.beginPath(); ctx.arc(cx, cy+4, 13, Math.PI, Math.PI*2); ctx.fill();
+        ctx.fillRect(cx-13, cy+4, 26, 8);
+        ctx.fillStyle = '#556677'; ctx.fillRect(cx-10, cy+2, 20, 4);
+        ctx.fillStyle = '#1a1818'; ctx.fillRect(cx-6, cy+4, 12, 5);
+        break;
+      }
+      case 'ally_wizard': {
+        // Purple pointy hat
+        ctx.fillStyle = '#6622aa';
+        ctx.beginPath(); ctx.moveTo(cx, cy-18); ctx.lineTo(cx+14, cy+8); ctx.lineTo(cx-14, cy+8); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#8833cc'; ctx.fillRect(cx-15, cy+6, 30, 6);
+        ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(cx, cy-16, 3, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'ally_golem': {
+        // Grey boulder with texture
+        ctx.fillStyle = '#666'; ctx.beginPath(); ctx.arc(cx, cy+2, 14, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(cx-3, cy-2, 10, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#999'; ctx.beginPath(); ctx.arc(cx-4, cy-4, 6, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx-8, cy+4); ctx.lineTo(cx+2, cy-4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx+2, cy-4); ctx.lineTo(cx+8, cy+6); ctx.stroke();
+        break;
+      }
+      case 'pow_airstrike': {
+        // Plane shape
+        ctx.fillStyle = '#aaa'; ctx.save(); ctx.translate(cx, cy);
+        ctx.beginPath(); ctx.ellipse(0, 0, 14, 5, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillRect(-2, -10, 4, 20);
+        ctx.fillStyle = '#888'; ctx.fillRect(-8, -4, 16, 3); // wings
+        ctx.restore();
+        break;
+      }
+      case 'pow_meteor': {
+        // Orange fireball with trail
+        ctx.fillStyle = '#cc4400';
+        ctx.beginPath(); ctx.arc(cx+4, cy-4, 12, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ff6600'; ctx.beginPath(); ctx.arc(cx+2, cy-6, 9, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.arc(cx, cy-8, 5, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = 'rgba(200,100,0,0.5)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(cx-4, cy+4); ctx.lineTo(cx-14, cy+14); ctx.stroke();
+        break;
+      }
+      case 'pow_freeze': {
+        // Snowflake — blue star
+        ctx.strokeStyle = '#88ddff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a)*14, cy + Math.sin(a)*14); ctx.stroke();
+        }
+        ctx.fillStyle = '#aaeeff'; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2); ctx.fill();
+        ctx.lineCap = 'butt';
+        break;
+      }
+      case 'pow_heal': {
+        // Red cross on white
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#dd2222';
+        ctx.fillRect(cx-4, cy-12, 8, 24);
+        ctx.fillRect(cx-12, cy-4, 24, 8);
+        break;
+      }
+      case 'pow_rage': {
+        // Orange flame shape
+        ctx.fillStyle = '#cc3300';
+        ctx.beginPath(); ctx.moveTo(cx-8, cy+14); ctx.lineTo(cx-4, cy-4); ctx.lineTo(cx-10, cy+2);
+        ctx.lineTo(cx, cy-14); ctx.lineTo(cx+6, cy-2); ctx.lineTo(cx+10, cy-10);
+        ctx.lineTo(cx+8, cy+14); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ff6600';
+        ctx.beginPath(); ctx.moveTo(cx-5, cy+12); ctx.lineTo(cx-2, cy-2); ctx.lineTo(cx-6, cy+4);
+        ctx.lineTo(cx+1, cy-10); ctx.lineTo(cx+4, cy-2); ctx.lineTo(cx+6, cy+12); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffcc00';
+        ctx.beginPath(); ctx.moveTo(cx-2, cy+10); ctx.lineTo(cx+1, cy-2); ctx.lineTo(cx+4, cy+10); ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'pow_shield': {
+        // Blue kite shield
+        ctx.fillStyle = '#2244aa';
+        ctx.beginPath(); ctx.moveTo(cx, cy-16); ctx.lineTo(cx+14, cy-8); ctx.lineTo(cx+14, cy+6);
+        ctx.lineTo(cx, cy+18); ctx.lineTo(cx-14, cy+6); ctx.lineTo(cx-14, cy-8); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#4488ff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy-14); ctx.lineTo(cx+12, cy-6); ctx.lineTo(cx+12, cy+5);
+        ctx.lineTo(cx, cy+16); ctx.lineTo(cx-12, cy+5); ctx.lineTo(cx-12, cy-6); ctx.closePath(); ctx.stroke();
+        ctx.strokeStyle = '#88aaff'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(cx, cy-12); ctx.lineTo(cx, cy+14); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx-10, cy-2); ctx.lineTo(cx+10, cy-2); ctx.stroke();
+        break;
+      }
+      case 'pow_lightning': {
+        // Yellow bolt
+        ctx.fillStyle = '#ffdd00';
+        ctx.beginPath(); ctx.moveTo(cx+4, cy-16); ctx.lineTo(cx-6, cy+2); ctx.lineTo(cx+2, cy+2);
+        ctx.lineTo(cx-4, cy+16); ctx.lineTo(cx+6, cy-2); ctx.lineTo(cx-2, cy-2); ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'pow_poison': {
+        // Skull and crossbones
+        ctx.fillStyle = '#eee'; ctx.beginPath(); ctx.arc(cx, cy-4, 11, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(cx-4, cy-6, 3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx+4, cy-6, 3, 0, Math.PI*2); ctx.fill();
+        ctx.fillRect(cx-4, cy+2, 8, 4);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(cx-10, cy+12); ctx.lineTo(cx+10, cy+18); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx+10, cy+12); ctx.lineTo(cx-10, cy+18); ctx.stroke();
+        ctx.lineCap = 'butt';
+        break;
+      }
+      case 'pow_time': {
+        // Hourglass
+        ctx.fillStyle = '#8b5e2a'; ctx.fillRect(cx-10, cy-16, 20, 4); ctx.fillRect(cx-10, cy+12, 20, 4);
+        ctx.fillStyle = '#c8a060';
+        ctx.beginPath(); ctx.moveTo(cx-10, cy-12); ctx.lineTo(cx+10, cy-12); ctx.lineTo(cx, cy); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(cx-10, cy+12); ctx.lineTo(cx+10, cy+12); ctx.lineTo(cx, cy); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffdd88'; ctx.beginPath(); ctx.arc(cx, cy+6, 4, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'upg_dmg': {
+        // Orange starburst
+        ctx.fillStyle = '#ff6600';
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const b = a + Math.PI / 8;
+          if (i === 0) ctx.moveTo(cx + Math.cos(a)*14, cy + Math.sin(a)*14);
+          else ctx.lineTo(cx + Math.cos(a)*14, cy + Math.sin(a)*14);
+          ctx.lineTo(cx + Math.cos(b)*7, cy + Math.sin(b)*7);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'upg_range': {
+        // Concentric arcs — blue range circles
+        for (let i = 3; i >= 1; i--) {
+          ctx.strokeStyle = `rgba(50,150,255,${0.3 + i*0.2})`; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(cx, cy, i * 6, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.fillStyle = '#4488ff'; ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'upg_gold': {
+        // Gold coin with percent
+        ctx.fillStyle = '#aa8800'; ctx.beginPath(); ctx.arc(cx-4, cy, 10, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(cx-4, cy, 9, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#333'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('%', cx+10, cy+5); ctx.textAlign = 'left';
+        break;
+      }
+      case 'upg_castle': {
+        // Castle with shield overlay
+        ctx.fillStyle = '#777'; ctx.fillRect(8, 16, 24, 16);
+        for (let i = 0; i < 4; i++) { ctx.fillStyle = '#666'; ctx.fillRect(8 + i*7, 10, 5, 8); }
+        ctx.fillStyle = '#2244aa';
+        ctx.beginPath(); ctx.moveTo(cx, cy-10); ctx.lineTo(cx+8, cy-5); ctx.lineTo(cx+8, cy+2);
+        ctx.lineTo(cx, cy+10); ctx.lineTo(cx-8, cy+2); ctx.lineTo(cx-8, cy-5); ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'upg_speed': {
+        // Brown boot shape
+        ctx.fillStyle = '#6b3a10';
+        ctx.beginPath(); ctx.moveTo(cx-10, cy-10); ctx.lineTo(cx-6, cy-10); ctx.lineTo(cx+10, cy+4);
+        ctx.lineTo(cx+12, cy+10); ctx.lineTo(cx-12, cy+10); ctx.lineTo(cx-12, cy+4); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#8b5e2a'; ctx.fillRect(cx-10, cy-10, 4, 10);
+        break;
+      }
+      case 'upg_spawn': {
+        // Two small tents
+        ctx.fillStyle = '#8b5e2a';
+        ctx.beginPath(); ctx.moveTo(cx-10, cy-8); ctx.lineTo(cx-2, cy+10); ctx.lineTo(cx-18, cy+10); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(cx+10, cy-8); ctx.lineTo(cx+18, cy+10); ctx.lineTo(cx+2, cy+10); ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'upg_armor': {
+        // Grey breastplate
+        ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(cx, cy-2, 13, Math.PI, Math.PI*2); ctx.fill();
+        ctx.fillRect(cx-13, cy-2, 26, 14);
+        ctx.fillStyle = '#aaa'; ctx.beginPath(); ctx.arc(cx, cy-2, 11, Math.PI, Math.PI*2); ctx.fill();
+        ctx.fillRect(cx-11, cy-2, 22, 12);
+        ctx.strokeStyle = '#666'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx, cy-12); ctx.lineTo(cx, cy+12); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx-9, cy+4); ctx.lineTo(cx+9, cy+4); ctx.stroke();
+        break;
+      }
+      case 'upg_bounce': {
+        // Arrow with arc
+        ctx.strokeStyle = '#4488ff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy+8, 14, -Math.PI*0.85, -Math.PI*0.15); ctx.stroke();
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath(); ctx.moveTo(cx+12, cy+8-14*Math.sin(Math.PI*0.15));
+        ctx.lineTo(cx+12+6, cy-8); ctx.lineTo(cx+6, cy-4); ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'upg_multi': {
+        // Two arrows
+        ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(cx-12, cy-6); ctx.lineTo(cx+8, cy-6); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx-12, cy+6); ctx.lineTo(cx+8, cy+6); ctx.stroke();
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath(); ctx.moveTo(cx+8, cy-10); ctx.lineTo(cx+16, cy-6); ctx.lineTo(cx+8, cy-2); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(cx+8, cy+2); ctx.lineTo(cx+16, cy+6); ctx.lineTo(cx+8, cy+10); ctx.closePath(); ctx.fill();
+        ctx.lineCap = 'butt';
+        break;
+      }
+      case 'upg_regen': {
+        // Green heart with plus
+        ctx.fillStyle = '#22aa44';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy+10);
+        ctx.bezierCurveTo(cx-16, cy, cx-16, cy-14, cx, cy-6);
+        ctx.bezierCurveTo(cx+16, cy-14, cx+16, cy, cx, cy+10);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(cx-1.5, cy-6, 3, 10);
+        ctx.fillRect(cx-5, cy-2.5, 10, 3);
+        break;
+      }
+      case 'sp_nuke': {
+        // Mushroom cloud
+        ctx.fillStyle = '#cc4400'; ctx.beginPath(); ctx.ellipse(cx, cy-10, 14, 10, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ff6600'; ctx.beginPath(); ctx.ellipse(cx, cy-12, 11, 8, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.ellipse(cx, cy-14, 7, 5, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#cc4400'; ctx.fillRect(cx-3, cy-10, 6, 22);
+        ctx.fillStyle = '#ff6600'; ctx.fillRect(cx-2, cy-10, 4, 22);
+        break;
+      }
+      case 'sp_angel': {
+        // White wing shapes
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.9;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.bezierCurveTo(cx-8, cy-14, cx-20, cy-16, cx-18, cy-2);
+        ctx.bezierCurveTo(cx-16, cy+6, cx-6, cy+8, cx, cy); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.bezierCurveTo(cx+8, cy-14, cx+20, cy-16, cx+18, cy-2);
+        ctx.bezierCurveTo(cx+16, cy+6, cx+6, cy+8, cx, cy); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffdd88'; ctx.beginPath(); ctx.arc(cx, cy-14, 5, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'sp_clone': {
+        // Two brown squares with battlements (towers)
+        for (const [ox, scl] of [[-6, 0.9], [8, 0.7]]) {
+          const x = cx + ox, s = 8 * scl;
+          ctx.fillStyle = '#5a3a10'; ctx.fillRect(x-s, cy-s, s*2, s*2);
+          ctx.fillStyle = '#7a5a20'; ctx.fillRect(x-s+1, cy-s+1, s*2-2, s*2-2);
+          ctx.fillStyle = '#4a2a08';
+          for (let i = 0; i < 3; i++) ctx.fillRect(x-s + i*(s*2/2.5), cy-s*1.6, s*0.6, s*0.6);
+        }
+        break;
+      }
+      default: {
+        // Fallback: emoji centred
+        const item = GEM_SHOP_ITEMS.find(i => i.id === itemId);
+        ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(item ? item.icon : '?', cx, cy);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        break;
+      }
+    }
   }
 
   // Buy a gem shop item — handles both permanent and consumable items

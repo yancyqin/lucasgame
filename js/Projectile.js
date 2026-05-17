@@ -53,7 +53,7 @@ export class Projectile {
       this.x += this.vx; this.y += this.vy;
       if (this._outOfBounds()) { this.dead = true; return; }
       const hit = enemies.find(e => distance(this, e) < e.size + 5);
-      if (hit) { hit.takeDamage(this.damage); if (this.slows) hit.slowTimer = 80; this.dead = true; }
+      if (hit) { hit.takeDamage(hit.isTitan ? this.damage * 0.5 : this.damage); if (this.slows) hit.slowTimer = 80; this.dead = true; }
     } else {
       if (!enemies.includes(this.target)) { this.dead = true; return; }
       const dx = this.target.x - this.x, dy = this.target.y - this.y;
