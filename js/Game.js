@@ -1035,13 +1035,13 @@ function _getWaveMsg(wave, levelId) {
     return pool[(wave - 1) % pool.length];
   }
 
-  // ── Levels 10-17 — Ogre / Giant era ──────────────────────────────────────
+  // ── Levels 10-17 — Giant era ─────────────────────────────────────────────
   if (levelId >= 10) {
     const pool = [
       'GIANTS EMERGE FROM THE CAVES', 'THEY SHRUG OFF YOUR ARROWS',
       'THE EARTH SHAKES UNDERFOOT',   'WALLS CRACK UNDER IRON FISTS',
-      'FIRE MELTS THROUGH THEIR ARMOR','THEY ARE TOO LARGE TO STOP',
-      'THE OGRE WARLORD LEADS THEM',  'BOULDERS ROLL TOWARDS THE GATE',
+      'FIRE MELTS THROUGH THEIR ARMOR','THE GIANTS ARE TOO LARGE TO STOP',
+      'THE GIANT WARLORD LEADS THEM', 'BOULDERS ROLL TOWARDS THE GATE',
       'HOLD THE LINE — GIANTS INBOUND','NOT EVEN WALLS CAN STOP THEM',
       'SEND THE MAGES FORWARD',       'EVERY GIANT YOU KILL IS A VICTORY',
     ];
@@ -1062,11 +1062,11 @@ function _getWaveMsg(wave, levelId) {
 
   // ── Levels 1-4 — Dark Knight / opening raids ─────────────────────────────
   const pool = [
-    'FIRST BLOOD',               'THE RAID BEGINS',
-    'DARK KNIGHTS CHARGE',       'MORE POUR THROUGH THE WOODS',
-    'THE GOBLINS PRESS HARDER',  'HOLD THE OUTER WALL!',
-    'THEY SMELL VICTORY',        'BRACE THE GATE',
-    'THE HORDE GROWS BOLDER',    'NO MERCY — FIRE!',
+    'FIRST BLOOD',                  'THE RAID BEGINS',
+    'DARK KNIGHTS CHARGE',          'MORE POUR THROUGH THE WOODS',
+    'THE DARK KNIGHTS PRESS HARDER','HOLD THE OUTER WALL!',
+    'THEY SMELL VICTORY',           'BRACE THE GATE',
+    'THE HORDE GROWS BOLDER',       'NO MERCY — FIRE!',
   ];
   return pool[(wave - 1) % pool.length];
 }
@@ -1075,13 +1075,13 @@ function _getWaveMsg(wave, levelId) {
 function _getMilestoneMsg(wave, levelDef) {
   const en = levelDef?.enemies ?? [];
   const total = levelDef?.waves ?? 99;
-  if (wave === 1)                                 return 'THE FIRST WAVE — DARK KNIGHTS CHARGE!';
-  if (en.includes('runner')      && wave === 2)   return 'SCOUTS APPEAR — TOO FAST TO STOP!';
-  if (en.includes('saboteur')    && wave === 4)   return 'TRAP WRECKERS INFILTRATE YOUR DEFENSES!';
-  if (en.includes('ogre')        && wave === 5)   return 'GIANTS EMERGE FROM THE CAVES!';
-  if (en.includes('dragon')      && wave === 7)   return 'DRAGONS TAKE THE SKY — AIM HIGH!';
-  if (en.includes('dragonRider') && wave === 10)  return 'DEATH RIDERS — MOUNTED ON CRIMSON DRAGONS!';
-  if (wave === total)                             return 'FINAL WAVE — HOLD EVERYTHING!';
+  if (wave === 1)                                 return 'WAVE 1 — THE DARK KNIGHTS CHARGE!';
+  if (en.includes('runner')      && wave === 2)   return 'WAVE 2 — SCOUTS INBOUND! TOO FAST TO STOP!';
+  if (en.includes('saboteur')    && wave === 4)   return 'WAVE 4 — TRAP WRECKERS TEAR THROUGH YOUR LINES!';
+  if (en.includes('ogre')        && wave === 5)   return 'WAVE 5 — GIANTS EMERGE FROM THE CAVES!';
+  if (en.includes('dragon')      && wave === 7)   return 'WAVE 7 — FOREST DRAGONS TAKE THE SKY!';
+  if (en.includes('dragonRider') && wave === 10)  return 'WAVE 10 — DEATH RIDERS ON CRIMSON DRAGONS!';
+  if (wave === total)                             return `WAVE ${total} — FINAL WAVE! HOLD EVERYTHING!`;
   return _getWaveMsg(wave, levelDef?.id ?? 1);
 }
 

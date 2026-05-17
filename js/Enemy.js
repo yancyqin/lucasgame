@@ -36,6 +36,7 @@ export class Enemy {
     this.titanJumpOffset  = 0;   // visual Y offset during jump
     this.titanJumpVel     = 0;
     this.titanShockwaveR  = 0;   // expanding ring radius (0 = inactive)
+    this.titanRegenTimer  = 0;   // counts up to 240 (4 sec) then heals 10% max HP
     // Gate siege state
     this.atGate = false;
     this.gateAttackTimer = 30;
@@ -52,6 +53,12 @@ export class Enemy {
 
     // Titan: cycle through 3 special attacks
     if (this.kind === 'titan') {
+      // ── Regen: 10% max HP every 4 seconds (240 frames) ──────────────────
+      this.titanRegenTimer++;
+      if (this.titanRegenTimer >= 240) {
+        this.titanRegenTimer = 0;
+        this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.10);
+      }
       if (this.titanAtkCooldown > 0) this.titanAtkCooldown--;
       // Jump physics (shockwave attack)
       if (this.titanJumpOffset !== 0 || this.titanJumpVel !== 0) {
@@ -62,16 +69,18 @@ export class Enemy {
           this.titanJumpOffset = 0; this.titanJumpVel = 0;
           this.titanShockwaveR = 1;
           const shockR = this.size * 4.5;
+          let shockSteal = 0;
           for (const s of soldiers) {
             if (distance(this, s) < shockR) {
-              s.takeDamage(90);
+              s.takeDamage(90); shockSteal += 90 * 0.15;
               const dd = Math.hypot(s.x-this.x, s.y-this.y) || 1;
               s.stunTimer = 50; s.pushVx = ((s.x-this.x)/dd)*12; s.pushVy = ((s.y-this.y)/dd)*12;
             }
           }
           for (const t of towers) {
-            if (distance(this, t) < shockR * 0.7) t.takeDamage(120);
+            if (distance(this, t) < shockR * 0.7) { t.takeDamage(120); shockSteal += 120 * 0.15; }
           }
+          this.hp = Math.min(this.maxHp, this.hp + shockSteal);
         }
       }
       if (this.titanShockwaveR > 0) this.titanShockwaveR += 5;
@@ -86,16 +95,19 @@ export class Enemy {
           // ── Wide slash: hits soldiers AND nearby towers ──
           this.attackTimer = 18; this.attackAngle = Math.atan2(path[Math.min(this.waypoint, path.length-1)].y - this.y, path[Math.min(this.waypoint, path.length-1)].x - this.x);
           const slashR = this.size * 3.2;
+          let slashSteal = 0;
           for (const s of soldiers) {
             if (distance(this, s) < slashR) {
               s.takeDamage(120);
+              slashSteal += 120 * 0.15;
               const dd = Math.hypot(s.x-this.x, s.y-this.y) || 1;
               s.stunTimer = 45; s.pushVx = ((s.x-this.x)/dd)*10; s.pushVy = ((s.y-this.y)/dd)*10;
             }
           }
           for (const t of towers) {
-            if (distance(this, t) < slashR) t.takeDamage(80);
+            if (distance(this, t) < slashR) { t.takeDamage(80); slashSteal += 80 * 0.15; }
           }
+          this.hp = Math.min(this.maxHp, this.hp + slashSteal);
         } else if (cycle === 1) {
           // ── Dark fireball: aimed at nearest tower ──
           const tgt = towers.sort((a,b) => distance(this,a)-distance(this,b))[0];
@@ -207,12 +219,14 @@ export class Enemy {
           // Damage per enemy type — stronger enemies hit harder; titan swats like flies
           const dmg = { goblin:4, runner:3, saboteur:10, ogre:18, dragon:30, dragonRider:50, titan:120 }[this.kind] ?? 4;
           this.soldierTarget.takeDamage(dmg);
-          // Titan scythe: stun + blast the soldier away
+          // Titan scythe: stun + blast the soldier away + lifesteal
           if (this.kind === 'titan') {
             const dist = Math.hypot(sx - this.x, sy - this.y) || 1;
             this.soldierTarget.stunTimer = 55;
             this.soldierTarget.pushVx = ((sx - this.x) / dist) * 14;
             this.soldierTarget.pushVy = ((sy - this.y) / dist) * 14;
+            // Lifesteal: 15% of damage dealt heals the titan
+            this.hp = Math.min(this.maxHp, this.hp + dmg * 0.15);
           }
           this.soldierAtkTimer = 50;
         }
