@@ -16,12 +16,12 @@ export const TYPES = {
 export const ENEMIES = {
   goblin:      { kind: 'goblin',      name: 'Dark Knight',   color: '#7799bb', speed: 1.0, hp: 8,   size: 10, reward: 4,  castleDamage: 5   },
   runner:      { kind: 'runner',      name: 'Scout',         color: '#c09030', speed: 2.5, hp: 5,   size: 8,  reward: 5,  castleDamage: 4   },
-  saboteur:    { kind: 'saboteur',    name: 'Trap Wrecker',  color: '#4a2268', speed: 1.8, hp: 18,  size: 9,  reward: 7,  castleDamage: 8   },
+  saboteur:    { kind: 'saboteur',    name: 'Trap Wrecker',  color: '#4a2268', speed: 1.8, hp: 10,  size: 9,  reward: 7,  castleDamage: 8   },
   ogre:        { kind: 'ogre',        name: 'Giant',         color: '#445566', speed: 0.8, hp: 55,  size: 18, reward: 12, castleDamage: 25  },
   dragon:      { kind: 'dragon',      name: 'Forest Dragon', color: '#2ea84a', speed: 1.2, hp: 130, size: 24, reward: 20, castleDamage: 120 },
   dragonRider: { kind: 'dragonRider', name: 'Death Rider',   color: '#8b0000', speed: 0.75, hp: 260, size: 28, reward: 35, castleDamage: 280 },
   titan:       { kind: 'titan',       name: 'Ancient Titan', color: '#1a0a2e', speed: 0.28, hp: 100000, size: 72, reward: 500, castleDamage: 999, isTitan: true },
-  elderDragonRider: { kind: 'elderDragonRider', name: 'Elder Dragon Rider', color: '#0a0020', speed: 0.22, hp: 120000, size: 88, reward: 1000, castleDamage: 999 },
+  elderDragonRider: { kind: 'elderDragonRider', name: 'Elder Dragon Rider', color: '#0a0020', speed: 0.22, hp: 1000000, size: 88, reward: 1000, castleDamage: 999 },
 };
 
 // 8 distinct path shapes. All start at x=0, end at x=W.

@@ -1408,15 +1408,15 @@ class Game {
       // Camp HP hit 1 → trigger cutscene
       if (this.enemyCampHp <= 1 && this.cutscenePhase === 0) {
         this.cutscenePhase = 1;
-        this.cutsceneTimer = 240;
+        this.cutsceneTimer = 600; // ~10 seconds at 60fps
         this.paused = true;
       }
     }
     // Cutscene countdown (final level only)
     if ((this.currentLevel?.id === 100 || this.currentLevel?.id === 101) && this.cutscenePhase > 0) {
       this.cutsceneTimer--;
-      // Init actors when phase 2 first starts
-      if (this.cutscenePhase === 1 && this.cutsceneTimer === 120 && this._cutsceneActors.length === 0) {
+      // Init actors mid-cutscene (soldiers flung by titan ~halfway through)
+      if (this.cutscenePhase === 1 && this.cutsceneTimer === 360 && this._cutsceneActors.length === 0) {
         const W = this.canvas.width, H = this.canvas.height;
         const cx = W / 2, cy = H * 0.65;
         // Spawn 10 soldiers near the titan's torso area
@@ -1457,7 +1457,7 @@ class Game {
         if (a.kind === 'weak') a.alpha -= 0.015;
         if (a.alpha <= 0) a.dead = true;
       }
-      if (this.cutscenePhase === 1 && this.cutsceneTimer <= 120) this.cutscenePhase = 2;
+      if (this.cutscenePhase === 1 && this.cutsceneTimer <= 300) this.cutscenePhase = 2;
       if (this.cutscenePhase === 2 && this.cutsceneTimer <= 0) {
         this.cutscenePhase = 3;
         this.titanSpawned = true;
@@ -3740,7 +3740,7 @@ class Game {
   _drawCutscene() {
     if ((this.currentLevel?.id !== 100 && this.currentLevel?.id !== 101) || this.cutscenePhase === 0) return;
     const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
-    const p = this.cutscenePhase === 1 ? 1 - this.cutsceneTimer / 240 : 1;
+    const p = this.cutscenePhase === 1 ? 1 - this.cutsceneTimer / 600 : 1;
     const t = Date.now() / 1000;
 
     // Dark overlay

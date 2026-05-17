@@ -91,35 +91,97 @@ export class Enemy {
         const cycle = this.titanAtkCycle;
         this.titanAtkCycle = (this.titanAtkCycle + 1) % 3;
 
-        if (cycle === 0) {
-          // ── Wide slash: hits soldiers AND nearby towers ──
-          this.attackTimer = 18; this.attackAngle = Math.atan2(path[Math.min(this.waypoint, path.length-1)].y - this.y, path[Math.min(this.waypoint, path.length-1)].x - this.x);
-          const slashR = this.size * 3.2;
-          let slashSteal = 0;
-          for (const s of soldiers) {
-            if (distance(this, s) < slashR) {
-              s.takeDamage(120);
-              slashSteal += 120 * 0.15;
+        if (this.kind === 'elderDragonRider') {
+          // ══ ELDER DRAGON RIDER — 3 unique attacks ═══════════════════════
+          if (cycle === 0) {
+            // ── Attack 1: FIRESTORM — damages everything on screen ──────────
+            // Hits ALL soldiers + ALL towers with massive fire damage
+            let stealAmt = 0;
+            for (const s of soldiers) {
+              s.takeDamage(200); stealAmt += 200 * 0.15;
               const dd = Math.hypot(s.x-this.x, s.y-this.y) || 1;
-              s.stunTimer = 45; s.pushVx = ((s.x-this.x)/dd)*10; s.pushVy = ((s.y-this.y)/dd)*10;
+              s.stunTimer = 70; s.pushVx = ((s.x-this.x)/dd)*18; s.pushVy = ((s.y-this.y)/dd)*18;
+            }
+            for (const t of towers) { t.takeDamage(150); stealAmt += 150 * 0.15; }
+            this.hp = Math.min(this.maxHp, this.hp + stealAmt);
+            this.attackTimer = 30;
+            this.attackAngle = Math.atan2(path[Math.min(this.waypoint,path.length-1)].y-this.y, path[Math.min(this.waypoint,path.length-1)].x-this.x);
+            // Firestorm visual: scatter 12 fireballs in all directions
+            for (let i = 0; i < 12; i++) {
+              const a = (i / 12) * Math.PI * 2;
+              projectiles.push(new Projectile({ x: this.x, y: this.y, vx: Math.cos(a)*7, vy: Math.sin(a)*7, damage: 150, darkFireball: true }));
+            }
+          } else if (cycle === 1) {
+            // ── Attack 2: WING SLAM — spread of 5 fireballs in a fan ───────
+            const baseAng = Math.atan2(path[Math.min(this.waypoint,path.length-1)].y-this.y, path[Math.min(this.waypoint,path.length-1)].x-this.x);
+            for (let i = -2; i <= 2; i++) {
+              const a = baseAng + i * 0.3;
+              projectiles.push(new Projectile({ x: this.x, y: this.y, vx: Math.cos(a)*9, vy: Math.sin(a)*9, damage: 280, darkFireball: true }));
+            }
+            this.attackTimer = 20; this.attackAngle = baseAng;
+          } else {
+            // ── Attack 3: INFERNO BREATH — instant fire cone along the path ─
+            // Hits all soldiers and towers within a wide cone ahead
+            const coneAng = Math.atan2(path[Math.min(this.waypoint,path.length-1)].y-this.y, path[Math.min(this.waypoint,path.length-1)].x-this.x);
+            const coneR = this.size * 6;
+            let stealAmt = 0;
+            for (const s of soldiers) {
+              const ang = Math.atan2(s.y-this.y, s.x-this.x);
+              const diff = Math.abs(((ang - coneAng + Math.PI*3) % (Math.PI*2)) - Math.PI);
+              if (diff < 0.9 && distance(this, s) < coneR) {
+                s.takeDamage(350); stealAmt += 350 * 0.15;
+                s.burnTimer = Math.max(s.burnTimer||0, 180);
+                const dd = Math.hypot(s.x-this.x, s.y-this.y) || 1;
+                s.stunTimer = 40; s.pushVx = ((s.x-this.x)/dd)*8; s.pushVy = ((s.y-this.y)/dd)*8;
+              }
+            }
+            for (const t of towers) {
+              const ang = Math.atan2(t.y-this.y, t.x-this.x);
+              const diff = Math.abs(((ang - coneAng + Math.PI*3) % (Math.PI*2)) - Math.PI);
+              if (diff < 0.9 && distance(this, t) < coneR) { t.takeDamage(200); stealAmt += 200 * 0.15; }
+            }
+            this.hp = Math.min(this.maxHp, this.hp + stealAmt);
+            this.attackTimer = 25; this.attackAngle = coneAng;
+            // Inferno visual: dense fireballs along the cone
+            for (let i = -3; i <= 3; i++) {
+              const a = coneAng + i * 0.18;
+              for (let dist2 = 1; dist2 <= 3; dist2++) {
+                projectiles.push(new Projectile({ x: this.x + Math.cos(a)*dist2*40, y: this.y + Math.sin(a)*dist2*40, vx: Math.cos(a)*5, vy: Math.sin(a)*5, damage: 0, darkFireball: true }));
+              }
             }
           }
-          for (const t of towers) {
-            if (distance(this, t) < slashR) { t.takeDamage(80); slashSteal += 80 * 0.15; }
-          }
-          this.hp = Math.min(this.maxHp, this.hp + slashSteal);
-        } else if (cycle === 1) {
-          // ── Dark fireball: aimed at nearest tower ──
-          const tgt = towers.sort((a,b) => distance(this,a)-distance(this,b))[0];
-          if (tgt) {
-            const dx = tgt.x - this.x, dy = tgt.y - this.y;
-            const dd = Math.hypot(dx, dy) || 1;
-            projectiles.push(new Projectile({ x: this.x, y: this.y, vx: (dx/dd)*6, vy: (dy/dd)*6, damage: 220, darkFireball: true }));
-          }
         } else {
-          // ── Shockwave jump: launch titan upward ──
-          this.titanJumpVel = 18;
-          this.titanJumpOffset = -1; // kick off physics
+          // ══ TITAN — original 3 attacks ══════════════════════════════════
+          if (cycle === 0) {
+            // ── Wide slash: hits soldiers AND nearby towers ──
+            this.attackTimer = 18; this.attackAngle = Math.atan2(path[Math.min(this.waypoint, path.length-1)].y - this.y, path[Math.min(this.waypoint, path.length-1)].x - this.x);
+            const slashR = this.size * 3.2;
+            let slashSteal = 0;
+            for (const s of soldiers) {
+              if (distance(this, s) < slashR) {
+                s.takeDamage(120);
+                slashSteal += 120 * 0.15;
+                const dd = Math.hypot(s.x-this.x, s.y-this.y) || 1;
+                s.stunTimer = 45; s.pushVx = ((s.x-this.x)/dd)*10; s.pushVy = ((s.y-this.y)/dd)*10;
+              }
+            }
+            for (const t of towers) {
+              if (distance(this, t) < slashR) { t.takeDamage(80); slashSteal += 80 * 0.15; }
+            }
+            this.hp = Math.min(this.maxHp, this.hp + slashSteal);
+          } else if (cycle === 1) {
+            // ── Dark fireball: aimed at nearest tower ──
+            const tgt = towers.sort((a,b) => distance(this,a)-distance(this,b))[0];
+            if (tgt) {
+              const dx = tgt.x - this.x, dy = tgt.y - this.y;
+              const dd = Math.hypot(dx, dy) || 1;
+              projectiles.push(new Projectile({ x: this.x, y: this.y, vx: (dx/dd)*6, vy: (dy/dd)*6, damage: 220, darkFireball: true }));
+            }
+          } else {
+            // ── Shockwave jump: launch titan upward ──
+            this.titanJumpVel = 18;
+            this.titanJumpOffset = -1; // kick off physics
+          }
         }
       }
     }
@@ -159,7 +221,7 @@ export class Enemy {
         } else {
           this.triggerAttack(this.trapTarget.x, this.trapTarget.y);
           if (this.saboteurTimer <= 0) {
-            this.trapTarget.takeDamage(60); // destroys most traps in 1-2 hits
+            this.trapTarget.takeDamage(5); // ~5 sec to destroy a trap (300 frames / 60 per hit)
             this.saboteurTimer = 60;
           } else {
             this.saboteurTimer--;
