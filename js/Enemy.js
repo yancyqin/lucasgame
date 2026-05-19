@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=42';
-import { Projectile } from './Projectile.js?v=42';
+import { ENEMIES, distance } from './constants.js?v=43';
+import { Projectile } from './Projectile.js?v=43';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -55,9 +55,9 @@ export class Enemy {
     if (this.kind === 'titan' || this.kind === 'elderDragonRider') {
       // ── Regen: 10% max HP every 4 seconds (240 frames) ──────────────────
       this.titanRegenTimer++;
-      if (this.titanRegenTimer >= 240) {
+      if (this.titanRegenTimer >= 600) {   // 10 seconds instead of 4
         this.titanRegenTimer = 0;
-        this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.10);
+        this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.04); // 4% instead of 10%
       }
       if (this.titanAtkCooldown > 0) this.titanAtkCooldown--;
       // Jump physics (shockwave attack)

@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=42';
-import { GameMap }     from './Map.js?v=42';
-import { Tower }       from './Tower.js?v=42';
-import { Enemy }       from './Enemy.js?v=42';
-import { Projectile }  from './Projectile.js?v=42';
-import { Trap }        from './Trap.js?v=42';
-import { Mine }        from './Mine.js?v=42';
-import { WaveManager } from './WaveManager.js?v=42';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=43';
+import { GameMap }     from './Map.js?v=43';
+import { Tower }       from './Tower.js?v=43';
+import { Enemy }       from './Enemy.js?v=43';
+import { Projectile }  from './Projectile.js?v=43';
+import { Trap }        from './Trap.js?v=43';
+import { Mine }        from './Mine.js?v=43';
+import { WaveManager } from './WaveManager.js?v=43';
 
 // ── Button icon renderer ─────────────────────────────────────────────────────
 // Draws the actual in-game unit/tower at small scale onto a canvas context.
@@ -474,8 +474,8 @@ function _makeTileBtn(id, key, name, cost) {
 
   // "WANTED" header strip
   const header = document.createElement('div');
-  header.textContent = 'WANTED FOR ARMY';
-  header.style.cssText = 'font-size:8px;font-weight:900;letter-spacing:1px;color:#8b0000;background:rgba(0,0,0,0.12);padding:2px 0;width:100%;text-align:center;border-bottom:1px solid #a07830;';
+  header.textContent = '★ WANTED ★';
+  header.style.cssText = 'font-size:10px;font-weight:900;letter-spacing:2px;color:#fff;background:rgba(160,0,0,0.92);padding:3px 0;width:100%;text-align:center;border-bottom:2px solid #ffcc00;text-shadow:0 1px 3px rgba(0,0,0,0.8);';
   btn.appendChild(header);
 
   // Canvas icon
@@ -1403,7 +1403,13 @@ class Game {
       this.enemies.push(e);
     } else if (waveResult?.levelComplete) {
       this.money = Math.min(this.money + waveResult.bonus, MAX_MONEY);
-      this._onLevelComplete();
+      if ((this.currentLevel?.id === 100 || this.currentLevel?.id === 101) && !this.titanSpawned) {
+        // Boss levels keep sending waves until the enemy camp is destroyed and boss spawns
+        this.waveManager.reset();
+        this.flash('⚔ The siege continues! Destroy the enemy camp to awaken the boss!');
+      } else {
+        this._onLevelComplete();
+      }
     } else if (waveResult?.waveCleared) {
       this.money = Math.min(this.money + waveResult.bonus, MAX_MONEY);
       // Wave 5 achievement
@@ -4338,7 +4344,8 @@ class Game {
     const pct  = Math.max(0, titan.hp / titan.maxHp);
 
     ctx.save();
-    ctx.shadowColor = '#ff2200'; ctx.shadowBlur = 22;
+    const isElder = this.currentLevel?.id === 101;
+    ctx.shadowColor = isElder ? '#aa00ff' : '#ff2200'; ctx.shadowBlur = 22;
     ctx.fillStyle   = 'rgba(0,0,0,0.75)';
     ctx.beginPath(); ctx.roundRect(bx - 12, by - 26, barW + 24, barH + 44, 10); ctx.fill();
     ctx.shadowBlur  = 0;
@@ -4346,9 +4353,9 @@ class Game {
     ctx.textAlign = 'center';
     ctx.font      = `bold ${Math.floor(W * 0.022)}px sans-serif`;
     const pulse   = 0.78 + 0.22 * Math.sin(Date.now() / 300);
-    ctx.fillStyle = `rgba(255,${Math.floor(80 * pulse)},40,${pulse})`;
-    ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 12 * pulse;
-    ctx.fillText('⚡  ANCIENT TITAN  ⚡', W / 2, by - 6);
+    ctx.fillStyle = isElder ? `rgba(180,0,255,${pulse})` : `rgba(255,${Math.floor(80 * pulse)},40,${pulse})`;
+    ctx.shadowColor = isElder ? '#cc00ff' : '#ff4400'; ctx.shadowBlur = 12 * pulse;
+    ctx.fillText(isElder ? '🐲  ELDER DRAGON RIDER  🐲' : '⚡  ANCIENT TITAN  ⚡', W / 2, by - 6);
     ctx.shadowBlur  = 0;
 
     ctx.fillStyle = 'rgba(60,0,0,0.9)';
@@ -4356,7 +4363,11 @@ class Game {
 
     if (pct > 0) {
       const grad = ctx.createLinearGradient(bx, 0, bx + barW * pct, 0);
-      grad.addColorStop(0, '#cc0000'); grad.addColorStop(0.5, '#ee3300'); grad.addColorStop(1, '#7700cc');
+      if (isElder) {
+        grad.addColorStop(0, '#2200cc'); grad.addColorStop(0.5, '#6600ff'); grad.addColorStop(1, '#aa00ff');
+      } else {
+        grad.addColorStop(0, '#cc0000'); grad.addColorStop(0.5, '#ee3300'); grad.addColorStop(1, '#7700cc');
+      }
       ctx.fillStyle = grad;
       ctx.beginPath(); ctx.roundRect(bx, by, barW * pct, barH, 5); ctx.fill();
     }
