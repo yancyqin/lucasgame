@@ -1,0 +1,16 @@
+{
+  "name": "Tower Defense",
+  "short_name": "TowerDef",
+  "description": "Build towers, place mines, hire workers and defend your castle!",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#222222",
+  "theme_color": "#4a7c4e",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%234a7c4e'/><text y='75' font-size='70' text-anchor='middle' x='50'>🏰</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

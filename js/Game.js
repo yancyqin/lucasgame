@@ -1155,6 +1155,54 @@ const TUTORIAL_TIPS = [
   { icon: '🏕', title: 'Recruit Soldiers',      text: 'Place a Camp (button C) to spawn friendly soldiers who march out and fight enemies directly. Very powerful!' },
 ];
 
+// ── World Leaderboard ──────────────────────────────────────────────────────
+// Seeded AI competitors — gives the leaderboard a "world" feel from day 1
+const LEADERBOARD_SEEDS = [
+  { name:'DragonSlayer99', scores:{ 1:3200, 2:5800, 3:8400, 5:14200, 10:28000, 100:980000 } },
+  { name:'TowerMaster',    scores:{ 1:2900, 2:5200, 3:7700, 5:12800, 10:24000, 100:870000 } },
+  { name:'GoblinCrusher',  scores:{ 1:2600, 2:4800, 3:7000, 5:11500, 10:21000 } },
+  { name:'WizardKing42',   scores:{ 1:2400, 2:4300, 5:10200, 10:19500 } },
+  { name:'CastleKnight',   scores:{ 1:2100, 2:3900, 5:9400  } },
+  { name:'ShadowArcher',   scores:{ 1:1900, 2:3600            } },
+  { name:'IronForge',      scores:{ 1:1700                    } },
+];
+
+function _lbKey() { return 'td_leaderboard_v2'; }
+
+function _lbGet(levelId) {
+  const raw = JSON.parse(localStorage.getItem(_lbKey()) || '{}');
+  const entries = raw[levelId] || [];
+  // Mix in seeds for this level
+  for (const seed of LEADERBOARD_SEEDS) {
+    if (seed.scores[levelId] != null) {
+      entries.push({ name: seed.name, score: seed.scores[levelId], seed: true });
+    }
+  }
+  // Sort descending, dedupe seeds
+  return entries.sort((a, b) => b.score - a.score).slice(0, 20);
+}
+
+function _lbSubmit(levelId, score) {
+  const name = localStorage.getItem('td_playerName') || 'Anonymous';
+  const raw = JSON.parse(localStorage.getItem(_lbKey()) || '{}');
+  if (!raw[levelId]) raw[levelId] = [];
+  // Keep only non-seed real entries
+  const existing = raw[levelId].filter(e => !e.seed);
+  // Only keep best score for this player
+  const idx = existing.findIndex(e => e.name === name);
+  if (idx >= 0) {
+    if (score > existing[idx].score) existing[idx].score = score;
+  } else {
+    existing.push({ name, score, date: Date.now() });
+  }
+  raw[levelId] = existing.slice(0, 50);
+  localStorage.setItem(_lbKey(), JSON.stringify(raw));
+}
+
+function _calcScore(wave, kills, money, castleHpFrac) {
+  return Math.floor(wave * 800 + kills * 40 + money * 2 + castleHpFrac * 2000);
+}
+
 class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -1269,6 +1317,14 @@ class Game {
     // Gems are rare — earned from level completions, achievements, and daily wheel
     this.gems = parseInt(localStorage.getItem('td_gems') || '0');
     this.titanKills = parseInt(localStorage.getItem('td_titanKills') || '0');
+
+    // Player name for leaderboard
+    this.playerName = localStorage.getItem('td_playerName') || '';
+    if (!this.playerName) {
+      const n = prompt('Enter your player name for the leaderboard:', 'Player');
+      this.playerName = (n || 'Anonymous').slice(0, 20);
+      localStorage.setItem('td_playerName', this.playerName);
+    }
     this.elderSpawned = false;
 
     this._buildTitleScreen();
@@ -2805,7 +2861,8 @@ class Game {
     const castleHpForLevel = levelDef.id === 101 ? 100000 : 10000;
     this.castleHp = castleHpForLevel;
     this.castleMaxHp = castleHpForLevel;
-    this.money = 100; this.score = 0;
+    this.money = (levelDef.id === 100 || levelDef.id === 101) ? 200 : 100;
+    this.score = 0;
     this.gameOver = false; this.levelComplete = false;
     this.tutorialStep  = 0;
     this.tutorialTimer = 0;
@@ -2864,6 +2921,11 @@ class Game {
     this._rebuildUI();
     document.getElementById('title-screen').style.display = 'none';
     this.titleActive = false;
+
+    // Dragon Island: notify about Dragon Camp
+    if (levelDef.id === 101) {
+      setTimeout(() => this.flash('🐉 Dragon Island! Buy a DRAGON CAMP ($150) to recruit dragon allies!'), 2800);
+    }
   }
 
   showTitle() {
@@ -2902,6 +2964,16 @@ class Game {
     this._grantGems(gemAmt);
     this.flash(`Level complete! 💎 +${gemAmt} gem${gemAmt > 1 ? 's' : ''}!`);
 
+    // Submit score to leaderboard
+    const lbScore = _calcScore(
+      this.waveManager?.wave || 1,
+      this.totalKills || 0,
+      this.money || 0,
+      (this.castleHp / this.castleMaxHp) || 0
+    );
+    _lbSubmit(id, lbScore);
+    this.lastScore = lbScore;
+
     this._updateButtons();
   }
 
@@ -2928,7 +3000,7 @@ class Game {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
     // Version badge — helps confirm the right code is loaded
-    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v40';
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v43';
 
     // Draw map background
     this._drawTitleBg();
@@ -2976,6 +3048,7 @@ class Game {
             b.style.transform = '';
           });
           document.getElementById('ts-play-btn').textContent = `▶ PLAY LEVEL ${lvl.id}`;
+          this._buildLeaderboard(lvl.id);
         };
       }
       levelsDiv.appendChild(btn);
@@ -3079,6 +3152,9 @@ class Game {
     const alreadySpun = localStorage.getItem('td_last_spin') === new Date().toDateString();
     wheelBtn.textContent = alreadySpun ? '🎡 Daily Spin (done today)' : '🎡 DAILY SPIN';
     wheelBtn.style.opacity = alreadySpun ? '0.5' : '1';
+
+    // Build leaderboard for the currently selected level
+    this._buildLeaderboard(this.selectedLevelId || 1);
   }
 
   _drawTitleBg() {
@@ -4729,6 +4805,32 @@ class Game {
   }
 
   // ── Gem Shop ─────────────────────────────────────────────────────────────────
+
+  _buildLeaderboard(levelId) {
+    const container = document.getElementById('ts-leaderboard');
+    if (!container) return;
+    const entries = _lbGet(levelId);
+    const playerName = this.playerName || localStorage.getItem('td_playerName') || '';
+
+    if (!entries.length) {
+      container.innerHTML = `<div style="padding:14px;text-align:center;color:rgba(255,255,255,0.3);font-size:12px">No scores yet — be the first!</div>`;
+      return;
+    }
+
+    let html = '';
+    entries.slice(0, 10).forEach((e, i) => {
+      const isPlayer = !e.seed && e.name === playerName;
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+      const bgClr  = isPlayer ? 'rgba(59,209,122,0.15)' : i < 3 ? 'rgba(255,215,0,0.06)' : 'transparent';
+      const nameClr = isPlayer ? '#3bd17a' : i === 0 ? '#ffd700' : i === 1 ? '#cccccc' : i === 2 ? '#cc8844' : 'rgba(255,255,255,0.7)';
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,0.04);background:${bgClr}">
+        <span style="width:28px;text-align:center;font-size:13px;flex-shrink:0">${medal}</span>
+        <span style="flex:1;font-size:12px;font-weight:bold;color:${nameClr};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name}${isPlayer ? ' ✦' : ''}</span>
+        <span style="font-size:12px;color:rgba(255,255,255,0.6);font-family:monospace">${e.score.toLocaleString()}</span>
+      </div>`;
+    });
+    container.innerHTML = html;
+  }
 
   // Build the HTML gem shop items inside #gem-shop-items, split into two sections
   _buildGemShop() {
