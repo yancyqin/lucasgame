@@ -76,6 +76,7 @@ export const CAMP_TYPES = {
   knight: { label: 'Knight Camp $180', color: '#3355aa', cost: 180, soldierHp: 18,  soldierDmg: 2,  spawnRate: 480 },
   mage:   { label: 'Mage Camp $200',   color: '#883399', cost: 200, soldierHp: 8,   soldierDmg: 3,  spawnRate: 500, magic: true },
   siege:  { label: 'Siege Camp $240',  color: '#885522', cost: 240, soldierHp: 15,  soldierDmg: 5,  spawnRate: 600, aoe: true },
+  dragon: { label: 'Dragon Camp $150', color: '#2ea84a', cost: 150, soldierHp: 30, soldierDmg: 8, spawnRate: 660, dragonSoldier: true },
 };
 
 // ── Gem Shop items ─────────────────────────────────────────────────────────────
@@ -180,7 +181,7 @@ export function generateLevels(count = 100) {
     towers: ALL_TOWERS,
     traps: ALL_TRAPS,
     enemies: ['dragon', 'dragonRider', 'dragon', 'dragonRider', 'dragon'],
-    camps: ALL_CAMPS,
+    camps: [...ALL_CAMPS, 'dragon'],
     mapVariant: 2,
     difficulty: 8,
     enemySlow: 0.8,

@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=40';
-import { GameMap }     from './Map.js?v=40';
-import { Tower }       from './Tower.js?v=40';
-import { Enemy }       from './Enemy.js?v=40';
-import { Projectile }  from './Projectile.js?v=40';
-import { Trap }        from './Trap.js?v=40';
-import { Mine }        from './Mine.js?v=40';
-import { WaveManager } from './WaveManager.js?v=40';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=41';
+import { GameMap }     from './Map.js?v=41';
+import { Tower }       from './Tower.js?v=41';
+import { Enemy }       from './Enemy.js?v=41';
+import { Projectile }  from './Projectile.js?v=41';
+import { Trap }        from './Trap.js?v=41';
+import { Mine }        from './Mine.js?v=41';
+import { WaveManager } from './WaveManager.js?v=41';
 
 // ── Button icon renderer ─────────────────────────────────────────────────────
 // Draws the actual in-game unit/tower at small scale onto a canvas context.
@@ -663,8 +663,9 @@ class Soldier {
     this.ranged = campType?.ranged || false;  // archer: don't close to melee
     this.magic  = campType?.magic  || false;  // mage: aoe blast
     this.aoe    = campType?.aoe    || false;  // siege: melee hits all nearby
-    this.range      = this.magic ? 140 : this.ranged ? 110 : 58;
-    this.attackRate = this.magic ? 110 : this.ranged ? 80  : 45;
+    this.dragonSoldier = campType?.dragonSoldier || false; // dragon camp: breathes fire
+    this.range      = this.dragonSoldier ? 130 : this.magic ? 140 : this.ranged ? 110 : 58;
+    this.attackRate = this.dragonSoldier ? 70  : this.magic ? 110 : this.ranged ? 80  : 45;
 
     this.waypoint = 0;
     this.attackTimer = 0;
@@ -710,7 +711,20 @@ class Soldier {
 
     if (this.target) {
       if (this.attackTimer <= 0) {
-        if (this.magic) {
+        if (this.dragonSoldier) {
+          // Dragon ally: breathes 3 fire projectiles in a cone toward target
+          const dx = this.target.x - this.x, dy = this.target.y - this.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const baseAng = Math.atan2(dy, dx);
+          for (let fi = -1; fi <= 1; fi++) {
+            const a = baseAng + fi * 0.25;
+            projectiles.push(new Projectile({
+              x: this.x, y: this.y,
+              vx: Math.cos(a) * 6, vy: Math.sin(a) * 6,
+              damage: this.damage, fromEnemy: false, fire: true, manual: true,
+            }));
+          }
+        } else if (this.magic) {
           // Mage: fires a visible explosive magic orb that splashes on impact
           const dx = this.target.x - this.x, dy = this.target.y - this.y;
           const dist = Math.hypot(dx, dy) || 1;
@@ -775,6 +789,7 @@ class Soldier {
       case 'knight': this._drawKnight(ctx, hit, jy); break;
       case 'mage':   this._drawMage(ctx, hit, jy);   break;
       case 'siege':  this._drawSiege(ctx, hit, jy);  break;
+      case 'dragon': this._drawDragonSoldier(ctx, hit, jy); break;
       default:       this._drawBasic(ctx, hit, jy);  break;
     }
 
@@ -953,6 +968,52 @@ class Soldier {
       ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(this.x, this.y, 62 * (1-p) + 10, 0, Math.PI*2); ctx.stroke();
     }
+  }
+
+  // ── DRAGON SOLDIER (green dragon ally) ─────────────────────────────────────
+  _drawDragonSoldier(ctx, hit, jy) {
+    const cx = this.x, cy = this.y - jy;
+    const s = 10; // small dragon size
+    const col  = hit ? '#fff' : '#2ea84a';
+    const dark = hit ? '#fff' : '#1a6b30';
+    // Shadow already drawn by draw()
+    // Body
+    ctx.fillStyle = col;
+    ctx.save(); ctx.translate(cx, cy);
+    ctx.beginPath(); ctx.ellipse(0, 0, s*1.2, s*0.75, 0, 0, Math.PI*2); ctx.fill();
+    // Head
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(s*1.0, -s*0.1, s*0.55, 0, Math.PI*2); ctx.fill();
+    // Snout
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.ellipse(s*1.55, s*0.1, s*0.35, s*0.22, 0.2, 0, Math.PI*2); ctx.fill();
+    // Eye
+    ctx.fillStyle = '#ffee00';
+    ctx.beginPath(); ctx.arc(s*0.92, -s*0.22, s*0.12, 0, Math.PI*2); ctx.fill();
+    // Wing
+    ctx.fillStyle = dark; ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(-s*0.1, -s*0.3);
+    ctx.bezierCurveTo(-s*0.35, -s*1.1, -s*1.3, -s*1.45, -s*1.6, -s*0.75);
+    ctx.bezierCurveTo(-s*1.2, -s*0.18, -s*0.58, -s*0.05, -s*0.1, -s*0.3);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Horn
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.moveTo(s*0.88,-s*0.22); ctx.lineTo(s*0.76,-s*0.62); ctx.lineTo(s*1.0,-s*0.24); ctx.closePath(); ctx.fill();
+    // Tail
+    ctx.strokeStyle = col; ctx.lineWidth = s*0.38; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-s*0.6,0); ctx.bezierCurveTo(-s*1.1,s*0.65,-s*2.1,-s*0.38,-s*2.4,s*0.15); ctx.stroke();
+    ctx.lineCap = 'butt';
+    // Fire breath when attacking
+    if (this.swingTimer > 0) {
+      const p = this.swingTimer / 14;
+      ctx.fillStyle = `rgba(255,100,0,${p*0.8})`;
+      ctx.beginPath(); ctx.arc(s*1.8, s*0.1, s*0.5*p+s*0.2, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = `rgba(255,220,0,${p*0.7})`;
+      ctx.beginPath(); ctx.arc(s*1.8, s*0.1, s*0.3*p+s*0.1, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
   }
 }
 
@@ -5178,6 +5239,30 @@ class Game {
           ctx.fillStyle = '#4a2a08';
           for (let i = 0; i < 3; i++) ctx.fillRect(x-s + i*(s*2/2.5), cy-s*1.6, s*0.6, s*0.6);
         }
+        break;
+      }
+      case 'sp_berserk': {
+        // Two fighters clashing — red crossed fists
+        ctx.save(); ctx.translate(cx, cy);
+        // Left fighter
+        ctx.fillStyle = '#cc2200';
+        ctx.beginPath(); ctx.arc(-10, -2, 7, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ff4400'; ctx.beginPath(); ctx.arc(-10, -2, 5, 0, Math.PI*2); ctx.fill();
+        // Right fighter
+        ctx.fillStyle = '#2200cc';
+        ctx.beginPath(); ctx.arc(10, -2, 7, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#4400ff'; ctx.beginPath(); ctx.arc(10, -2, 5, 0, Math.PI*2); ctx.fill();
+        // Clash sparks in the middle
+        ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a)*7, Math.sin(a)*7); ctx.stroke();
+        }
+        // Anger symbol above
+        ctx.fillStyle = '#ff4400';
+        ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('💢', 0, -10);
+        ctx.lineCap = 'butt'; ctx.restore();
         break;
       }
       default: {

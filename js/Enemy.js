@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=39';
-import { Projectile } from './Projectile.js?v=39';
+import { ENEMIES, distance } from './constants.js?v=41';
+import { Projectile } from './Projectile.js?v=41';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -31,7 +31,7 @@ export class Enemy {
     this.soldierTarget    = null;
     this.soldierAtkTimer  = 0;   // cooldown between hits on a soldier
     // Titan multi-attack system
-    this.titanAtkCooldown = 120; // first attack is quick
+    this.titanAtkCooldown = 200; // initial delay before first attack
     this.titanAtkCycle    = 0;   // 0=slash, 1=fireball, 2=shockwave
     this.titanJumpOffset  = 0;   // visual Y offset during jump
     this.titanJumpVel     = 0;
@@ -87,7 +87,7 @@ export class Enemy {
       if (this.titanShockwaveR > this.size * 5) this.titanShockwaveR = 0;
 
       if (this.titanAtkCooldown <= 0) {
-        this.titanAtkCooldown = 200; // ~3.3s between attacks at 60fps
+        this.titanAtkCooldown = this.kind === 'elderDragonRider' ? 300 : 380;
         const cycle = this.titanAtkCycle;
         this.titanAtkCycle = (this.titanAtkCycle + 1) % 3;
 
@@ -170,12 +170,16 @@ export class Enemy {
             }
             this.hp = Math.min(this.maxHp, this.hp + slashSteal);
           } else if (cycle === 1) {
-            // ── Dark fireball: aimed at nearest tower ──
+            // ── Triple dark orbs: 3 spread toward nearest tower ──
             const tgt = towers.sort((a,b) => distance(this,a)-distance(this,b))[0];
             if (tgt) {
               const dx = tgt.x - this.x, dy = tgt.y - this.y;
               const dd = Math.hypot(dx, dy) || 1;
-              projectiles.push(new Projectile({ x: this.x, y: this.y, vx: (dx/dd)*6, vy: (dy/dd)*6, damage: 220, darkFireball: true }));
+              const baseAng = Math.atan2(dy, dx);
+              for (let oi = -1; oi <= 1; oi++) {
+                const a = baseAng + oi * 0.28;
+                projectiles.push(new Projectile({ x: this.x, y: this.y, vx: Math.cos(a)*6, vy: Math.sin(a)*6, damage: 180, darkFireball: true }));
+              }
             }
           } else {
             // ── Shockwave jump: launch titan upward ──
