@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=41';
-import { Projectile } from './Projectile.js?v=41';
+import { ENEMIES, distance } from './constants.js?v=42';
+import { Projectile } from './Projectile.js?v=42';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -1253,6 +1253,20 @@ export class Enemy {
     ctx.save(); ctx.scale(1.15, 0.72);
     ctx.fillStyle = bc;
     ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI*2); ctx.fill();
+    // Scale pattern on body
+    if (!hit) {
+      ctx.strokeStyle = this.kind === 'dragonRider' ? 'rgba(100,0,0,0.5)' : 'rgba(0,80,20,0.5)';
+      ctx.lineWidth = 1.2 / 0.72; // compensate for scale
+      for (let row = -1; row <= 1; row++) {
+        for (let col = -2; col <= 2; col++) {
+          const sx = col * s * 0.32 + (row % 2) * s * 0.16;
+          const sy = row * s * 0.22;
+          if (Math.hypot(sx * 0.87, sy * 1.39) < s * 0.65) {
+            ctx.beginPath(); ctx.arc(sx, sy, s * 0.18, Math.PI * 0.05, Math.PI * 0.95); ctx.stroke();
+          }
+        }
+      }
+    }
     ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.6/0.72;
     ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
@@ -1327,6 +1341,22 @@ export class Enemy {
     ctx.beginPath(); ctx.moveTo(s*0.32,-s*0.50); ctx.lineTo(s*0.90,-s*1.98); ctx.stroke();
     ctx.globalAlpha = 1.0;
 
+    // Wing veins/membrane on left wing
+    if (!hit) {
+      const wingDark = this.kind === 'dragonRider' ? 'rgba(80,0,0,0.6)' : 'rgba(0,60,10,0.6)';
+      ctx.strokeStyle = wingDark; ctx.lineWidth = 0.8;
+      // Left wing veins
+      const lwx = -s*0.13, lwy = -s*0.36;
+      const lwex = -s*1.92, lwey = -s*0.92;
+      for (let i = 1; i <= 3; i++) {
+        const t = i / 4;
+        ctx.beginPath();
+        ctx.moveTo(lwx, lwy);
+        ctx.lineTo(lwx + (lwex - lwx)*t + s*0.2*(1-t), lwy + (lwey - lwy)*t - s*0.4*(1-t));
+        ctx.stroke();
+      }
+    }
+
     // Neck
     ctx.fillStyle = bc;
     ctx.beginPath();
@@ -1354,11 +1384,35 @@ export class Enemy {
     ctx.beginPath(); ctx.arc(s*2.74,s*0.02,s*0.055,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(s*2.74,s*0.16,s*0.055,0,Math.PI*2); ctx.fill();
 
+    // Teeth
+    if (!hit) {
+      const teethCol = '#ffe8d0';
+      ctx.fillStyle = teethCol;
+      for (let ti = -1; ti <= 1; ti++) {
+        ctx.save();
+        ctx.translate(s*1.88 + ti*s*0.12, s*0.14);
+        ctx.rotate(0.22);
+        ctx.beginPath(); ctx.moveTo(-s*0.06, 0); ctx.lineTo(0, s*0.16); ctx.lineTo(s*0.06, 0); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+
     // Eye
     ctx.fillStyle = '#ffe000';
     ctx.beginPath(); ctx.arc(s*1.90,-s*0.18,s*0.15,0,Math.PI*2); ctx.fill();
     ctx.fillStyle = '#000';
     ctx.fillRect(s*1.878,-s*0.278,s*0.052,s*0.218);
+
+    // Eye glow
+    if (!hit) {
+      const eyeGlowCol = this.kind === 'dragonRider' ? 'rgba(255,50,50,0.6)' : 'rgba(255,200,0,0.5)';
+      ctx.shadowColor = eyeGlowCol; ctx.shadowBlur = 8;
+      // (eye already drawn above — just re-draw for glow)
+      ctx.fillStyle = this.kind === 'dragonRider' ? '#ff3300' : '#ffdd00';
+      const eyed = s * (this.kind === 'dragonRider' ? 0.20 : 0.18);
+      ctx.beginPath(); ctx.arc(s*(this.kind === 'dragonRider' ? 1.02 : 1.04), -s*0.08, eyed, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
 
     // Horns
     ctx.fillStyle = dark;
