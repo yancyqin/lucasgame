@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=43';
-import { GameMap }     from './Map.js?v=43';
-import { Tower }       from './Tower.js?v=43';
-import { Enemy }       from './Enemy.js?v=43';
-import { Projectile }  from './Projectile.js?v=43';
-import { Trap }        from './Trap.js?v=43';
-import { Mine }        from './Mine.js?v=43';
-import { WaveManager } from './WaveManager.js?v=43';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=44';
+import { GameMap }     from './Map.js?v=44';
+import { Tower }       from './Tower.js?v=44';
+import { Enemy }       from './Enemy.js?v=44';
+import { Projectile }  from './Projectile.js?v=44';
+import { Trap }        from './Trap.js?v=44';
+import { Mine }        from './Mine.js?v=44';
+import { WaveManager } from './WaveManager.js?v=44';
 
 // ── Button icon renderer ─────────────────────────────────────────────────────
 // Draws the actual in-game unit/tower at small scale onto a canvas context.
@@ -5048,29 +5048,140 @@ class Game {
         break;
       }
       case 'ally_knight': {
-        // Knight helmet — grey dome with visor
-        ctx.fillStyle = '#8899aa'; ctx.beginPath(); ctx.arc(cx, cy+4, 13, Math.PI, Math.PI*2); ctx.fill();
-        ctx.fillRect(cx-13, cy+4, 26, 8);
-        ctx.fillStyle = '#556677'; ctx.fillRect(cx-10, cy+2, 20, 4);
-        ctx.fillStyle = '#1a1818'; ctx.fillRect(cx-6, cy+4, 12, 5);
+        // Three war knights side by side
+        ctx.save();
+        function drawKnightFigure(kx, ky, scale) {
+          ctx.save(); ctx.translate(kx, ky); ctx.scale(scale, scale);
+          // Legs
+          ctx.fillStyle = '#334488'; ctx.fillRect(-4, 2, 3, 8); ctx.fillRect(1, 2, 3, 8);
+          ctx.fillStyle = '#222'; ctx.fillRect(-5, 8, 5, 3); ctx.fillRect(0, 8, 5, 3);
+          // Body — blue plate
+          ctx.fillStyle = '#2255aa'; ctx.fillRect(-5, -7, 10, 9);
+          ctx.strokeStyle = '#4477cc'; ctx.lineWidth = 0.8;
+          ctx.strokeRect(-5, -7, 10, 9);
+          // Shoulder pads
+          ctx.fillStyle = '#3366bb';
+          ctx.beginPath(); ctx.arc(-5, -6, 3, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(5, -6, 3, 0, Math.PI*2); ctx.fill();
+          // Shield (left)
+          ctx.fillStyle = '#8b1a00'; ctx.fillRect(-10, -6, 5, 8);
+          ctx.strokeStyle = '#ff3300'; ctx.lineWidth = 0.6;
+          ctx.beginPath(); ctx.moveTo(-7, -5); ctx.lineTo(-7, 1); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-10, -2); ctx.lineTo(-5, -2); ctx.stroke();
+          // Sword (right) raised
+          ctx.fillStyle = '#ccc'; ctx.fillRect(6, -14, 2, 12);
+          ctx.fillStyle = '#884400'; ctx.fillRect(4, -4, 6, 1.5);
+          ctx.fillStyle = '#ddd';
+          ctx.beginPath(); ctx.moveTo(6, -14); ctx.lineTo(8, -14); ctx.lineTo(7, -18); ctx.closePath(); ctx.fill();
+          // Neck + head
+          ctx.fillStyle = '#e8b890'; ctx.fillRect(-2, -10, 4, 4);
+          ctx.beginPath(); ctx.arc(0, -13, 4, 0, Math.PI*2); ctx.fill();
+          // Helmet
+          ctx.fillStyle = '#8899aa';
+          ctx.beginPath(); ctx.arc(0, -13, 4.5, Math.PI, Math.PI*2); ctx.fill();
+          ctx.fillRect(-4.5, -13, 9, 4);
+          ctx.fillStyle = '#556677'; ctx.fillRect(-3, -14, 6, 3);
+          ctx.fillStyle = '#111'; ctx.fillRect(-2, -13, 4, 2.5);
+          ctx.restore();
+        }
+        drawKnightFigure(cx - 12, cy + 8, 0.72);
+        drawKnightFigure(cx,      cy + 8, 0.82);
+        drawKnightFigure(cx + 12, cy + 8, 0.72);
+        ctx.restore();
         break;
       }
       case 'ally_wizard': {
-        // Purple pointy hat
-        ctx.fillStyle = '#6622aa';
-        ctx.beginPath(); ctx.moveTo(cx, cy-18); ctx.lineTo(cx+14, cy+8); ctx.lineTo(cx-14, cy+8); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#8833cc'; ctx.fillRect(cx-15, cy+6, 30, 6);
-        ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(cx, cy-16, 3, 0, Math.PI*2); ctx.fill();
+        ctx.save(); ctx.translate(cx, cy + 6);
+        // Robe bottom — flowing purple
+        ctx.fillStyle = '#5a1a7a';
+        ctx.beginPath(); ctx.moveTo(-7, 2); ctx.lineTo(-9, 16); ctx.lineTo(9, 16); ctx.lineTo(7, 2); ctx.closePath(); ctx.fill();
+        // Body — purple robe
+        ctx.fillStyle = '#7a2a9a'; ctx.fillRect(-6, -7, 12, 9);
+        // Robe trim — gold
+        ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-6, -7); ctx.lineTo(0, 9); ctx.lineTo(6, -7); ctx.stroke();
+        // Gold belt
+        ctx.fillStyle = '#ffd700'; ctx.fillRect(-6, 1, 12, 2);
+        // Left arm holding staff up
+        ctx.fillStyle = '#7a2a9a'; ctx.fillRect(-10, -5, 5, 3);
+        // Staff pole
+        ctx.strokeStyle = '#6a3a0a'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-12, 10); ctx.lineTo(-12, -18); ctx.stroke();
+        ctx.lineCap = 'butt';
+        // Staff glowing orb
+        ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 10;
+        ctx.fillStyle = '#aa33ee'; ctx.beginPath(); ctx.arc(-12, -21, 5, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#dd99ff'; ctx.beginPath(); ctx.arc(-12, -21, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(-14, -23, 1.5, 0, Math.PI*2); ctx.fill();
+        // Right arm with sparks
+        ctx.fillStyle = '#7a2a9a'; ctx.fillRect(5, -5, 5, 3);
+        ctx.fillStyle = '#dd99ff';
+        for (let i = 0; i < 4; i++) {
+          const a = i / 4 * Math.PI * 2;
+          ctx.beginPath(); ctx.arc(13 + Math.cos(a)*3, -3 + Math.sin(a)*3, 1.5, 0, Math.PI*2); ctx.fill();
+        }
+        // Neck + head
+        ctx.fillStyle = '#e8b890'; ctx.fillRect(-2, -10, 4, 4);
+        ctx.beginPath(); ctx.arc(0, -14, 5, 0, Math.PI*2); ctx.fill();
+        // Wizard hat — tall and pointy
+        ctx.fillStyle = '#4a0a6a';
+        ctx.beginPath(); ctx.moveTo(-5, -17); ctx.lineTo(0, -30); ctx.lineTo(5, -17); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#6a2a8a'; ctx.fillRect(-6, -19, 12, 3);
+        // Star on hat
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 6px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('★', 0, -22); ctx.textAlign = 'left';
+        ctx.restore();
         break;
       }
       case 'ally_golem': {
-        // Grey boulder with texture
-        ctx.fillStyle = '#666'; ctx.beginPath(); ctx.arc(cx, cy+2, 14, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(cx-3, cy-2, 10, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#999'; ctx.beginPath(); ctx.arc(cx-4, cy-4, 6, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(cx-8, cy+4); ctx.lineTo(cx+2, cy-4); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(cx+2, cy-4); ctx.lineTo(cx+8, cy+6); ctx.stroke();
+        ctx.save(); ctx.translate(cx, cy + 4);
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.save(); ctx.scale(1, 0.3);
+        ctx.beginPath(); ctx.arc(0, 40, 12, 0, Math.PI*2); ctx.fill(); ctx.restore();
+        // Legs — thick stone pillars
+        ctx.fillStyle = '#5a4a30';
+        ctx.fillRect(-9, 6, 7, 12); ctx.fillRect(2, 6, 7, 12);
+        ctx.fillStyle = '#3a2a18';
+        ctx.fillRect(-10, 15, 9, 4); ctx.fillRect(1, 15, 9, 4); // feet
+        // Body — massive stone block
+        ctx.fillStyle = '#6a5a3a'; ctx.fillRect(-12, -8, 24, 15);
+        // Stone texture lines on body
+        ctx.strokeStyle = '#4a3a22'; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(12, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(0, 7); ctx.stroke();
+        ctx.fillStyle = '#7a6a48'; ctx.fillRect(-12, -8, 24, 4); // chest highlight
+        // Left arm — huge stone club raised
+        ctx.fillStyle = '#6a5a3a'; ctx.fillRect(-22, -10, 10, 6);
+        ctx.fillRect(-24, -18, 12, 10); // shoulder
+        // Left fist — big boulder
+        ctx.fillStyle = '#554433'; ctx.beginPath(); ctx.arc(-22, -22, 8, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#776655'; ctx.beginPath(); ctx.arc(-23, -24, 5, 0, Math.PI*2); ctx.fill();
+        // Right arm — raised and threatening
+        ctx.fillStyle = '#6a5a3a'; ctx.fillRect(12, -10, 10, 6);
+        ctx.fillRect(12, -18, 12, 10);
+        // Right fist
+        ctx.fillStyle = '#554433'; ctx.beginPath(); ctx.arc(22, -22, 8, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#776655'; ctx.beginPath(); ctx.arc(23, -24, 5, 0, Math.PI*2); ctx.fill();
+        // Shoulder boulders
+        ctx.fillStyle = '#7a6a48'; ctx.beginPath(); ctx.arc(-12, -7, 5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(12, -7, 5, 0, Math.PI*2); ctx.fill();
+        // Head — rough stone block
+        ctx.fillStyle = '#6a5a3a'; ctx.fillRect(-8, -20, 16, 13);
+        ctx.fillStyle = '#5a4a2a'; ctx.fillRect(-9, -21, 18, 4); // brow ridge
+        // Glowing eyes — green energy
+        ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 8;
+        ctx.fillStyle = '#22dd66';
+        ctx.beginPath(); ctx.arc(-4, -14, 3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(4, -14, 3, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
+        // Pupil slits
+        ctx.fillStyle = '#004422';
+        ctx.fillRect(-4.5, -15, 1, 3); ctx.fillRect(3.5, -15, 1, 3);
+        // Mouth — grimacing crack
+        ctx.strokeStyle = '#2a1a08'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(-5, -9); ctx.lineTo(-2, -11); ctx.lineTo(2, -11); ctx.lineTo(5, -9); ctx.stroke();
+        ctx.restore();
         break;
       }
       case 'pow_airstrike': {
@@ -5328,14 +5439,27 @@ class Game {
         break;
       }
       case 'sp_clone': {
-        // Two brown squares with battlements (towers)
-        for (const [ox, scl] of [[-6, 0.9], [8, 0.7]]) {
-          const x = cx + ox, s = 8 * scl;
-          ctx.fillStyle = '#5a3a10'; ctx.fillRect(x-s, cy-s, s*2, s*2);
-          ctx.fillStyle = '#7a5a20'; ctx.fillRect(x-s+1, cy-s+1, s*2-2, s*2-2);
-          ctx.fillStyle = '#4a2a08';
-          for (let i = 0; i < 3; i++) ctx.fillRect(x-s + i*(s*2/2.5), cy-s*1.6, s*0.6, s*0.6);
+        ctx.save();
+        // Original tower (solid)
+        const tx1 = cx - 8, ty1 = cy + 8;
+        ctx.fillStyle = '#555'; ctx.beginPath(); ctx.arc(tx1, ty1, 9, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#777'; ctx.beginPath(); ctx.arc(tx1-1, ty1-1, 8, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#444';
+        for (let i = 0; i < 4; i++) {
+          const a = (i/4)*Math.PI*2;
+          ctx.beginPath(); ctx.arc(tx1+Math.cos(a)*8, ty1+Math.sin(a)*8, 2.5, 0, Math.PI*2); ctx.fill();
         }
+        // Arrow/sparkle between them
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('→', cx + 2, cy + 11); ctx.textAlign = 'left';
+        // Clone tower (glowing blue ghost)
+        const tx2 = cx + 14, ty2 = cy + 8;
+        ctx.shadowColor = '#44aaff'; ctx.shadowBlur = 12;
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#3399ff'; ctx.beginPath(); ctx.arc(tx2, ty2, 9, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#66bbff'; ctx.beginPath(); ctx.arc(tx2-1, ty2-1, 7, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+        ctx.restore();
         break;
       }
       case 'sp_berserk': {
