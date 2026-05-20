@@ -1,4 +1,4 @@
-import { distance } from './constants.js?v=47';
+import { distance } from './constants.js?v=48';
 
 // GameMap owns the terrain: path, terrain features, and structures.
 // isFinalLevel = true → medieval wasteland theme; false → normal green battlefield.
@@ -416,119 +416,238 @@ export class GameMap {
   _drawCampStructures(ctx) {
     const sp = this.path[0];
     const ox = sp.x + 46, oy = sp.y;
+    const t  = Date.now() / 1000;
 
-    // Dark fortress gate posts
-    ctx.fillStyle = '#1a1210';
-    ctx.fillRect(ox - 56, oy - 42, 10, 54);
-    ctx.fillRect(ox + 34, oy - 42, 10, 54);
-    // Crenellations on gate posts
-    ctx.fillStyle = '#120e0c';
-    for (let i = 0; i < 3; i++) {
-      ctx.fillRect(ox - 56 + i*4, oy - 52, 3, 12);
-      ctx.fillRect(ox + 34 + i*4, oy - 52, 3, 12);
+    // ── Palisade wall (dark wooden stakes) ───────────────────────────────
+    const pStakes = [-58,-50,-42,-34,-26,-18,20,28,36,44];
+    for (const px2 of pStakes) {
+      const stakeG = ctx.createLinearGradient(ox+px2, oy-52, ox+px2+7, oy-52);
+      stakeG.addColorStop(0, '#1a0e08'); stakeG.addColorStop(0.4,'#3a2010'); stakeG.addColorStop(1,'#1a0e08');
+      ctx.fillStyle = stakeG;
+      ctx.fillRect(ox + px2, oy - 52, 7, 60);
+      // Pointed top
+      ctx.fillStyle = '#1a0e08';
+      ctx.beginPath();
+      ctx.moveTo(ox + px2, oy - 52);
+      ctx.lineTo(ox + px2 + 3.5, oy - 62);
+      ctx.lineTo(ox + px2 + 7, oy - 52);
+      ctx.closePath(); ctx.fill();
     }
-    // Gate chain / portcullis hint
-    ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 2;
-    for (let gx = ox - 46; gx < ox + 34; gx += 8) {
-      ctx.beginPath(); ctx.moveTo(gx, oy - 42); ctx.lineTo(gx, oy + 12); ctx.stroke();
+    // Horizontal brace
+    const braceG = ctx.createLinearGradient(0, oy - 34, 0, oy - 28);
+    braceG.addColorStop(0,'#2a1808'); braceG.addColorStop(1,'#1a1008');
+    ctx.fillStyle = braceG; ctx.fillRect(ox - 58, oy - 34, 80, 6);
+
+    // ── Gate opening ─────────────────────────────────────────────────────
+    ctx.fillStyle = '#080504'; ctx.fillRect(ox - 18, oy - 52, 36, 60);
+    // Iron portcullis
+    ctx.strokeStyle = '#3a3030'; ctx.lineWidth = 2;
+    for (let gi = -2; gi <= 2; gi++) {
+      ctx.beginPath(); ctx.moveTo(ox + gi * 7, oy - 52); ctx.lineTo(ox + gi * 7, oy + 8); ctx.stroke();
     }
-    ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 1.5;
-    for (let gy = oy - 38; gy < oy + 12; gy += 8) {
-      ctx.beginPath(); ctx.moveTo(ox - 46, gy); ctx.lineTo(ox + 34, gy); ctx.stroke();
+    ctx.lineWidth = 1.5;
+    for (const gy of [oy - 42, oy - 28, oy - 14]) {
+      ctx.beginPath(); ctx.moveTo(ox - 15, gy); ctx.lineTo(ox + 15, gy); ctx.stroke();
+    }
+    // Glowing red eyes in the darkness
+    const eyePulse = 0.6 + 0.4 * Math.sin(t * 2.2);
+    ctx.fillStyle = `rgba(200,0,0,${eyePulse})`;
+    ctx.beginPath(); ctx.arc(ox - 6, oy - 22, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox + 6, oy - 22, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(255,80,0,${eyePulse * 0.7})`;
+    ctx.beginPath(); ctx.arc(ox - 6, oy - 22, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox + 6, oy - 22, 5, 0, Math.PI * 2); ctx.fill();
+
+    // ── Animated evil banner ──────────────────────────────────────────────
+    ctx.fillStyle = '#2a1005'; ctx.fillRect(ox - 8, oy - 74, 3, 68);
+    const bw1 = Math.sin(t * 2.8) * 2.5, bw2 = Math.sin(t * 2.8 + 1.0) * 3.5;
+    ctx.fillStyle = '#7a0000';
+    ctx.beginPath();
+    ctx.moveTo(ox - 5, oy - 74);
+    ctx.quadraticCurveTo(ox + 7 + bw1, oy - 68, ox + 22 + bw2, oy - 72);
+    ctx.lineTo(ox + 22 + bw2, oy - 56);
+    ctx.quadraticCurveTo(ox + 7 + bw1, oy - 52, ox - 5, oy - 56);
+    ctx.closePath(); ctx.fill();
+    // Skull emblem on banner
+    ctx.fillStyle = '#ffeecc'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('☠', ox + 8, oy - 61); ctx.textAlign = 'left';
+
+    // ── 3 skulls on spikes ────────────────────────────────────────────────
+    for (const [sx, off] of [[ox + 56, 0],[ox + 70, 4],[ox + 84, -3]]) {
+      ctx.fillStyle = '#2a1005'; ctx.fillRect(sx, oy - 40 + off, 3, 44 - off);
+      // Skull
+      const skullG = ctx.createRadialGradient(sx+1, oy-46+off, 1, sx+1, oy-46+off, 8);
+      skullG.addColorStop(0, '#e8e0c8'); skullG.addColorStop(1, '#a09880');
+      ctx.fillStyle = skullG;
+      ctx.beginPath(); ctx.arc(sx + 1, oy - 46 + off, 8, 0, Math.PI * 2); ctx.fill();
+      // Eye sockets
+      ctx.fillStyle = '#1a1010';
+      ctx.beginPath(); ctx.arc(sx - 2, oy - 47 + off, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + 4, oy - 47 + off, 2.5, 0, Math.PI * 2); ctx.fill();
+      // Jaw
+      ctx.strokeStyle = '#1a1010'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(sx - 5, oy - 40 + off); ctx.lineTo(sx + 7, oy - 40 + off); ctx.stroke();
+      for (let tooth = 0; tooth < 3; tooth++) {
+        ctx.beginPath(); ctx.moveTo(sx - 3 + tooth * 4, oy - 40 + off); ctx.lineTo(sx - 3 + tooth * 4, oy - 37 + off); ctx.stroke();
+      }
     }
 
-    // Dark banner
-    ctx.fillStyle = '#2a1005'; ctx.fillRect(ox - 8, oy - 66, 4, 60);
-    ctx.fillStyle = '#660000'; ctx.fillRect(ox - 4, oy - 66, 28, 18);
-    ctx.fillStyle = '#990000';
-    ctx.beginPath(); ctx.arc(ox + 10, oy - 57, 5, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#ff2200';
-    ctx.beginPath(); ctx.arc(ox + 8, oy - 59, 2, 0, Math.PI*2); ctx.fill();
+    // ── Campfire glow ─────────────────────────────────────────────────────
+    const cfx = ox + 30, cfy = oy + 8;
+    const cfp = 0.7 + 0.3 * Math.sin(t * 7);
+    const cfG = ctx.createRadialGradient(cfx, cfy, 0, cfx, cfy, 18);
+    cfG.addColorStop(0, `rgba(255,180,0,${cfp * 0.5})`);
+    cfG.addColorStop(1, 'rgba(255,60,0,0)');
+    ctx.fillStyle = cfG; ctx.beginPath(); ctx.arc(cfx, cfy, 18, 0, Math.PI * 2); ctx.fill();
+    // Flame
+    ctx.fillStyle = `rgba(255,60,0,${cfp * 0.9})`;
+    ctx.beginPath(); ctx.moveTo(cfx - 5, cfy); ctx.quadraticCurveTo(cfx, cfy - 14 * cfp, cfx + 5, cfy); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffcc00';
+    ctx.beginPath(); ctx.moveTo(cfx - 3, cfy); ctx.quadraticCurveTo(cfx, cfy - 8 * cfp, cfx + 3, cfy); ctx.closePath(); ctx.fill();
 
-    // Skull on a spike
-    ctx.fillStyle = '#2a1005'; ctx.fillRect(ox + 60, oy - 42, 3, 46);
-    ctx.fillStyle = '#c8c0a8';
-    ctx.beginPath(); ctx.arc(ox + 61, oy - 46, 7, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#1a1010';
-    ctx.beginPath(); ctx.arc(ox + 59, oy - 48, 2, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(ox + 64, oy - 48, 2, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = '#1a1010'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(ox+57, oy-42); ctx.lineTo(ox+65, oy-42); ctx.stroke();
-
-    ctx.fillStyle = 'rgba(200,40,40,0.8)'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('ENEMY CAMP', ox + 10, oy - 70); ctx.textAlign = 'left';
+    // ── Label ─────────────────────────────────────────────────────────────
+    ctx.fillStyle = 'rgba(220,40,40,0.9)';
+    ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('ENEMY CAMP', ox + 10, oy - 78); ctx.textAlign = 'left';
   }
 
   _drawCastle(ctx) {
     const ex = this.path[this.path.length - 1].x;
     const ey = this.path[this.path.length - 1].y;
+    const t  = Date.now() / 1000;
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillRect(ex - 58, ey + 18, 116, 12);
+    // ── Helper: draw a stone rectangle with gradient shading + brick grid ──
+    const stoneRect = (x, y, w, h, lightColor, darkColor) => {
+      const g = ctx.createLinearGradient(x, y, x + w, y + h * 0.5);
+      g.addColorStop(0,   darkColor);
+      g.addColorStop(0.3, lightColor);
+      g.addColorStop(0.7, lightColor);
+      g.addColorStop(1,   darkColor);
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, w, h);
+      // mortar horizontal
+      ctx.strokeStyle = 'rgba(0,0,0,0.30)'; ctx.lineWidth = 1;
+      for (let row = y + 9; row < y + h; row += 9) {
+        ctx.beginPath(); ctx.moveTo(x + 1, row); ctx.lineTo(x + w - 1, row); ctx.stroke();
+      }
+      // mortar vertical (offset per row)
+      for (let row = 0; row * 9 < h; row++) {
+        const ry = y + row * 9;
+        const off = row % 2 === 0 ? 0 : 8;
+        for (let cx2 = x + off; cx2 < x + w; cx2 += 14) {
+          ctx.beginPath(); ctx.moveTo(cx2, ry); ctx.lineTo(cx2, Math.min(ry + 9, y + h)); ctx.stroke();
+        }
+      }
+      // top-edge highlight
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x + 1, y + 1); ctx.lineTo(x + w - 1, y + 1); ctx.stroke();
+    };
 
-    // Main walls — dark grey stone
-    ctx.fillStyle = '#4a4848'; ctx.fillRect(ex - 54, ey - 30, 108, 50);
-    ctx.fillStyle = '#686464'; ctx.fillRect(ex - 52, ey - 28, 104, 46);
-    // Stone brick lines
-    ctx.strokeStyle = '#3a3838'; ctx.lineWidth = 1;
-    for (let row = ey - 22; row < ey + 20; row += 8) {
-      ctx.beginPath(); ctx.moveTo(ex - 52, row); ctx.lineTo(ex + 52, row); ctx.stroke();
+    // ── Ground shadow ──────────────────────────────────────────────────────
+    const shadowG = ctx.createRadialGradient(ex, ey + 22, 0, ex, ey + 22, 70);
+    shadowG.addColorStop(0, 'rgba(0,0,0,0.35)');
+    shadowG.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = shadowG;
+    ctx.save(); ctx.translate(ex, ey + 22); ctx.scale(1.6, 0.3);
+    ctx.beginPath(); ctx.arc(0, 0, 70, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // ── Main curtain wall ─────────────────────────────────────────────────
+    stoneRect(ex - 54, ey - 32, 108, 52, '#747070', '#3e3c3c');
+    // Wall battlements
+    for (let i = 0; i < 7; i++) {
+      stoneRect(ex - 48 + i * 17, ey - 42, 11, 12, '#686464', '#3a3838');
+      ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(ex - 42 + i * 17, ey - 40, 5, 4);
     }
-    for (let col = ex - 46; col < ex + 52; col += 14) {
-      ctx.beginPath(); ctx.moveTo(col, ey - 28); ctx.lineTo(col, ey + 20); ctx.stroke();
+
+    // ── Left tower ────────────────────────────────────────────────────────
+    stoneRect(ex - 64, ey - 62, 34, 80, '#6e6a6a', '#404040');
+    // Left tower battlements (5 merlons)
+    for (let i = 0; i < 4; i++) {
+      stoneRect(ex - 64 + i * 9, ey - 72, 7, 12, '#686464', '#3a3838');
     }
-
-    // Left tower
-    ctx.fillStyle = '#424040'; ctx.fillRect(ex - 62, ey - 58, 32, 76);
-    ctx.fillStyle = '#686262'; ctx.fillRect(ex - 60, ey - 56, 28, 72);
-    // Battlements
-    ctx.fillStyle = '#424040';
-    for (let i = 0; i < 4; i++) ctx.fillRect(ex - 62 + i * 9, ey - 67, 7, 12);
-    // Arrow slits
-    ctx.fillStyle = '#1a1818';
-    ctx.fillRect(ex - 56, ey - 44, 5, 9); ctx.fillRect(ex - 44, ey - 44, 5, 9);
-
-    // Right tower
-    ctx.fillStyle = '#424040'; ctx.fillRect(ex + 30, ey - 58, 32, 76);
-    ctx.fillStyle = '#686262'; ctx.fillRect(ex + 32, ey - 56, 28, 72);
-    ctx.fillStyle = '#424040';
-    for (let i = 0; i < 4; i++) ctx.fillRect(ex + 30 + i * 9, ey - 67, 7, 12);
-    ctx.fillStyle = '#1a1818';
-    ctx.fillRect(ex + 42, ey - 44, 5, 9); ctx.fillRect(ex + 54, ey - 44, 5, 9);
-
-    // Wall top battlements
-    ctx.fillStyle = '#424040';
-    for (let i = 0; i < 6; i++) ctx.fillRect(ex - 48 + i * 18, ey - 38, 12, 10);
-
-    // Gate windows
-    ctx.fillStyle = '#1a1818';
-    ctx.fillRect(ex - 46, ey - 16, 5, 10); ctx.fillRect(ex - 28, ey - 16, 5, 10);
-    ctx.fillRect(ex + 23, ey - 16, 5, 10); ctx.fillRect(ex + 41, ey - 16, 5, 10);
-
-    // Gate arch
-    ctx.fillStyle = '#2a2828'; ctx.fillRect(ex - 15, ey - 20, 30, 38);
-    ctx.fillStyle = '#1a1818';
-    ctx.beginPath(); ctx.arc(ex, ey - 20, 15, Math.PI, 0); ctx.fill();
-    // Portcullis bars
-    ctx.strokeStyle = '#484444'; ctx.lineWidth = 2;
-    for (let i = -2; i <= 2; i++) {
-      ctx.beginPath(); ctx.moveTo(ex + i * 6, ey - 30); ctx.lineTo(ex + i * 6, ey + 18); ctx.stroke();
+    // Arrow slits left
+    for (const [sx, sy] of [[ex-56, ey-48],[ex-46, ey-48],[ex-56, ey-30],[ex-46, ey-30]]) {
+      ctx.fillStyle = '#0e0c0c'; ctx.fillRect(sx, sy, 5, 10);
+      ctx.fillStyle = 'rgba(255,160,60,0.12)'; ctx.fillRect(sx, sy, 5, 10);
     }
-    ctx.beginPath(); ctx.moveTo(ex - 13, ey - 14); ctx.lineTo(ex + 13, ey - 14); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(ex - 13, ey - 3);  ctx.lineTo(ex + 13, ey - 3);  ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(ex - 13, ey + 8);  ctx.lineTo(ex + 13, ey + 8);  ctx.stroke();
+    // Left tower door
+    ctx.fillStyle = '#1a1818'; ctx.fillRect(ex - 54, ey - 10, 14, 26);
+    ctx.beginPath(); ctx.arc(ex - 47, ey - 10, 7, Math.PI, 0); ctx.fill();
+
+    // ── Right tower ───────────────────────────────────────────────────────
+    stoneRect(ex + 30, ey - 62, 34, 80, '#6e6a6a', '#404040');
+    for (let i = 0; i < 4; i++) {
+      stoneRect(ex + 30 + i * 9, ey - 72, 7, 12, '#686464', '#3a3838');
+    }
+    for (const [sx, sy] of [[ex+41, ey-48],[ex+51, ey-48],[ex+41, ey-30],[ex+51, ey-30]]) {
+      ctx.fillStyle = '#0e0c0c'; ctx.fillRect(sx, sy, 5, 10);
+      ctx.fillStyle = 'rgba(255,160,60,0.12)'; ctx.fillRect(sx, sy, 5, 10);
+    }
+    ctx.fillStyle = '#1a1818'; ctx.fillRect(ex + 40, ey - 10, 14, 26);
+    ctx.beginPath(); ctx.arc(ex + 47, ey - 10, 7, Math.PI, 0); ctx.fill();
+
+    // ── Gate archway ─────────────────────────────────────────────────────
+    stoneRect(ex - 17, ey - 30, 34, 48, '#666262', '#3c3838');
+    // Arch keystone
+    ctx.fillStyle = '#1c1a1a';
+    ctx.beginPath(); ctx.arc(ex, ey - 28, 17, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.arc(ex, ey - 28, 17, Math.PI, 0); ctx.stroke();
+    // Portcullis
+    ctx.strokeStyle = '#5a5050'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    for (let gi = -2; gi <= 2; gi++) {
+      ctx.beginPath(); ctx.moveTo(ex + gi * 7, ey - 40); ctx.lineTo(ex + gi * 7, ey + 18); ctx.stroke();
+    }
+    ctx.lineWidth = 1.5;
+    for (const gy of [ey - 28, ey - 14, ey]) {
+      ctx.beginPath(); ctx.moveTo(ex - 14, gy); ctx.lineTo(ex + 14, gy); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
     // Torch glow inside gate
-    ctx.fillStyle = 'rgba(255,140,0,0.4)'; ctx.fillRect(ex - 7, ey - 5, 14, 22);
+    const torchPulse = 0.30 + 0.12 * Math.sin(t * 4.5);
+    const torchG = ctx.createRadialGradient(ex, ey, 0, ex, ey, 22);
+    torchG.addColorStop(0, `rgba(255,170,50,${torchPulse})`);
+    torchG.addColorStop(1, 'rgba(255,80,0,0)');
+    ctx.fillStyle = torchG; ctx.fillRect(ex - 18, ey - 30, 36, 50);
 
-    // Flag poles
-    ctx.fillStyle = '#3a2a18'; ctx.fillRect(ex - 47, ey - 76, 2, 22);
-    ctx.fillStyle = '#8b0000'; ctx.fillRect(ex - 62, ey - 76, 18, 14);  // dark red banner
-    ctx.fillStyle = '#cc2222'; ctx.fillRect(ex - 57, ey - 74, 8, 8);
+    // ── Torches on towers ─────────────────────────────────────────────────
+    for (const [tx2, ty2] of [[ex - 58, ey - 30], [ex + 58, ey - 30]]) {
+      const tp = 0.6 + 0.4 * Math.sin(t * 5 + tx2);
+      ctx.fillStyle = `rgba(255,140,30,${tp * 0.55})`;
+      ctx.beginPath(); ctx.arc(tx2, ty2 - 6, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#5a3010'; ctx.fillRect(tx2 - 1, ty2 - 4, 3, 8);
+      ctx.fillStyle = '#ff8800';
+      ctx.beginPath(); ctx.moveTo(tx2 - 3, ty2 - 4); ctx.lineTo(tx2 + 1, ty2 - 4 - 9 * tp); ctx.lineTo(tx2 + 4, ty2 - 4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffdd00';
+      ctx.beginPath(); ctx.moveTo(tx2 - 1, ty2 - 4); ctx.lineTo(tx2 + 1, ty2 - 4 - 5 * tp); ctx.lineTo(tx2 + 2, ty2 - 4); ctx.closePath(); ctx.fill();
+    }
 
-    ctx.fillStyle = '#3a2a18'; ctx.fillRect(ex + 45, ey - 76, 2, 22);
-    ctx.fillStyle = '#8b0000'; ctx.fillRect(ex + 47, ey - 76, 18, 14);
-    ctx.fillStyle = '#cc2222'; ctx.fillRect(ex + 52, ey - 74, 8, 8);
+    // ── Animated flags (wave with sin) ────────────────────────────────────
+    for (const [px2, py2, flip] of [[ex - 47, ey - 78, 1], [ex + 49, ey - 78, -1]]) {
+      ctx.fillStyle = '#4a3010'; ctx.fillRect(px2 - 1, py2, 3, 24);
+      // Wave shape using 3 points
+      const w1 = Math.sin(t * 3.0 + px2 * 0.05) * 3 * flip;
+      const w2 = Math.sin(t * 3.0 + 1.2 + px2 * 0.05) * 4 * flip;
+      const bx2 = px2 + flip * 2;
+      ctx.fillStyle = '#c01020';
+      ctx.beginPath();
+      ctx.moveTo(bx2, py2 + 2);
+      ctx.quadraticCurveTo(bx2 + flip * 9 + w1, py2 + 5, bx2 + flip * 18 + w2, py2 + 2);
+      ctx.lineTo(bx2 + flip * 18 + w2, py2 + 13);
+      ctx.quadraticCurveTo(bx2 + flip * 9 + w1, py2 + 16, bx2, py2 + 13);
+      ctx.closePath(); ctx.fill();
+      // Lion/crown emblem
+      ctx.fillStyle = '#ffd700';
+      ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('✦', bx2 + flip * 9, py2 + 11);
+    }
+    ctx.textAlign = 'left';
+
+    // ── "YOUR CASTLE" label ───────────────────────────────────────────────
+    ctx.fillStyle = 'rgba(255,220,100,0.85)';
+    ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('YOUR CASTLE', ex, ey - 80);
+    ctx.textAlign = 'left';
   }
 
   isOnFeature(x, y) {
@@ -701,35 +820,67 @@ export class GameMap {
       for (let i = 1; i < this.path.length; i++) ctx.lineTo(this.path[i].x, this.path[i].y);
       ctx.stroke();
     };
-    // Base path layers (shadow, dark border, mid, light center)
-    drawLine(shadow, 52); drawLine(dark, 44); drawLine(mid, 30); drawLine(light, 16);
+    // Base path: shadow border, dark road bed, mid layer, light center
+    drawLine(shadow, 58); drawLine(dark, 48); drawLine(mid, 36); drawLine(light, 22);
 
-    // Cobblestone texture — draw stone blocks along path segments
-    const stoneW = 16, stoneH = 10;
-    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1;
-    for (let seg = 0; seg < this.path.length - 1; seg++) {
-      const a = this.path[seg], b = this.path[seg + 1];
-      const len = Math.hypot(b.x - a.x, b.y - a.y);
-      const ang = Math.atan2(b.y - a.y, b.x - a.x);
-      const steps = Math.floor(len / stoneW);
-      for (let st = 0; st < steps; st++) {
-        const t = (st + 0.5) / steps;
-        const cx = a.x + (b.x - a.x) * t;
-        const cy = a.y + (b.y - a.y) * t;
-        // Draw a rotated rectangle (stone block)
-        ctx.save();
-        ctx.translate(cx, cy); ctx.rotate(ang);
-        // Alternate offset for brick pattern
-        const yOff = (st % 2 === 0) ? -stoneH * 0.5 : 0;
-        ctx.strokeRect(-stoneW * 0.5, yOff - stoneH * 0.5, stoneW * 0.92, stoneH * 0.85);
-        // Stone highlight
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-        ctx.beginPath();
-        ctx.moveTo(-stoneW * 0.45, yOff - stoneH * 0.42);
-        ctx.lineTo(stoneW * 0.42, yOff - stoneH * 0.42);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(0,0,0,0.28)';
-        ctx.restore();
+    // Ambient occlusion — soft dark edge along path sides
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(this.path[0].x, this.path[0].y);
+    for (let i = 1; i < this.path.length; i++) ctx.lineTo(this.path[i].x, this.path[i].y);
+    // just a second wide stroke for AO
+    ctx.lineWidth = 48; ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+    ctx.stroke();
+
+    // ── Cobblestones — each stone is individually shaded ──────────────────
+    const SW = 15, SH = 10; // stone width/height (path-local coords)
+    // We draw 3 rows across the path width
+    for (let row = -1; row <= 1; row++) {
+      for (let seg = 0; seg < this.path.length - 1; seg++) {
+        const a = this.path[seg], b = this.path[seg + 1];
+        const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+        const ang    = Math.atan2(b.y - a.y, b.x - a.x);
+        const perp   = ang + Math.PI / 2;
+        const steps  = Math.ceil(segLen / SW);
+        for (let st = 0; st < steps; st++) {
+          const frac = (st + 0.5) / steps;
+          // Alternate brick offset per row
+          const brickOff = ((st + row) % 2 === 0) ? SW * 0.5 : 0;
+          const cx = a.x + (b.x - a.x) * frac + Math.cos(perp) * row * (SH + 2);
+          const cy = a.y + (b.y - a.y) * frac + Math.sin(perp) * row * (SH + 2);
+
+          ctx.save();
+          ctx.translate(cx + Math.cos(ang) * brickOff * 0.5, cy + Math.sin(ang) * brickOff * 0.5);
+          ctx.rotate(ang);
+
+          // Each stone gets its own radial gradient for a 3-D rounded look
+          const sx = -SW * 0.46, sy = -SH * 0.42;
+          const sg = ctx.createRadialGradient(sx + SW * 0.3, sy + SH * 0.25, 0, sx + SW * 0.46, sy + SH * 0.5, SW * 0.7);
+          // Base color slightly varied per stone (deterministic noise)
+          const vary = ((seg * 31 + st * 17 + row * 7) % 18) - 9;
+          const base = parseInt(light.slice(1, 3), 16) + vary;
+          sg.addColorStop(0,   `rgba(${Math.min(base+30,255)},${Math.min(base+20,220)},${Math.min(base+5,170)},1)`);
+          sg.addColorStop(0.55,`rgba(${base},${Math.max(base-10,100)},${Math.max(base-25,80)},1)`);
+          sg.addColorStop(1,   `rgba(${Math.max(base-25,60)},${Math.max(base-30,55)},${Math.max(base-40,50)},1)`);
+          ctx.fillStyle = sg;
+          ctx.fillRect(sx, sy, SW * 0.92, SH * 0.84);
+
+          // Top-left bevel highlight
+          ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(sx + 1, sy + SH * 0.80);
+          ctx.lineTo(sx + 1, sy + 1);
+          ctx.lineTo(sx + SW * 0.88, sy + 1);
+          ctx.stroke();
+          // Bottom-right shadow edge
+          ctx.strokeStyle = 'rgba(0,0,0,0.30)'; ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(sx + SW * 0.92, sy + 1);
+          ctx.lineTo(sx + SW * 0.92, sy + SH * 0.84);
+          ctx.lineTo(sx + 1, sy + SH * 0.84);
+          ctx.stroke();
+
+          ctx.restore();
+        }
       }
     }
     ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';

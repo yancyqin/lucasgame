@@ -3,7 +3,7 @@ export class WaveManager {
   constructor() {
     this.wave = 0;
     this.inBreak = true;
-    this.breakTimer = 180;
+    this.breakTimer = this.levelDef?.startBreak ?? 90; // 1.5 s opening break
     this.spawnQueue = [];
     this.spawnDelay = 0;
     this.levelDef = null; // set by setLevel()
@@ -30,7 +30,7 @@ export class WaveManager {
     if (this.spawnDelay > 0) { this.spawnDelay--; return null; }
 
     if (this.spawnQueue.length > 0) {
-      this.spawnDelay = 45; // was 60 — enemies arrive a bit faster now
+      this.spawnDelay = 22; // faster enemy trickle
       return this.spawnQueue.shift();
     }
 
@@ -40,7 +40,7 @@ export class WaveManager {
         return { levelComplete: true, bonus: 0 };
       }
       this.inBreak = true;
-      this.breakTimer = 300;
+      this.breakTimer = this.levelDef?.waveBreak ?? 140; // 2.3 s between waves
       return { waveCleared: true, bonus: 0 };
     }
 
@@ -50,7 +50,7 @@ export class WaveManager {
   reset() {
     this.wave = 0;
     this.inBreak = true;
-    this.breakTimer = 180;
+    this.breakTimer = this.levelDef?.startBreak ?? 90; // 1.5 s opening break
     this.spawnQueue = [];
     this.spawnDelay = 0;
   }

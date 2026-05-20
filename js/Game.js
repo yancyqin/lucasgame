@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=47';
-import { GameMap }     from './Map.js?v=47';
-import { Tower }       from './Tower.js?v=47';
-import { Enemy }       from './Enemy.js?v=47';
-import { Projectile }  from './Projectile.js?v=47';
-import { Trap }        from './Trap.js?v=47';
-import { Mine }        from './Mine.js?v=47';
-import { WaveManager } from './WaveManager.js?v=47';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=48';
+import { GameMap }     from './Map.js?v=48';
+import { Tower }       from './Tower.js?v=48';
+import { Enemy }       from './Enemy.js?v=48';
+import { Projectile }  from './Projectile.js?v=48';
+import { Trap }        from './Trap.js?v=48';
+import { Mine }        from './Mine.js?v=48';
+import { WaveManager } from './WaveManager.js?v=48';
 
 // ── Button icon renderer ─────────────────────────────────────────────────────
 // Draws the actual in-game unit/tower at small scale onto a canvas context.
