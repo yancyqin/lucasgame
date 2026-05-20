@@ -1,5 +1,5 @@
-import { ENEMIES, distance } from './constants.js?v=44';
-import { Projectile } from './Projectile.js?v=44';
+import { ENEMIES, distance } from './constants.js?v=47';
+import { Projectile } from './Projectile.js?v=47';
 
 export class Enemy {
   constructor(kind, spawnX, spawnY, difficulty = 1) {
@@ -346,6 +346,15 @@ export class Enemy {
     const wp = path[Math.min(this.waypoint, path.length - 1)];
     const facing = Math.atan2(wp.y - this.y, wp.x - this.x);
     const bc = this.hitTimer > 0 ? '#fff' : this.slowTimer > 0 ? '#bb66ff' : this.color;
+
+    // Ground shadow beneath enemy
+    const shadowScale = this.kind === 'dragon' || this.kind === 'dragonRider' || this.kind === 'elderDragonRider' ? 1.6 : 1.0;
+    ctx.save(); ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#000';
+    ctx.translate(this.x + this.size * 0.15, this.y + this.size * (shadowScale * 0.8));
+    ctx.scale(shadowScale, 0.25);
+    ctx.beginPath(); ctx.arc(0, 0, this.size * 1.1, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
 
     if (this.kind === 'elderDragonRider') {
       this._drawElderDragonRider(ctx, facing, bc);
@@ -770,15 +779,39 @@ export class Enemy {
     }
     ctx.restore();
 
-    // TORSO
+    // TORSO — gradient shaded for depth
+    let torsoFill;
+    if (hit || slowed) {
+      torsoFill = bc;
+    } else {
+      torsoFill = ctx.createLinearGradient(cx - torsoW/2, 0, cx + torsoW/2, 0);
+      torsoFill.addColorStop(0, bc.replace(/rgb\(/, 'rgba(').replace(')', ',0.7)') || bc);
+      torsoFill.addColorStop(0.35, bc);
+      torsoFill.addColorStop(1, bc.replace(/rgb\(/, 'rgba(').replace(')', ',0.6)') || bc);
+    }
+    ctx.fillStyle = hit || slowed ? bc : (() => {
+      const g = ctx.createLinearGradient(cx - torsoW/2, torsoTop, cx + torsoW/2, torsoTop);
+      g.addColorStop(0, 'rgba(0,0,0,0.3)'); g.addColorStop(0.4, 'rgba(255,255,255,0.08)'); g.addColorStop(1, 'rgba(0,0,0,0.25)');
+      return g;
+    })();
     ctx.fillStyle = bc;
     ctx.fillRect(cx - torsoW / 2, torsoTop, torsoW, torsoH);
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5;
+    // Shading overlay
+    if (!hit && !slowed) {
+      const tg = ctx.createLinearGradient(cx - torsoW/2, torsoTop, cx + torsoW/2, torsoTop);
+      tg.addColorStop(0, 'rgba(0,0,0,0.28)'); tg.addColorStop(0.45, 'rgba(255,255,255,0.10)'); tg.addColorStop(1, 'rgba(0,0,0,0.22)');
+      ctx.fillStyle = tg; ctx.fillRect(cx - torsoW/2, torsoTop, torsoW, torsoH);
+    }
+    ctx.strokeStyle = 'rgba(0,0,0,0.40)'; ctx.lineWidth = 1.5;
     ctx.strokeRect(cx - torsoW / 2, torsoTop, torsoW, torsoH);
     if (!hit && !slowed) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath(); ctx.moveTo(cx, torsoTop + torsoH * 0.08); ctx.lineTo(cx, torsoTop + torsoH * 0.88); ctx.stroke();
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(cx - torsoW/2 + 2, torsoTop + torsoH * 0.68); ctx.lineTo(cx + torsoW/2 - 2, torsoTop + torsoH * 0.68); ctx.stroke();
+      // Armor highlight stripe at top
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(cx - torsoW/2 + 1, torsoTop + 1, torsoW - 2, 3);
     }
     ctx.fillStyle = armColor;
     ctx.beginPath(); ctx.arc(cx - torsoW/2 + 1, torsoTop + 4, s * 0.22, 0, Math.PI * 2); ctx.fill();

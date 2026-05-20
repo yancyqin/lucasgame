@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=44';
-import { GameMap }     from './Map.js?v=44';
-import { Tower }       from './Tower.js?v=44';
-import { Enemy }       from './Enemy.js?v=44';
-import { Projectile }  from './Projectile.js?v=44';
-import { Trap }        from './Trap.js?v=44';
-import { Mine }        from './Mine.js?v=44';
-import { WaveManager } from './WaveManager.js?v=44';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=47';
+import { GameMap }     from './Map.js?v=47';
+import { Tower }       from './Tower.js?v=47';
+import { Enemy }       from './Enemy.js?v=47';
+import { Projectile }  from './Projectile.js?v=47';
+import { Trap }        from './Trap.js?v=47';
+import { Mine }        from './Mine.js?v=47';
+import { WaveManager } from './WaveManager.js?v=47';
 
 // ── Button icon renderer ─────────────────────────────────────────────────────
 // Draws the actual in-game unit/tower at small scale onto a canvas context.
@@ -785,20 +785,26 @@ class Soldier {
 
     // Dispatch to type-specific drawing
     switch (this.typeName) {
-      case 'archer': this._drawArcher(ctx, hit, jy); break;
-      case 'knight': this._drawKnight(ctx, hit, jy); break;
-      case 'mage':   this._drawMage(ctx, hit, jy);   break;
-      case 'siege':  this._drawSiege(ctx, hit, jy);  break;
-      case 'dragon': this._drawDragonSoldier(ctx, hit, jy); break;
-      default:       this._drawBasic(ctx, hit, jy);  break;
+      case 'archer':    this._drawArcher(ctx, hit, jy);     break;
+      case 'knight':    this._drawKnight(ctx, hit, jy);     break;
+      case 'mage':      this._drawMage(ctx, hit, jy);       break;
+      case 'siege':     this._drawSiege(ctx, hit, jy);      break;
+      case 'dragon':    this._drawDragonSoldier(ctx, hit, jy); break;
+      // ── Gem shop premium allies — visually distinct from camp soldiers ──
+      case 'gemKnight': this._drawGemKnight(ctx, hit, jy);  break;
+      case 'gemWizard': this._drawGemWizard(ctx, hit, jy);  break;
+      case 'gemGolem':  this._drawGemGolem(ctx, hit, jy);   break;
+      case 'gemDragon': this._drawGemDragon(ctx, hit, jy);  break;
+      default:          this._drawBasic(ctx, hit, jy);      break;
     }
 
-    // HP bar (same for all)
-    const bw = 20;
-    ctx.fillStyle = '#111'; ctx.fillRect(this.x-bw/2, this.y-26-jy, bw, 3);
+    // HP bar — gem golems are bigger so the bar sits higher
+    const bw = this.typeName === 'gemGolem' ? 28 : 20;
+    const byo = this.typeName === 'gemGolem' ? -42 : this.typeName === 'gemDragon' ? -38 : -26;
+    ctx.fillStyle = '#111'; ctx.fillRect(this.x-bw/2, this.y+byo-jy, bw, 3);
     const hf = this.hp / this.maxHp;
     ctx.fillStyle = hf > 0.5 ? '#2f8' : hf > 0.25 ? '#fa0' : '#f44';
-    ctx.fillRect(this.x-bw/2, this.y-26-jy, bw*hf, 3);
+    ctx.fillRect(this.x-bw/2, this.y+byo-jy, bw*hf, 3);
 
     // Titan stun — spinning stars above head
     if (this.stunTimer > 0) {
@@ -1015,6 +1021,269 @@ class Soldier {
     }
     ctx.restore();
   }
+
+  // ── GEM KNIGHT — golden paladin, larger and glowing ─────────────────────────
+  _drawGemKnight(ctx, hit, jy) {
+    const x = this.x, y = this.y;
+    // Golden glow aura
+    if (!hit) {
+      ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 14;
+    }
+    // Greaves — gold plate
+    ctx.fillStyle = hit ? '#fff' : '#b8860b';
+    ctx.fillRect(x-7, y+3-jy, 6, 8); ctx.fillRect(x+1, y+3-jy, 6, 8);
+    ctx.fillStyle = hit ? '#fff' : '#8b6914'; // boots
+    ctx.fillRect(x-8, y+9-jy, 8, 4); ctx.fillRect(x, y+9-jy, 8, 4);
+    // Plate body — gold
+    ctx.fillStyle = hit ? '#fff' : '#daa520';
+    ctx.fillRect(x-7, y-10-jy, 14, 13);
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1;
+    ctx.strokeRect(x-7, y-10-jy, 14, 13);
+    // Shoulder pads — large rounded
+    ctx.fillStyle = hit ? '#fff' : '#b8860b';
+    ctx.beginPath(); ctx.arc(x-7, y-9-jy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+7, y-9-jy, 4, 0, Math.PI*2); ctx.fill();
+    // Large tower shield (crimson + gold)
+    ctx.fillStyle = hit ? '#fff' : '#990000';
+    ctx.fillRect(x-19, y-14-jy, 9, 22);
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(x-19, y-14-jy, 9, 22);
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('✦', x-14, y-2-jy); ctx.textAlign = 'left';
+    // Neck
+    ctx.fillStyle = '#e8b890'; ctx.fillRect(x-2, y-13-jy, 4, 4);
+    // Full helm — shining gold
+    ctx.fillStyle = hit ? '#fff' : '#ffd700';
+    ctx.beginPath(); ctx.arc(x, y-17-jy, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = hit ? '#ddd' : '#b8860b'; // visor
+    ctx.fillRect(x-4, y-19-jy, 8, 4);
+    // Crown on top
+    ctx.fillStyle = hit ? '#fff' : '#ffd700';
+    ctx.beginPath();
+    ctx.moveTo(x-5, y-23-jy); ctx.lineTo(x-5, y-29-jy); ctx.lineTo(x-2, y-26-jy);
+    ctx.lineTo(x, y-31-jy); ctx.lineTo(x+2, y-26-jy); ctx.lineTo(x+5, y-29-jy);
+    ctx.lineTo(x+5, y-23-jy); ctx.closePath(); ctx.fill();
+    // Great sword — swings when attacking
+    ctx.shadowBlur = 0;
+    const sw = this.swingTimer > 0 ? Math.sin(this.swingTimer/14*Math.PI)*14 : 0;
+    ctx.save(); ctx.translate(x+10, y-8-jy-sw);
+    ctx.fillStyle = '#e0e0ff'; ctx.fillRect(-2,-20,4,22); // blade
+    ctx.fillStyle = '#ffd700'; ctx.fillRect(-5,-2,11,2.5); // crossguard
+    ctx.fillStyle = '#cc9900'; ctx.beginPath(); ctx.arc(0,0,3,0,Math.PI*2); ctx.fill(); // pommel
+    ctx.restore();
+    // Block flash
+    if (this.blocking) {
+      ctx.fillStyle='rgba(255,215,0,0.35)'; ctx.fillRect(x-19, y-14-jy, 9, 22);
+    }
+  }
+
+  // ── GEM WIZARD — archmage, glowing robes and orbiting stars ─────────────────
+  _drawGemWizard(ctx, hit, jy) {
+    const x = this.x, y = this.y;
+    const t = Date.now() / 400;
+    // Floating effect — wizard hovers slightly above ground
+    const hover = Math.sin(t * 1.8) * 2;
+    const fy = jy + hover;
+    // Purple/white glow
+    if (!hit) { ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 18; }
+    // Robe — flowing, taller than regular mage
+    ctx.fillStyle = hit ? '#fff' : '#4a0a7a';
+    ctx.beginPath(); ctx.moveTo(x-8, y+2-fy); ctx.lineTo(x-11, y+16-fy);
+    ctx.lineTo(x+11, y+16-fy); ctx.lineTo(x+8, y+2-fy); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = hit ? '#fff' : '#7722bb';
+    ctx.fillRect(x-6, y-12-fy, 12, 14);
+    // Gold robe trim
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x-6,-12+y-fy); ctx.lineTo(x,2+y-fy); ctx.lineTo(x+6,-12+y-fy); ctx.stroke();
+    // Gold belt
+    ctx.fillStyle = '#ffd700'; ctx.fillRect(x-6, y+1-fy, 12, 2.5);
+    // Left arm holding staff
+    ctx.fillStyle = hit ? '#fff' : '#7722bb'; ctx.fillRect(x-11, y-8-fy, 6, 3);
+    // Staff pole — glowing
+    ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#7a4a10'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x-14, y+12-fy); ctx.lineTo(x-14, y-26-fy); ctx.stroke();
+    ctx.lineCap = 'butt';
+    // Big pulsing orb on staff tip
+    const orbGlow = 0.6 + 0.4 * Math.sin(t * 2);
+    ctx.shadowColor = '#dd88ff'; ctx.shadowBlur = 20 * orbGlow;
+    ctx.fillStyle = `rgba(180,60,255,${orbGlow})`; ctx.beginPath(); ctx.arc(x-14, y-29-fy, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = `rgba(240,180,255,${orbGlow*0.7})`; ctx.beginPath(); ctx.arc(x-14, y-29-fy, 4.5, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    // Right arm with energy sparks
+    ctx.fillStyle = hit ? '#fff' : '#7722bb'; ctx.fillRect(x+5, y-8-fy, 6, 3);
+    // Orbiting star particles
+    for (let i = 0; i < 3; i++) {
+      const a = t + (i * Math.PI * 2 / 3);
+      const sx = x + 14 + Math.cos(a) * 5, sy = y - 6 - fy + Math.sin(a) * 5;
+      ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(sx, sy, 2, 0, Math.PI*2); ctx.fill();
+    }
+    // Head
+    ctx.fillStyle = '#e8b890'; ctx.beginPath(); ctx.arc(x, y-16-fy, 6, 0, Math.PI*2); ctx.fill();
+    // Tall pointed hat with star
+    ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 6;
+    ctx.fillStyle = hit ? '#ddd' : '#3a005a';
+    ctx.beginPath(); ctx.moveTo(x-8, y-19-fy); ctx.lineTo(x, y-36-fy); ctx.lineTo(x+8, y-19-fy); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#6622aa'; ctx.fillRect(x-9, y-22-fy, 18, 4);
+    ctx.shadowBlur = 0;
+    // Star on hat
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('★', x, y-29-fy); ctx.textAlign = 'left';
+  }
+
+  // ── GEM GOLEM — massive stone creature with glowing eyes ────────────────────
+  _drawGemGolem(ctx, hit, jy) {
+    const x = this.x, y = this.y;
+    // Green glow from eyes
+    if (!hit) { ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 12; }
+    // Feet — heavy stone slabs
+    ctx.fillStyle = hit ? '#fff' : '#3a2a18';
+    ctx.fillRect(x-12, y+15-jy, 11, 5); ctx.fillRect(x+1, y+15-jy, 11, 5);
+    // Legs — thick stone pillars
+    ctx.fillStyle = hit ? '#fff' : '#6a5a3a';
+    ctx.fillRect(x-11, y+3-jy, 9, 14); ctx.fillRect(x+2, y+3-jy, 9, 14);
+    ctx.fillStyle = hit ? '#ddd' : '#7a6a4a';
+    ctx.fillRect(x-10, y+3-jy, 9, 4); ctx.fillRect(x+1, y+3-jy, 9, 4);
+    // Massive body block
+    ctx.fillStyle = hit ? '#fff' : '#6a5a3a';
+    ctx.fillRect(x-14, y-14-jy, 28, 17);
+    // Stone texture lines
+    ctx.strokeStyle = hit ? '#ccc' : '#4a3a22'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x-14, y-4-jy); ctx.lineTo(x+14, y-4-jy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y-14-jy); ctx.lineTo(x, y+3-jy); ctx.stroke();
+    // Chest highlight
+    ctx.fillStyle = hit ? '#eee' : '#7a6a48'; ctx.fillRect(x-14, y-14-jy, 28, 5);
+    // Left arm — raised with boulder fist
+    ctx.fillStyle = hit ? '#fff' : '#6a5a3a';
+    ctx.fillRect(x-28, y-14-jy, 14, 8);
+    ctx.fillRect(x-30, y-24-jy, 16, 12);
+    // Boulder fist (left)
+    ctx.shadowColor = '#44ff88'; ctx.shadowBlur = hit ? 0 : 8;
+    ctx.fillStyle = hit ? '#ccc' : '#554433';
+    ctx.beginPath(); ctx.arc(x-26, y-29-jy, 10, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = hit ? '#eee' : '#776655';
+    ctx.beginPath(); ctx.arc(x-28, y-31-jy, 7, 0, Math.PI*2); ctx.fill();
+    // Right arm
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = hit ? '#fff' : '#6a5a3a';
+    ctx.fillRect(x+14, y-14-jy, 14, 8);
+    ctx.fillRect(x+14, y-24-jy, 16, 12);
+    // Boulder fist (right)
+    ctx.fillStyle = hit ? '#ccc' : '#554433';
+    ctx.beginPath(); ctx.arc(x+26, y-29-jy, 10, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = hit ? '#eee' : '#776655';
+    ctx.beginPath(); ctx.arc(x+28, y-31-jy, 7, 0, Math.PI*2); ctx.fill();
+    // Shoulder boulders
+    ctx.fillStyle = hit ? '#ddd' : '#8a7a58';
+    ctx.beginPath(); ctx.arc(x-14, y-12-jy, 6, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+14, y-12-jy, 6, 0, Math.PI*2); ctx.fill();
+    // Head — rough stone block
+    ctx.fillStyle = hit ? '#fff' : '#6a5a3a';
+    ctx.fillRect(x-10, y-28-jy, 20, 15);
+    ctx.fillStyle = hit ? '#ddd' : '#5a4a2a';
+    ctx.fillRect(x-11, y-29-jy, 22, 5); // brow ridge
+    // Glowing green eyes
+    ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 12;
+    ctx.fillStyle = hit ? '#aaffcc' : '#22dd66';
+    ctx.beginPath(); ctx.arc(x-5, y-20-jy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+5, y-20-jy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#004422';
+    ctx.fillRect(x-5.5, y-21-jy, 1.5, 4); ctx.fillRect(x+4, y-21-jy, 1.5, 4); // slits
+    ctx.shadowBlur = 0;
+    // Grimace crack
+    ctx.strokeStyle = '#2a1a08'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x-6, y-14-jy); ctx.lineTo(x-2, y-16-jy);
+    ctx.lineTo(x+2, y-16-jy); ctx.lineTo(x+6, y-14-jy); ctx.stroke();
+    // Ground slam ring when attacking
+    if (this.swingTimer > 0) {
+      const p = this.swingTimer / 14;
+      ctx.strokeStyle = `rgba(100,200,100,${p * 0.8})`; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(x, y+10-jy, (1-p) * 50 + 10, 0, Math.PI*2); ctx.stroke();
+    }
+  }
+
+  // ── GEM DRAGON — full-size green dragon ally ─────────────────────────────────
+  _drawGemDragon(ctx, hit, jy) {
+    const cx = this.x, cy = this.y - jy;
+    const s = 16; // bigger than the small camp dragon (s=10)
+    const col  = hit ? '#fff' : '#2ea84a';
+    const dark = hit ? '#fff' : '#1a6b30';
+    const belly = hit ? '#eee' : '#88cc66';
+    if (!hit) { ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 8; }
+    ctx.save(); ctx.translate(cx, cy);
+    // Body
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.ellipse(0, 0, s*1.3, s*0.8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.ellipse(-1, -1, s*1.1, s*0.65, 0, 0, Math.PI*2); ctx.fill();
+    // Belly scales
+    ctx.fillStyle = belly;
+    ctx.beginPath(); ctx.ellipse(0, 2, s*0.6, s*0.4, 0, 0, Math.PI*2); ctx.fill();
+    // Fish-scale texture on belly
+    ctx.strokeStyle = 'rgba(100,180,80,0.4)'; ctx.lineWidth = 0.8;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath(); ctx.arc(i*s*0.3, 2, s*0.2, 0, Math.PI); ctx.stroke();
+    }
+    // Head
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(s*1.15, -s*0.1, s*0.65, 0, Math.PI*2); ctx.fill();
+    // Snout
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.ellipse(s*1.8, s*0.1, s*0.38, s*0.25, 0.2, 0, Math.PI*2); ctx.fill();
+    // Teeth
+    ctx.fillStyle = '#fffde0';
+    for (let i = -1; i <= 1; i += 2) {
+      ctx.beginPath(); ctx.moveTo(s*1.65+i*s*0.14, s*0.22);
+      ctx.lineTo(s*1.7+i*s*0.1, s*0.38); ctx.lineTo(s*1.75+i*s*0.14, s*0.22); ctx.fill();
+    }
+    // Eye — glowing
+    ctx.shadowColor = '#ffee00'; ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ffee00'; ctx.beginPath(); ctx.arc(s*1.06, -s*0.22, s*0.17, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(s*1.08, -s*0.22, s*0.09, 0, Math.PI*2); ctx.fill();
+    // Wings
+    ctx.fillStyle = dark; ctx.globalAlpha = 0.88;
+    ctx.beginPath();
+    ctx.moveTo(-s*0.2, -s*0.3);
+    ctx.bezierCurveTo(-s*0.7, -s*1.7, -s*2.2, -s*1.9, -s*2.4, -s*0.85);
+    ctx.bezierCurveTo(-s*1.8, -s*0.1, -s*0.8, s*0.1, -s*0.2, -s*0.3);
+    ctx.fill();
+    // Wing vein lines
+    ctx.strokeStyle = 'rgba(0,80,20,0.5)'; ctx.lineWidth = 1;
+    for (let i = 1; i <= 3; i++) {
+      const t2 = i / 4;
+      ctx.beginPath();
+      ctx.moveTo(-s*0.2, -s*0.3);
+      ctx.lineTo(-s*0.2 + (-s*2.4-(-s*0.2))*t2 + s*0.3*(1-t2), -s*0.3 + (-s*0.85-(-s*0.3))*t2 - s*0.7*(1-t2));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // Tail
+    ctx.strokeStyle = col; ctx.lineWidth = s*0.42; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-s*0.8, s*0.1); ctx.bezierCurveTo(-s*1.5, s*0.9, -s*2.6, -s*0.4, -s*3.0, s*0.2); ctx.stroke();
+    ctx.lineCap = 'butt';
+    // Horns
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.moveTo(s*1.0,-s*0.22); ctx.lineTo(s*0.8,-s*0.72); ctx.lineTo(s*1.2,-s*0.26); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s*0.85,-s*0.2); ctx.lineTo(s*0.7,-s*0.58); ctx.lineTo(s*1.0,-s*0.24); ctx.closePath(); ctx.fill();
+    // Spine ridges
+    ctx.fillStyle = dark;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath(); ctx.moveTo(i*s*0.4, -s*0.42); ctx.lineTo(i*s*0.3, -s*0.72); ctx.lineTo(i*s*0.5, -s*0.44); ctx.closePath(); ctx.fill();
+    }
+    // Fire breath when attacking
+    if (this.swingTimer > 0) {
+      const p = this.swingTimer / 14;
+      ctx.globalAlpha = p * 0.9;
+      ctx.fillStyle = '#ff8800';
+      ctx.beginPath(); ctx.arc(s*2.2, s*0.1, s*0.8*p+s*0.3, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ffee00';
+      ctx.beginPath(); ctx.arc(s*2.2, s*0.1, s*0.45*p+s*0.15, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
 }
 
 // Returns a dramatic one-liner for the wave announcement banner
@@ -1207,6 +1476,8 @@ class Game {
     this.camps       = [];
     this.soldiers    = [];
     this.workerUnits = []; // animated worker characters
+    this.vfx         = []; // power-up visual effects (planes, lightning, explosions)
+    this._upgDelay   = 0; // stagger counter for upgrade VFX cascades
 
     this.castleHp    = 10000;
     this.castleMaxHp = 10000;
@@ -1243,10 +1514,20 @@ class Game {
     this.typeKeys  = Object.keys(TYPES);
     this.trapKeys  = Object.keys(TRAPS);
 
-    // ── Loadout state ─────────────────────────────────────────────────────────
-    this.pendingConsumables = []; // item IDs queued from gem shop for next level
-    this._pendingTriggers   = []; // damage items waiting for first wave enemies
-    this.activeLoadout      = [];   // consumables ready to USE during the current level
+    // ── Inventory system ──────────────────────────────────────────────────────
+    this.gemInventory = JSON.parse(localStorage.getItem('td_gemInventory') || '[]');
+    // legacy compat: if pendingConsumables exist, migrate them
+    const legacy = JSON.parse(localStorage.getItem('td_pendingConsumables') || '[]');
+    if (legacy.length > 0) {
+      this.gemInventory.push(...legacy);
+      localStorage.removeItem('td_pendingConsumables');
+      localStorage.setItem('td_gemInventory', JSON.stringify(this.gemInventory));
+    }
+    this._pendingTriggers = [];
+    this.activeLoadout = []; // keep this for backwards compat but it becomes unused
+    this._invBtnBounds = []; // click bounds for inventory USE buttons
+    // Legacy pendingConsumables reference (kept for gem shop count display)
+    this.pendingConsumables = this.gemInventory;
 
     // ── Daily Wheel state ──────────────────────────────────────────────────────
     this.wheelOpen     = false;  // is the wheel overlay showing?
@@ -1290,6 +1571,9 @@ class Game {
 
     this.paused         = false;
     this.helpOpen       = false;
+    this.achOpen        = false;
+    this.lbOpen         = false;
+    this._achScroll     = 0;
     this.titleActive    = true;
     this.selectedLevelId = 1;
     this.campLimit = 5; // raised to 10 by gem_camps upgrade
@@ -1360,6 +1644,9 @@ class Game {
         if (t.hp < t.maxHp) t.hp = Math.min(t.hp + 0.005, t.maxHp);
       }
     }
+
+    // Tick VFX (power-up visual effects — planes, lightning bolts, explosions)
+    this._updateVfx();
 
     // Once the titan spawns it's the ONLY thing left — no more waves
     const waveResult = this.titanSpawned ? null : this.waveManager.update(this.enemies.length);
@@ -1717,10 +2004,12 @@ class Game {
     this._drawCastleArcher();
     for (const e     of this.enemies)     e.draw(this.ctx, this.path);
     for (const p     of this.projectiles) p.draw(this.ctx);
+    this._drawVfx(); // power-up visual effects on top of everything
 
     this._drawCampHpBar();
     this._drawCutscene();
     this._drawHUD();
+    this._drawInventory();
     this._drawBreakOverlay();
     this._drawStoryBanner();   // cinematic level-start overlay
     this._drawWaveBanner();    // dramatic wave announcement
@@ -1733,6 +2022,8 @@ class Game {
     if (this.paused) this._drawPauseOverlay();
     // Draw help overlay
     if (this.helpOpen) this._drawHelpOverlay();
+    if (this.achOpen)  this._drawAchPanel();
+    if (this.lbOpen)   this._drawLbPanel();
     // Draw wheel on top if it's open
     if (this.wheelOpen) this._drawWheel();
     this._drawTutorialKing();
@@ -2828,6 +3119,8 @@ class Game {
 
     this.towers = []; this.enemies = []; this.projectiles = [];
     this.traps = []; this.mines = []; this.guards = []; this.camps = []; this.soldiers = []; this.workerUnits = [];
+    this.vfx = [];
+    this._upgDelay = 0; // stagger counter for upgrade VFX cascades
     this.viewMode = 'flat'; this.viewTower = null;
 
     // Pre-place 3 mines at the start of each level — try candidate spots until 3 land off-path
@@ -2896,12 +3189,12 @@ class Game {
     // Apply gem shop permanent upgrades (happens before wheel reward so both stack)
     this._applyGemUpgrades();
 
-    // Apply consumable loadout queued from the gem shop
+    // Inventory: load from localStorage (already in this.gemInventory from constructor)
+    // Do NOT apply items automatically — player activates manually
     this._pendingTriggers = [];
-    this.activeLoadout = [];
-    this._applyConsumables();
-
-    // Apply pending wheel reward (from daily spin)
+    // Apply permanent gem upgrades (these ARE automatic, not consumables)
+    // (already called above as _applyGemUpgrades)
+    // Apply pending wheel reward if any
     if (this.pendingWheelReward) {
       this._applyWheelReward(this.pendingWheelReward);
       this.pendingWheelReward = null;
@@ -2921,6 +3214,11 @@ class Game {
     this.titleActive = true;
     this._buildTitleScreen();
     document.getElementById('title-screen').style.display = 'flex';
+    const nb = document.getElementById('btn-notebook');
+    const tb = document.getElementById('btn-trophy');
+    if (nb) nb.style.display = 'none';
+    if (tb) tb.style.display = 'none';
+    this.achOpen = false; this.lbOpen = false;
   }
 
   restart() {
@@ -2989,7 +3287,7 @@ class Game {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
     // Version badge — helps confirm the right code is loaded
-    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v43';
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v46';
 
     // Draw map background
     this._drawTitleBg();
@@ -3300,6 +3598,12 @@ class Game {
     ui.appendChild(sellBtn);
 
     this._updateButtons();
+
+    // Show side panel buttons during gameplay
+    const nb = document.getElementById('btn-notebook');
+    const tb = document.getElementById('btn-trophy');
+    if (nb) { nb.style.display = 'block'; nb.onclick = () => { this.achOpen = !this.achOpen; this.lbOpen = false; }; }
+    if (tb) { tb.style.display = 'block'; tb.onclick = () => { this.lbOpen = !this.lbOpen; this.achOpen = false; }; }
   }
 
   _selectType(key) {
@@ -3387,16 +3691,12 @@ class Game {
       if (this.gameOver || this.levelComplete || this.titleActive) return;
       if (this.paused) return; // can't place or select anything while paused
 
-      // Check loadout USE button clicks
-      if (this._loadoutBtnBounds) {
-        for (const b of this._loadoutBtnBounds) {
-          if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-            const idx = this.activeLoadout.indexOf(b.id);
-            if (idx !== -1) {
-              this._fireTrigger(b.id);
-              this.activeLoadout.splice(idx, 1);
-              this.flash(`${b.id.replace('pow_','').replace('sp_','').toUpperCase()} activated!`);
-            }
+      // Check inventory USE button clicks
+      if (this._invBtnBounds) {
+        for (const b of this._invBtnBounds) {
+          if (x >= b.fullX && x <= b.fullX + b.fullW && y >= b.fullY && y <= b.fullY + b.fullH) {
+            if (!this.currentLevel) return;
+            this._activateInventoryItem(b.id);
             return;
           }
         }
@@ -3499,6 +3799,7 @@ class Game {
       }
       if ((e.key === 'h' || e.key === 'H') && !this.titleActive) { this.helpOpen = !this.helpOpen; return; }
       if (e.key === 'Escape' && this.helpOpen) { this.helpOpen = false; return; }
+      if (e.key === 'Escape') { this.achOpen = false; this.lbOpen = false; }
       if (this.wheelOpen) return; // don't handle hotkeys while wheel overlay is open
       const allowedTowers = this.currentLevel ? this.currentLevel.towers : this.typeKeys;
       const allowedTraps  = this.currentLevel ? this.currentLevel.traps  : this.trapKeys;
@@ -4039,45 +4340,91 @@ class Game {
       this._upgradePanelBounds = null;
     }
 
-    // Active loadout items — USE buttons shown during gameplay
-    if (this.activeLoadout.length > 0) {
-      const ITEM_ICONS = {
-        pow_airstrike:'✈️', pow_meteor:'☄️', pow_freeze:'❄️',
-        pow_lightning:'⚡', pow_poison:'☠️', sp_nuke:'💣', sp_berserk:'😤'
-      };
-      const ITEM_NAMES = {
-        pow_airstrike:'AIRSTRIKE', pow_meteor:'METEOR', pow_freeze:'FREEZE',
-        pow_lightning:'LIGHTNING', pow_poison:'POISON', sp_nuke:'NUKE', sp_berserk:'BERSERK'
-      };
-      this._loadoutBtnBounds = [];
-      const btnW = 68, btnH = 36, gap = 6;
-      const totalW = this.activeLoadout.length * (btnW + gap) - gap;
-      let bx = this.canvas.width / 2 - totalW / 2;
-      const by = this.canvas.height - 58;
-      for (let i = 0; i < this.activeLoadout.length; i++) {
-        const id = this.activeLoadout[i];
-        // Button background
-        ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        ctx.strokeStyle = '#ffcc00';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.roundRect(bx, by, btnW, btnH, 6); ctx.fill(); ctx.stroke();
-        // Icon + label
-        ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillStyle = '#fff';
-        ctx.fillText(ITEM_ICONS[id] || '⚡', bx + 18, by + 24);
-        ctx.font = 'bold 9px sans-serif';
-        ctx.fillStyle = '#ffcc00';
-        ctx.fillText(ITEM_NAMES[id] || id.toUpperCase(), bx + btnW*0.62, by + 15);
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
-        ctx.font = '8px sans-serif';
-        ctx.fillText('CLICK TO USE', bx + btnW*0.62, by + 27);
-        ctx.textAlign = 'left';
-        // Store bounds for click detection
-        this._loadoutBtnBounds.push({ id, x: bx, y: by, w: btnW, h: btnH });
-        bx += btnW + gap;
-      }
+  }
+
+  _drawInventory() {
+    if (!this.currentLevel || this.titleActive || this.gameOver || this.levelComplete) return;
+    if (this.gemInventory.length === 0) return;
+
+    const ICONS = {
+      ally_dragon:'🐉', ally_knight:'⚔️', ally_wizard:'✨', ally_golem:'🪨',
+      pow_heal:'❤️', pow_rage:'🔥', pow_shield:'🛡', pow_time:'⏳', sp_angel:'👼',
+      upg_dmg:'⚔️', upg_range:'🎯', upg_gold:'💰', upg_castle:'🏰',
+      upg_speed:'💨', upg_spawn:'⚡', upg_armor:'🛡', upg_bounce:'🏹',
+      upg_multi:'🏹', upg_regen:'💚',
+      pow_airstrike:'✈️', pow_meteor:'☄️', pow_freeze:'❄️',
+      pow_lightning:'⚡', pow_poison:'☠️', sp_nuke:'💣', sp_berserk:'😤', sp_clone:'🔮'
+    };
+    const SHORT = {
+      ally_dragon:'Dragon', ally_knight:'Knights', ally_wizard:'Wizard', ally_golem:'Golem',
+      pow_heal:'Heal', pow_rage:'Rage', pow_shield:'Shield', pow_time:'Slow', sp_angel:'Angel',
+      upg_dmg:'+Dmg', upg_range:'+Range', upg_gold:'+Gold', upg_castle:'+HP',
+      upg_speed:'+Speed', upg_spawn:'+Spawn', upg_armor:'Armor', upg_bounce:'Bounce',
+      upg_multi:'Multi', upg_regen:'Regen',
+      pow_airstrike:'Strike', pow_meteor:'Meteor', pow_freeze:'Freeze',
+      pow_lightning:'Bolt', pow_poison:'Poison', sp_nuke:'Nuke', sp_berserk:'Berserk', sp_clone:'Clone'
+    };
+
+    const ctx = this.ctx;
+    const btnW = 58, btnH = 50, gap = 5, maxPerRow = 6;
+    const rows = Math.ceil(this.gemInventory.length / maxPerRow);
+    const totalW = Math.min(this.gemInventory.length, maxPerRow) * (btnW + gap) - gap;
+    const startX = this.canvas.width - totalW - 12;
+    const startY = 36;
+
+    // Panel background
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.strokeStyle = '#ffd70088';
+    ctx.lineWidth = 1;
+    const panelPad = 5;
+    const panelW = totalW + panelPad * 2;
+    const panelH = rows * (btnH + gap) - gap + panelPad * 2 + 16;
+    if (ctx.roundRect) {
+      ctx.beginPath(); ctx.roundRect(startX - panelPad, startY - 16 - panelPad, panelW, panelH, 8);
+      ctx.fill(); ctx.stroke();
     } else {
-      this._loadoutBtnBounds = [];
+      ctx.fillRect(startX - panelPad, startY - 16 - panelPad, panelW, panelH);
+      ctx.strokeRect(startX - panelPad, startY - 16 - panelPad, panelW, panelH);
+    }
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('INVENTORY', startX + totalW / 2 - gap / 2, startY - 6);
+    ctx.textAlign = 'left';
+
+    this._invBtnBounds = [];
+    for (let i = 0; i < this.gemInventory.length; i++) {
+      const id = this.gemInventory[i];
+      const row = Math.floor(i / maxPerRow);
+      const col = i % maxPerRow;
+      const bx = startX + col * (btnW + gap);
+      const by = startY + row * (btnH + gap);
+
+      // Button bg
+      const isUpg = id.startsWith('upg_');
+      const isAlly = id.startsWith('ally_');
+      const bgColor = isUpg ? 'rgba(20,40,80,0.9)' : isAlly ? 'rgba(20,60,20,0.9)' : 'rgba(60,10,10,0.9)';
+      const borderColor = isUpg ? '#4488ff' : isAlly ? '#44ff88' : '#ff6644';
+      ctx.fillStyle = bgColor;
+      ctx.strokeStyle = borderColor; ctx.lineWidth = 1.5;
+      if (ctx.roundRect) {
+        ctx.beginPath(); ctx.roundRect(bx, by, btnW, btnH, 5); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillRect(bx, by, btnW, btnH); ctx.strokeRect(bx, by, btnW, btnH);
+      }
+      // Icon
+      ctx.font = '18px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(ICONS[id] || '?', bx + btnW/2, by + 22);
+      // Name
+      ctx.font = 'bold 7px sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(SHORT[id] || id, bx + btnW/2, by + 33);
+      // USE button
+      ctx.fillStyle = 'rgba(255,215,0,0.9)';
+      ctx.fillRect(bx + 6, by + 37, btnW - 12, 10);
+      ctx.fillStyle = '#000'; ctx.font = 'bold 7px sans-serif';
+      ctx.fillText('USE', bx + btnW/2, by + 45);
+      ctx.textAlign = 'left';
+
+      this._invBtnBounds.push({ id, x: bx, y: by + 37, w: btnW - 12, h: 10, fullX: bx, fullY: by, fullW: btnW, fullH: btnH });
     }
   }
 
@@ -4400,6 +4747,119 @@ class Game {
     ctx.textAlign = 'left';
   }
 
+  _getAchList() {
+    return typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : [];
+  }
+
+  _drawAchPanel() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    const pw = 340, ph = Math.min(480, H - 80);
+    const px = W - pw - 52, py = (H - ph) / 2;
+
+    // Panel bg
+    ctx.fillStyle = 'rgba(10,8,5,0.94)';
+    ctx.strokeStyle = '#c8a060'; ctx.lineWidth = 2;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillRect(px, py, pw, ph); ctx.strokeRect(px, py, pw, ph); }
+
+    ctx.fillStyle = '#f0d090'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('📓  ACHIEVEMENTS', px + pw/2, py + 26);
+    ctx.strokeStyle = '#c8a06055'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px + 16, py + 36); ctx.lineTo(px + pw - 16, py + 36); ctx.stroke();
+
+    const unlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
+    let achList = [];
+    try { achList = this._getAchList ? this._getAchList() : []; } catch(e) { achList = []; }
+
+    const itemH = 38, startY = py + 48, visibleCount = Math.floor((ph - 56) / itemH);
+    const ach = this._achScroll || 0;
+
+    for (let i = 0; i < visibleCount; i++) {
+      const a = achList[ach + i];
+      if (!a) break;
+      const iy = startY + i * itemH;
+      const isUnlocked = unlocked.includes(a.id);
+      ctx.fillStyle = isUnlocked ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.03)';
+      ctx.fillRect(px + 10, iy, pw - 20, itemH - 4);
+      ctx.font = '20px sans-serif'; ctx.textAlign = 'left';
+      ctx.globalAlpha = isUnlocked ? 1 : 0.35;
+      ctx.fillStyle = isUnlocked ? '#ffd700' : '#888';
+      ctx.fillText(a.icon || '🏅', px + 16, iy + 26);
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillStyle = isUnlocked ? '#fff' : '#666';
+      ctx.fillText(a.name, px + 44, iy + 16);
+      ctx.font = '9px sans-serif';
+      ctx.fillStyle = isUnlocked ? '#aaa' : '#555';
+      ctx.fillText(a.desc, px + 44, iy + 28);
+      if (isUnlocked) {
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'right';
+        ctx.fillText('✓', px + pw - 16, iy + 22);
+      }
+      ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+    }
+
+    // Scroll hint
+    if (achList.length > visibleCount) {
+      ctx.fillStyle = '#aaa'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(`${unlocked.length}/${achList.length} unlocked  •  scroll: ↑↓`, px + pw/2, py + ph - 10);
+    }
+    ctx.textAlign = 'left';
+  }
+
+  _drawLbPanel() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    const pw = 340, ph = Math.min(460, H - 80);
+    const px = W - pw - 52, py = (H - ph) / 2;
+
+    ctx.fillStyle = 'rgba(5,8,20,0.94)';
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillRect(px, py, pw, ph); ctx.strokeRect(px, py, pw, ph); }
+
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('🏆  WORLD LEADERBOARD', px + pw/2, py + 26);
+    ctx.strokeStyle = '#ffd70055'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px + 16, py + 36); ctx.lineTo(px + pw - 16, py + 36); ctx.stroke();
+
+    const lbKey = 'td_leaderboard_v2';
+    const lb = JSON.parse(localStorage.getItem(lbKey) || '[]');
+    lb.sort((a, b) => b.score - a.score);
+
+    const medals = ['🥇','🥈','🥉'];
+    const itemH = 34;
+    const startY = py + 50;
+
+    for (let i = 0; i < Math.min(lb.length, 10); i++) {
+      const e = lb[i];
+      const iy = startY + i * itemH;
+      const isPlayer = e.name === this.playerName;
+      ctx.fillStyle = isPlayer ? 'rgba(255,215,0,0.12)' : (i % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0)');
+      ctx.fillRect(px + 10, iy, pw - 20, itemH - 3);
+
+      ctx.font = '16px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(medals[i] || `${i+1}.`, px + 14, iy + 22);
+      ctx.font = isPlayer ? 'bold 11px sans-serif' : '11px sans-serif';
+      ctx.fillStyle = isPlayer ? '#ffd700' : '#ddd';
+      ctx.fillText(e.name, px + 46, iy + 16);
+      ctx.font = '9px sans-serif'; ctx.fillStyle = '#aaa';
+      ctx.fillText(`Lv${e.level}  Wave ${e.wave}`, px + 46, iy + 28);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = isPlayer ? '#ffd700' : '#88ffaa';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(e.score.toLocaleString(), px + pw - 16, iy + 22);
+      ctx.textAlign = 'left';
+    }
+
+    if (lb.length === 0) {
+      ctx.fillStyle = '#666'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('No scores yet — complete a level!', px + pw/2, py + ph/2);
+    }
+    ctx.textAlign = 'left';
+  }
+
   _drawHelpOverlay() {
     const ctx = this.ctx;
     const W = this.canvas.width, H = this.canvas.height;
@@ -4500,6 +4960,118 @@ class Game {
     ctx.textAlign = 'left';
   }
 
+  _saveInventory() {
+    localStorage.setItem('td_gemInventory', JSON.stringify(this.gemInventory));
+  }
+
+  // ── Inventory item activation — called when player clicks USE button ──────────
+  _activateInventoryItem(id) {
+    // Remove from inventory
+    const idx = this.gemInventory.indexOf(id);
+    if (idx !== -1) { this.gemInventory.splice(idx, 1); this._saveInventory(); }
+
+    // Apply the effect:
+    const pe = this.path[this.path.length - 1];
+    switch (id) {
+      case 'ally_dragon': {
+        const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 250, soldierDmg: 35, dragonSoldier: true }, 'gemDragon');
+        s.waypoint = this.path.length - 1; s.speed = 2.0; s.range = 140; s.attackRate = 60;
+        this.soldiers.push(s); this.flash('🐉 Dragon Ally summoned!'); break;
+      }
+      case 'ally_knight': {
+        for (let i = 0; i < 3; i++) {
+          const s = new Soldier(pe.x - 24 + i * 18, pe.y - 12, { soldierHp: 140, soldierDmg: 22 }, 'gemKnight');
+          s.waypoint = this.path.length - 1; s.speed = 1.4; this.soldiers.push(s);
+        }
+        this.flash('⚔️ Golden Paladins summoned!'); break;
+      }
+      case 'ally_wizard': {
+        const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 80, soldierDmg: 40, magic: true }, 'gemWizard');
+        s.waypoint = this.path.length - 1; s.speed = 1.4; s.range = 160; s.attackRate = 100;
+        this.soldiers.push(s); this.flash('✨ Archmage summoned!'); break;
+      }
+      case 'ally_golem': {
+        const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 600, soldierDmg: 18, aoe: true }, 'gemGolem');
+        s.waypoint = this.path.length - 1; s.speed = 0.7; s.range = 65; s.attackRate = 50;
+        this.soldiers.push(s); this.flash('🪨 Stone Golem summoned!'); break;
+      }
+      case 'pow_heal': {
+        const h = Math.floor(this.castleMaxHp * 0.2);
+        this.castleHp = Math.min(this.castleHp + h, this.castleMaxHp);
+        this._spawnVfx('heal'); this.flash(`❤️ Castle healed +${h} HP!`); break;
+      }
+      case 'pow_rage':
+        this.rageTimer = 30 * 60; this._spawnVfx('rage'); this.flash('🔥 Tower Rage activated! 30s'); break;
+      case 'pow_shield':
+        this.shieldTimer = 10 * 60; this._spawnVfx('shield'); this.flash('🛡 Castle Shield! 10s'); break;
+      case 'pow_time':
+        this.timeSlowTimer = 20 * 60; this._spawnVfx('timeslow'); this.flash('⏳ Time Slow! 20s'); break;
+      case 'sp_angel':
+        this.shieldTimer = 60 * 60; this._spawnVfx('angel'); this.flash('👼 Angel Guard! 60s'); break;
+      case 'upg_dmg':
+        for (const t of this.towers) t.damage *= 1.25;
+        this._spawnVfx('upg_dmg', { delay: 0 }); this.flash('⚔️ Tower Damage +25%!'); break;
+      case 'upg_range':
+        for (const t of this.towers) t.range *= 1.2;
+        this._spawnVfx('upg_range', { delay: 0 }); this.flash('🎯 Tower Range +20%!'); break;
+      case 'upg_gold':
+        this.goldBonus *= 1.3; this._spawnVfx('upg_gold', { delay: 0 }); this.flash('💰 Gold Bonus +30%!'); break;
+      case 'upg_castle': {
+        const old = this.castleMaxHp;
+        this.castleMaxHp = Math.floor(old * 1.5);
+        this.castleHp += this.castleMaxHp - old;
+        this._spawnVfx('upg_castle', { delay: 0 }); this.flash('🏰 Castle HP +50%!'); break;
+      }
+      case 'upg_speed':
+        this.swiftSoldiers = true; for (const s of this.soldiers) s.speed *= 1.5;
+        this._spawnVfx('upg_speed', { delay: 0 }); this.flash('💨 Soldiers faster!'); break;
+      case 'upg_spawn':
+        this.rapidSpawnActive = true; this._spawnVfx('upg_spawn', { delay: 0 }); this.flash('⚡ Rapid Spawning!'); break;
+      case 'upg_armor':
+        this.armorActive = true; this._spawnVfx('upg_armor', { delay: 0 }); this.flash('🛡 Tower Armor active!'); break;
+      case 'upg_bounce':
+        this.bounceActive = true; for (const t of this.towers) t.bounceShot = true;
+        this._spawnVfx('upg_bounce', { delay: 0 }); this.flash('🏹 Bouncing Arrows!'); break;
+      case 'upg_multi':
+        this.multiShotActive = true; for (const t of this.towers) t.multiShot = true;
+        this._spawnVfx('upg_multi', { delay: 0 }); this.flash('🏹 Multishot active!'); break;
+      case 'upg_regen':
+        this.regenActive = true; this._spawnVfx('upg_regen', { delay: 0 }); this.flash('💚 HP Regen active!'); break;
+      case 'pow_airstrike':
+        for (const e of this.enemies) e.takeDamage(30);
+        this._spawnVfx('airstrike'); this.flash('✈️ AIRSTRIKE!'); break;
+      case 'pow_meteor':
+        for (const e of this.enemies) e.takeDamage(999);
+        this._spawnVfx('meteor'); this.flash('☄️ METEOR STRIKE!'); break;
+      case 'pow_freeze':
+        this.timeSlowTimer = 300; this._grantAchievement('freeze');
+        this._spawnVfx('freeze'); this.flash('❄️ FREEZE!'); break;
+      case 'pow_lightning': {
+        const targets = [...this.enemies].sort(() => Math.random() - 0.5).slice(0, 10);
+        for (const e of targets) e.takeDamage(20);
+        this._spawnVfx('lightning'); this.flash('⚡ LIGHTNING!'); break;
+      }
+      case 'pow_poison':
+        this.poisonTimer = 5 * 60; this._spawnVfx('poison'); this.flash('☠️ Poison Cloud!'); break;
+      case 'sp_nuke':
+        for (const e of this.enemies) e.takeDamage(99999);
+        this._grantAchievement('nuke'); this._spawnVfx('nuke'); this.flash('💣 NUKE! EVERYTHING DIES!'); break;
+      case 'sp_berserk':
+        this.berserkTimer = 15 * 60; this._spawnVfx('berserk'); this.flash('😤 BERSERK! 15s'); break;
+      case 'sp_clone': {
+        const src = this.towers[0];
+        if (src) {
+          const angle = Math.random() * Math.PI * 2;
+          const clone = new Tower(src.x + Math.cos(angle) * 55, src.y + Math.sin(angle) * 55, src.typeKey);
+          clone.damage = src.damage; clone.range = src.range; clone.fireRate = src.fireRate; clone.level = src.level;
+          this.towers.push(clone);
+          this._spawnVfx('clone', { x: clone.x, y: clone.y });
+        }
+        this.flash('🔮 Tower Cloned!'); break;
+      }
+    }
+  }
+
   // ── Loadout — apply consumables queued from the gem shop ─────────────────────
   // Called at the start of each level. Immediate items apply now; trigger items
   // wait in _pendingTriggers until the first wave enemy spawns.
@@ -4508,56 +5080,100 @@ class Game {
       switch (id) {
         // ── Allies (spawn immediately) ────────────────────────────────────────
         case 'ally_dragon': {
+          // Premium gem ally: full-size green dragon — uses new gemDragon appearance
           const pe = this.path[this.path.length - 1];
-          const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 200, soldierDmg: 30 }, 'basic');
-          s.waypoint = this.path.length - 1; s.speed = 1.8;
-          this.soldiers.push(s); break;
+          const s = new Soldier(pe.x - 30, pe.y - 20,
+            { soldierHp: 250, soldierDmg: 35, dragonSoldier: true }, 'gemDragon');
+          s.waypoint = this.path.length - 1; s.speed = 2.0;
+          s.range = 140; s.attackRate = 60;
+          this.soldiers.push(s);
+          this.flash('🐉 Dragon Ally summoned!'); break;
         }
         case 'ally_knight': {
+          // Three golden paladins — elite knights with golden armor
           const pe = this.path[this.path.length - 1];
           for (let i = 0; i < 3; i++) {
-            const s = new Soldier(pe.x - 20 + i * 15, pe.y - 15, { soldierHp: 100, soldierDmg: 15 }, 'knight');
-            s.waypoint = this.path.length - 1;
+            const s = new Soldier(pe.x - 24 + i * 18, pe.y - 12,
+              { soldierHp: 140, soldierDmg: 22 }, 'gemKnight');
+            s.waypoint = this.path.length - 1; s.speed = 1.4;
             this.soldiers.push(s);
-          } break;
+          }
+          this.flash('⚔️ Golden Paladins summoned!'); break;
         }
         case 'ally_wizard': {
+          // Archmage — taller, glowing, more powerful than camp mage
           const pe = this.path[this.path.length - 1];
-          const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 60, soldierDmg: 25, magic: true }, 'mage');
-          s.waypoint = this.path.length - 1; s.speed = 1.2;
-          this.soldiers.push(s); break;
+          const s = new Soldier(pe.x - 30, pe.y - 20,
+            { soldierHp: 80, soldierDmg: 40, magic: true }, 'gemWizard');
+          s.waypoint = this.path.length - 1; s.speed = 1.4;
+          s.range = 160; s.attackRate = 100;
+          this.soldiers.push(s);
+          this.flash('✨ Archmage summoned!'); break;
         }
         case 'ally_golem': {
+          // Stone Golem — massive tank, looks like the shop icon
           const pe = this.path[this.path.length - 1];
-          const s = new Soldier(pe.x - 30, pe.y - 20, { soldierHp: 300, soldierDmg: 10 }, 'siege');
-          s.waypoint = this.path.length - 1; s.speed = 0.5;
-          this.soldiers.push(s); break;
+          const s = new Soldier(pe.x - 30, pe.y - 20,
+            { soldierHp: 600, soldierDmg: 18, aoe: true }, 'gemGolem');
+          s.waypoint = this.path.length - 1; s.speed = 0.7;
+          s.range = 65; s.attackRate = 50;
+          this.soldiers.push(s);
+          this.flash('🪨 Stone Golem summoned!'); break;
         }
-        // ── Immediate buffs ──────────────────────────────────────────────────
+        // ── Immediate buffs — each one plays a visual effect ─────────────────
         case 'pow_heal': {
           const h = Math.floor(this.castleMaxHp * 0.2);
-          this.castleHp = Math.min(this.castleHp + h, this.castleMaxHp); break;
+          this.castleHp = Math.min(this.castleHp + h, this.castleMaxHp);
+          this._spawnVfx('heal'); break;
         }
-        case 'pow_rage':   this.rageTimer    = 30 * 60; break;
-        case 'pow_shield': this.shieldTimer  = 10 * 60; break;
-        case 'pow_time':   this.timeSlowTimer = 20 * 60; break;
-        case 'sp_angel':   this.shieldTimer  = 60 * 60; break;
-        // ── Level-long upgrades ──────────────────────────────────────────────
-        case 'upg_dmg':    for (const t of this.towers) t.damage  *= 1.25; break;
-        case 'upg_range':  for (const t of this.towers) t.range   *= 1.2;  break;
-        case 'upg_gold':   this.goldBonus *= 1.3; break;
+        case 'pow_rage':
+          this.rageTimer = 30 * 60;
+          this._spawnVfx('rage'); break;
+        case 'pow_shield':
+          this.shieldTimer = 10 * 60;
+          this._spawnVfx('shield'); break;
+        case 'pow_time':
+          this.timeSlowTimer = 20 * 60;
+          this._spawnVfx('timeslow'); break;
+        case 'sp_angel':
+          this.shieldTimer = 60 * 60;
+          this._spawnVfx('angel'); break;
+        // ── Level-long upgrades — stagger VFX so they fire one after another ─
+        // (using a running delay counter so the effects cascade visually)
+        case 'upg_dmg':
+          for (const t of this.towers) t.damage *= 1.25;
+          this._spawnVfx('upg_dmg', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
+        case 'upg_range':
+          for (const t of this.towers) t.range *= 1.2;
+          this._spawnVfx('upg_range', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
+        case 'upg_gold':
+          this.goldBonus *= 1.3;
+          this._spawnVfx('upg_gold', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
         case 'upg_castle': {
           const old = this.castleMaxHp;
           this.castleMaxHp = Math.floor(old * 1.5);
-          this.castleHp += this.castleMaxHp - old; break;
+          this.castleHp += this.castleMaxHp - old;
+          this._spawnVfx('upg_castle', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
         }
-        case 'upg_speed':  this.swiftSoldiers = true;  for (const s of this.soldiers) s.speed *= 1.5; break;
-        case 'upg_spawn':  this.rapidSpawnActive = true; break;
-        case 'upg_armor':  this.armorActive = true; break;
-        case 'upg_bounce': this.bounceActive = true; for (const t of this.towers) t.bounceShot = true; break;
-        case 'upg_multi':  this.multiShotActive = true; for (const t of this.towers) t.multiShot = true; break;
-        case 'upg_regen':  this.regenActive = true; break;
-        // ── First-wave triggers (queue until wave 1 enemies appear) ──────────
+        case 'upg_speed':
+          this.swiftSoldiers = true; for (const s of this.soldiers) s.speed *= 1.5;
+          this._spawnVfx('upg_speed', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
+        case 'upg_spawn':
+          this.rapidSpawnActive = true;
+          this._spawnVfx('upg_spawn', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
+        case 'upg_armor':
+          this.armorActive = true;
+          this._spawnVfx('upg_armor', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
+        case 'upg_bounce':
+          this.bounceActive = true; for (const t of this.towers) t.bounceShot = true;
+          this._spawnVfx('upg_bounce', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
+        case 'upg_multi':
+          this.multiShotActive = true; for (const t of this.towers) t.multiShot = true;
+          this._spawnVfx('upg_multi', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
+        case 'upg_regen':
+          this.regenActive = true;
+          this._spawnVfx('upg_regen', { delay: this._upgDelay = (this._upgDelay || 0) + 18 }); break;
+        // ── First-wave triggers (player clicks USE button during gameplay) ────
         case 'pow_airstrike':
         case 'pow_meteor':
         case 'pow_freeze':
@@ -4565,7 +5181,7 @@ class Game {
         case 'pow_poison':
         case 'sp_nuke':
         case 'sp_berserk':
-          this.activeLoadout.push(id); break;   // player clicks USE button during gameplay
+          this.activeLoadout.push(id); break;
         // ── Clone: duplicate first tower ─────────────────────────────────────
         case 'sp_clone': {
           const src = this.towers[0];
@@ -4575,6 +5191,7 @@ class Game {
             clone.damage = src.damage; clone.range = src.range;
             clone.fireRate = src.fireRate; clone.level = src.level;
             this.towers.push(clone);
+            this._spawnVfx('clone', { x: clone.x, y: clone.y });
           } break;
         }
       }
@@ -4583,18 +5200,645 @@ class Game {
   }
 
   // Fire a single trigger item when the first wave enemy appears
+  // Also spawns a real visual effect so the player can SEE it happen!
   _fireTrigger(id) {
     switch (id) {
-      case 'pow_airstrike': for (const e of this.enemies) e.takeDamage(30);  break;
-      case 'pow_meteor':    for (const e of this.enemies) e.takeDamage(999); break;
-      case 'pow_freeze':    this.timeSlowTimer = 300; this._grantAchievement('freeze'); break;
+      case 'pow_airstrike':
+        for (const e of this.enemies) e.takeDamage(30);
+        this._spawnVfx('airstrike'); break;
+      case 'pow_meteor':
+        for (const e of this.enemies) e.takeDamage(999);
+        this._spawnVfx('meteor'); break;
+      case 'pow_freeze':
+        this.timeSlowTimer = 300;
+        this._grantAchievement('freeze');
+        this._spawnVfx('freeze'); break;
       case 'pow_lightning': {
         const targets = [...this.enemies].sort(() => Math.random() - 0.5).slice(0, 10);
-        for (const e of targets) e.takeDamage(20); break;
+        for (const e of targets) e.takeDamage(20);
+        this._spawnVfx('lightning'); break;
       }
-      case 'pow_poison':  this.poisonTimer  = 5 * 60;  break;
-      case 'sp_nuke':     for (const e of this.enemies) e.takeDamage(99999); this._grantAchievement('nuke'); break;
-      case 'sp_berserk':  this.berserkTimer = 15 * 60; break;
+      case 'pow_poison':
+        this.poisonTimer = 5 * 60;
+        this._spawnVfx('poison'); break;
+      case 'sp_nuke':
+        for (const e of this.enemies) e.takeDamage(99999);
+        this._grantAchievement('nuke');
+        this._spawnVfx('nuke'); break;
+      case 'sp_berserk':
+        this.berserkTimer = 15 * 60;
+        this._spawnVfx('berserk'); break;
+    }
+  }
+
+  // ── VFX System — visual effects for power-ups ─────────────────────────────────
+  // Teaching concept: this is composition! The Game "has-many" VFX particles.
+  // Each VFX object is just data: { kind, timer, maxTimer, plus any extra fields }
+
+  // Spawns a visual effect. `data` is optional extra fields merged in.
+  // Use a negative timer value for delay: { timer: -30 } starts 30 frames later.
+  _spawnVfx(kind, data = {}) {
+    const W = this.canvas.width, H = this.canvas.height;
+    // Castle position (path end) is the default "event" location
+    const pe = this.path[this.path.length - 1];
+    switch (kind) {
+
+      // ── Trigger power-ups (fire on wave 1) ──────────────────────────────────
+      case 'airstrike':
+        for (let i = 0; i < 3; i++) {
+          const target = this.enemies[Math.floor(Math.random() * Math.max(1, this.enemies.length))];
+          this.vfx.push({ kind: 'plane', timer: -i * 15, maxTimer: 100,
+            startY: H * (0.15 + i * 0.22),
+            targetX: target ? target.x : W * 0.5,
+            targetY: target ? target.y : H * 0.5 });
+        }
+        break;
+      case 'meteor':
+        this.vfx.push({ kind: 'meteor', timer: 0, maxTimer: 70,
+          sx: W * 1.1, sy: -40, ex: W * 0.5, ey: H * 0.45 });
+        break;
+      case 'lightning':
+        for (const e of this.enemies) {
+          this.vfx.push({ kind: 'bolt', timer: 0, maxTimer: 22,
+            x: e.x, y: e.y,
+            topX: e.x + (Math.random() - 0.5) * 60, topY: -20 });
+        }
+        break;
+      case 'freeze':
+        this.vfx.push({ kind: 'freeze', timer: 0, maxTimer: 50,
+          x: W / 2, y: H / 2 });
+        break;
+      case 'nuke':
+        this.vfx.push({ kind: 'nuke', timer: 0, maxTimer: 90,
+          x: W / 2, y: H / 2 });
+        break;
+      case 'berserk':
+        this.vfx.push({ kind: 'berserk', timer: 0, maxTimer: 55,
+          x: W / 2, y: H / 2,
+          targets: [...this.enemies].slice(0, 12) }); // snapshot positions
+        break;
+      case 'poison':
+        this.vfx.push({ kind: 'poison_cloud', timer: 0, maxTimer: 80,
+          x: W * 0.4, y: H * 0.45 });
+        break;
+
+      // ── Immediate consumables (applied at level start) ────────────────────
+      case 'heal':
+        this.vfx.push({ kind: 'heal', timer: 0, maxTimer: 70,
+          x: pe.x, y: pe.y });
+        break;
+      case 'rage':
+        this.vfx.push({ kind: 'rage_burst', timer: 0, maxTimer: 60,
+          x: W / 2, y: H / 2 });
+        break;
+      case 'shield':
+        this.vfx.push({ kind: 'shield_dome', timer: 0, maxTimer: 80,
+          x: pe.x, y: pe.y });
+        break;
+      case 'timeslow':
+        this.vfx.push({ kind: 'timeslow', timer: 0, maxTimer: 70,
+          x: W / 2, y: H / 2 });
+        break;
+      case 'angel':
+        this.vfx.push({ kind: 'angel_descent', timer: 0, maxTimer: 120,
+          x: pe.x, y: pe.y - 20 });
+        break;
+      case 'clone':
+        this.vfx.push({ kind: 'clone_flash', timer: 0, maxTimer: 45,
+          x: data.x || W / 2, y: data.y || H / 2 });
+        break;
+
+      // ── Upgrade buffs (staggered so they play one after another) ──────────
+      // data.delay lets the caller offset the start time
+      case 'upg_dmg':
+        this.vfx.push({ kind: 'upg_buff', timer: -(data.delay || 0), maxTimer: 50,
+          x: W / 2, y: H / 2, color: '#ff6600' });
+        break;
+      case 'upg_range':
+        this.vfx.push({ kind: 'upg_buff', timer: -(data.delay || 0), maxTimer: 50,
+          x: W / 2, y: H / 2, color: '#4488ff' });
+        break;
+      case 'upg_armor':
+        this.vfx.push({ kind: 'armor_flash', timer: -(data.delay || 0), maxTimer: 55,
+          x: W / 2, y: H / 2 });
+        break;
+      case 'upg_speed':
+        this.vfx.push({ kind: 'speed_lines', timer: -(data.delay || 0), maxTimer: 45 });
+        break;
+      case 'upg_regen':
+        this.vfx.push({ kind: 'regen_pulse', timer: -(data.delay || 0), maxTimer: 60,
+          x: W / 2, y: H / 2 });
+        break;
+      case 'upg_gold':
+        this.vfx.push({ kind: 'gold_coins', timer: -(data.delay || 0), maxTimer: 90 });
+        break;
+      case 'upg_castle':
+        this.vfx.push({ kind: 'castle_fortify', timer: -(data.delay || 0), maxTimer: 70,
+          x: pe.x, y: pe.y });
+        break;
+      case 'upg_multi':
+        this.vfx.push({ kind: 'upg_buff', timer: -(data.delay || 0), maxTimer: 50,
+          x: W / 2, y: H / 2, color: '#ffdd00' });
+        break;
+      case 'upg_bounce':
+        this.vfx.push({ kind: 'upg_buff', timer: -(data.delay || 0), maxTimer: 50,
+          x: W / 2, y: H / 2, color: '#44ffaa' });
+        break;
+      case 'upg_spawn':
+        this.vfx.push({ kind: 'upg_buff', timer: -(data.delay || 0), maxTimer: 50,
+          x: W / 2, y: H / 2, color: '#cc8844' });
+        break;
+    }
+  }
+
+  _updateVfx() {
+    for (const fx of this.vfx) fx.timer++;
+    // Keep if timer hasn't reached maxTimer (negative timer = waiting for delay)
+    this.vfx = this.vfx.filter(fx => fx.timer < fx.maxTimer);
+  }
+
+  _drawVfx() {
+    const ctx = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    for (const fx of this.vfx) {
+      if (fx.timer < 0) continue; // still in delay — not yet visible
+      const p = fx.timer / fx.maxTimer; // 0.0 = just started, 1.0 = done
+      ctx.save();
+      switch (fx.kind) {
+
+        case 'plane': {
+          // Plane sweeps left→right. Drops a bomb at the halfway point.
+          const px = -80 + p * (W + 160);
+          ctx.translate(px, fx.startY);
+          // Plane body
+          ctx.fillStyle = '#aaaacc';
+          ctx.beginPath(); ctx.ellipse(0, 0, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillRect(-4, -14, 8, 28); // fuselage fin
+          ctx.fillStyle = '#9999bb';
+          ctx.fillRect(-14, -5, 28, 5); // wings
+          // Cockpit
+          ctx.fillStyle = '#88ddff'; ctx.beginPath(); ctx.arc(10, -2, 4, 0, Math.PI * 2); ctx.fill();
+          // Bomb — drops when plane passes the target
+          const dropPhase = p - 0.3; // starts at 30% of flight
+          if (dropPhase > 0 && dropPhase < 0.35) {
+            const bd = dropPhase / 0.35; // 0→1 as bomb falls
+            const bx = fx.targetX - px; // position relative to plane
+            const by = bd * 120;
+            ctx.fillStyle = '#444';
+            ctx.beginPath(); ctx.ellipse(bx, by, 6, 10, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#888';
+            ctx.beginPath(); ctx.ellipse(bx, by - 5, 4, 6, 0, 0, Math.PI * 2); ctx.fill();
+          }
+          // Explosion when bomb lands
+          if (dropPhase >= 0.35) {
+            const ep = (dropPhase - 0.35) / 0.65;
+            const bx = fx.targetX - px;
+            const by = 120;
+            ctx.globalAlpha = Math.max(0, 1 - ep * 1.8);
+            ctx.fillStyle = '#ff6600';
+            ctx.beginPath(); ctx.arc(bx, by, ep * 38, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffcc00';
+            ctx.beginPath(); ctx.arc(bx, by, ep * 22, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(bx, by, ep * 10, 0, Math.PI * 2); ctx.fill();
+          }
+          break;
+        }
+
+        case 'meteor': {
+          // Fireball streaks from top-right to center, then explodes
+          const ix = fx.sx + (fx.ex - fx.sx) * Math.min(p * 1.5, 1);
+          const iy = fx.sy + (fx.ey - fx.sy) * Math.min(p * 1.5, 1);
+          if (p < 0.65) {
+            // Draw trail
+            ctx.strokeStyle = 'rgba(255,120,0,0.6)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(fx.sx, fx.sy); ctx.lineTo(ix, iy); ctx.stroke();
+            // Fireball
+            ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 20;
+            ctx.fillStyle = '#ff3300';
+            ctx.beginPath(); ctx.arc(ix, iy, 16, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ff8800';
+            ctx.beginPath(); ctx.arc(ix, iy, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffcc00';
+            ctx.beginPath(); ctx.arc(ix, iy, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+          } else {
+            // Impact explosion
+            const ep = (p - 0.65) / 0.35;
+            ctx.globalAlpha = Math.max(0, 1 - ep);
+            ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 30;
+            ctx.fillStyle = '#ff2200';
+            ctx.beginPath(); ctx.arc(fx.ex, fx.ey, ep * 90, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ff8800';
+            ctx.beginPath(); ctx.arc(fx.ex, fx.ey, ep * 60, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffdd00';
+            ctx.beginPath(); ctx.arc(fx.ex, fx.ey, ep * 30, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+          break;
+        }
+
+        case 'bolt': {
+          // Jagged lightning bolt flashes and fades
+          ctx.globalAlpha = Math.max(0, 1 - p * 1.5);
+          ctx.shadowColor = '#ffff88'; ctx.shadowBlur = 16;
+          ctx.strokeStyle = p < 0.3 ? '#ffffff' : '#ffff44';
+          ctx.lineWidth = p < 0.3 ? 3.5 : 2;
+          ctx.lineCap = 'round';
+          // Draw a zigzag bolt from top to the enemy
+          ctx.beginPath();
+          ctx.moveTo(fx.topX, fx.topY);
+          const steps = 6;
+          for (let i = 1; i <= steps; i++) {
+            const bt = i / steps;
+            const bx = fx.topX + (fx.x - fx.topX) * bt + (i % 2 === 0 ? 12 : -12) * (1 - bt);
+            const by = fx.topY + (fx.y - fx.topY) * bt;
+            ctx.lineTo(bx, by);
+          }
+          ctx.stroke();
+          // Flash circle at impact point
+          ctx.fillStyle = '#ffffaa';
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, (1 - p) * 18, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+          break;
+        }
+
+        case 'freeze': {
+          // Expanding icy ring with snow crystal sparkles
+          ctx.globalAlpha = Math.max(0, 1 - p);
+          const r = p * Math.max(this.canvas.width, this.canvas.height) * 0.85;
+          ctx.shadowColor = '#88ddff'; ctx.shadowBlur = 20;
+          ctx.strokeStyle = '#aaeeff'; ctx.lineWidth = 8 * (1 - p);
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = 'rgba(200,240,255,0.4)'; ctx.lineWidth = 18 * (1 - p);
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, r * 0.7, 0, Math.PI * 2); ctx.stroke();
+          ctx.shadowBlur = 0;
+          // Crystal snowflake particles scattered around the ring
+          ctx.strokeStyle = '#ccf0ff'; ctx.lineWidth = 1.5;
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2 + p * 0.5;
+            const sx = fx.x + Math.cos(a) * r * 0.6;
+            const sy = fx.y + Math.sin(a) * r * 0.6;
+            for (let j = 0; j < 6; j++) {
+              const ja = (j / 6) * Math.PI * 2;
+              ctx.beginPath();
+              ctx.moveTo(sx, sy);
+              ctx.lineTo(sx + Math.cos(ja) * 7, sy + Math.sin(ja) * 7);
+              ctx.stroke();
+            }
+          }
+          break;
+        }
+
+        case 'nuke': {
+          // Massive mushroom cloud rising and expanding
+          const ep = Math.min(p * 1.4, 1);
+          ctx.globalAlpha = Math.max(0, 1 - p * 0.9);
+          // Shockwave ring
+          ctx.strokeStyle = `rgba(255,150,50,${(1-p)*0.8})`; ctx.lineWidth = 10 * (1-p*0.5);
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, ep * 220, 0, Math.PI * 2); ctx.stroke();
+          // Pillar / stem
+          const stemH = ep * 160;
+          const stemW = ep * 30;
+          ctx.fillStyle = '#cc4400';
+          ctx.fillRect(fx.x - stemW / 2, fx.y - stemH, stemW, stemH);
+          ctx.fillStyle = '#ff6600';
+          ctx.fillRect(fx.x - stemW / 3, fx.y - stemH, stemW * 0.65, stemH);
+          // Cloud cap
+          ctx.fillStyle = '#cc4400';
+          ctx.beginPath(); ctx.ellipse(fx.x, fx.y - stemH, ep * 70, ep * 45, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ff6600';
+          ctx.beginPath(); ctx.ellipse(fx.x, fx.y - stemH - 5, ep * 55, ep * 35, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffaa00';
+          ctx.beginPath(); ctx.ellipse(fx.x, fx.y - stemH - 12, ep * 35, ep * 22, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffee00';
+          ctx.beginPath(); ctx.ellipse(fx.x, fx.y - stemH - 18, ep * 18, ep * 12, 0, 0, Math.PI * 2); ctx.fill();
+          break;
+        }
+
+        // ── New VFX types for remaining shop items ──────────────────────────────
+
+        case 'heal': {
+          // Green healing crosses float up from the castle
+          const fade = Math.max(0, 1 - p);
+          // Expanding green ring at castle
+          ctx.globalAlpha = fade;
+          ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 16;
+          ctx.strokeStyle = '#44ff88'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, p * 80, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = '#88ffaa'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, p * 50, 0, Math.PI * 2); ctx.stroke();
+          ctx.shadowBlur = 0;
+          // Green crosses floating upward
+          for (let i = 0; i < 7; i++) {
+            const angle = (i / 7) * Math.PI * 2;
+            const r = 30 + p * 60;
+            const hx = fx.x + Math.cos(angle) * r;
+            const hy = fx.y + Math.sin(angle) * r - p * 30;
+            ctx.globalAlpha = Math.max(0, (1 - p) * 0.9);
+            ctx.fillStyle = '#22ee66';
+            ctx.fillRect(hx - 4, hy - 1.5, 8, 3);
+            ctx.fillRect(hx - 1.5, hy - 4, 3, 8);
+          }
+          break;
+        }
+
+        case 'rage_burst': {
+          // Red/orange fire wave radiates from center — towers are now enraged
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade * 0.7;
+          ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 20;
+          ctx.strokeStyle = '#ff2200'; ctx.lineWidth = 8 * (1 - p * 0.5);
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, p * W * 0.7, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, p * W * 0.5, 0, Math.PI * 2); ctx.stroke();
+          ctx.shadowBlur = 0;
+          // Fire particles
+          for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2 + p;
+            const r = p * W * 0.35;
+            ctx.globalAlpha = Math.max(0, (1 - p) * 0.8);
+            ctx.fillStyle = i % 2 === 0 ? '#ff4400' : '#ffaa00';
+            ctx.beginPath();
+            ctx.moveTo(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r);
+            ctx.lineTo(fx.x + Math.cos(a + 0.15) * (r - 12), fx.y + Math.sin(a + 0.15) * (r - 12));
+            ctx.lineTo(fx.x + Math.cos(a) * (r + 16), fx.y + Math.sin(a) * (r + 16));
+            ctx.closePath(); ctx.fill();
+          }
+          break;
+        }
+
+        case 'shield_dome': {
+          // Blue dome rises from castle and settles into a glowing ring
+          const phase = p < 0.5 ? p * 2 : 1; // grows for first half
+          const fade = p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.3) : 1;
+          ctx.globalAlpha = fade * 0.7;
+          ctx.shadowColor = '#44aaff'; ctx.shadowBlur = 18;
+          // Dome arc (top half of oval)
+          ctx.strokeStyle = '#88ccff'; ctx.lineWidth = 5 * fade;
+          ctx.beginPath(); ctx.ellipse(fx.x, fx.y, phase * 70, phase * 50, 0, Math.PI, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = 'rgba(136,204,255,0.35)'; ctx.lineWidth = 18 * (1 - p * 0.5);
+          ctx.beginPath(); ctx.ellipse(fx.x, fx.y, phase * 70, phase * 50, 0, Math.PI, Math.PI * 2); ctx.stroke();
+          // Ground ring
+          ctx.strokeStyle = '#44aaff'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.ellipse(fx.x, fx.y, phase * 70, 12, 0, 0, Math.PI * 2); ctx.stroke();
+          ctx.shadowBlur = 0;
+          break;
+        }
+
+        case 'timeslow': {
+          // Blue/cyan clock ripples — time is bending
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade * 0.65;
+          for (let r2 = 0; r2 < 3; r2++) {
+            const rr = (p + r2 * 0.33) % 1;
+            ctx.strokeStyle = `rgba(80,200,255,${(1-rr)*0.8})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(fx.x, fx.y, rr * Math.max(W, H) * 0.75, 0, Math.PI * 2); ctx.stroke();
+          }
+          // Clock hands spinning at center
+          ctx.globalAlpha = fade;
+          const t2 = fx.timer / 12;
+          ctx.strokeStyle = '#88eeff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(fx.x, fx.y); ctx.lineTo(fx.x + Math.cos(t2) * 22, fx.y + Math.sin(t2) * 22); ctx.stroke();
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(fx.x, fx.y); ctx.lineTo(fx.x + Math.cos(t2 * 12) * 14, fx.y + Math.sin(t2 * 12) * 14); ctx.stroke();
+          ctx.lineCap = 'butt';
+          ctx.fillStyle = '#88eeff'; ctx.beginPath(); ctx.arc(fx.x, fx.y, 4, 0, Math.PI * 2); ctx.fill();
+          break;
+        }
+
+        case 'angel_descent': {
+          // White angel figure drifts down from sky to castle position
+          const startY = -60;
+          const ay = startY + p * (fx.y - startY + 40);
+          const fade = p > 0.8 ? Math.max(0, 1 - (p - 0.8) / 0.2) : 1;
+          ctx.globalAlpha = fade;
+          ctx.save(); ctx.translate(fx.x, ay);
+          // Halo glow
+          ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 20;
+          ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(0, -22, 12, 0, Math.PI * 2); ctx.stroke();
+          ctx.shadowBlur = 0;
+          // Wings
+          ctx.fillStyle = '#f0f8ff'; ctx.globalAlpha = fade * 0.92;
+          ctx.beginPath();
+          ctx.moveTo(-3, -8); ctx.bezierCurveTo(-12, -18, -24, -22, -22, -10);
+          ctx.bezierCurveTo(-18, 0, -10, 5, -3, -8); ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(3, -8); ctx.bezierCurveTo(12, -18, 24, -22, 22, -10);
+          ctx.bezierCurveTo(18, 0, 10, 5, 3, -8); ctx.fill();
+          // Robe
+          ctx.fillStyle = '#fff'; ctx.globalAlpha = fade;
+          ctx.beginPath(); ctx.moveTo(-8, -4); ctx.lineTo(-10, 14); ctx.lineTo(10, 14); ctx.lineTo(8, -4); ctx.closePath(); ctx.fill();
+          // Head
+          ctx.fillStyle = '#f5d5b0'; ctx.beginPath(); ctx.arc(0, -12, 7, 0, Math.PI * 2); ctx.fill();
+          // Gold belt
+          ctx.fillStyle = '#ffd700'; ctx.fillRect(-8, 2, 16, 2.5);
+          // Radiant light rays fanning out below
+          ctx.globalAlpha = fade * 0.25;
+          for (let i = 0; i < 8; i++) {
+            const ra = (i / 8) * Math.PI - Math.PI * 0.3;
+            ctx.fillStyle = '#ffffaa';
+            ctx.beginPath();
+            ctx.moveTo(0, 14);
+            ctx.lineTo(Math.cos(ra) * 50, 14 + Math.sin(Math.abs(ra - Math.PI/2)) * 80);
+            ctx.lineTo(Math.cos(ra + 0.25) * 50, 14 + Math.sin(Math.abs(ra + 0.25 - Math.PI/2)) * 80);
+            ctx.fill();
+          }
+          ctx.restore();
+          break;
+        }
+
+        case 'clone_flash': {
+          // Gold sparkle materializes a new tower
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade;
+          ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 20;
+          // Star burst of gold rays
+          ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2 + p * 2;
+            const r1 = p * 10, r2 = p * 28 + 8;
+            ctx.beginPath(); ctx.moveTo(fx.x + Math.cos(a)*r1, fx.y + Math.sin(a)*r1);
+            ctx.lineTo(fx.x + Math.cos(a)*r2, fx.y + Math.sin(a)*r2); ctx.stroke();
+          }
+          ctx.fillStyle = '#ffffa0';
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, (1-p) * 14, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0; ctx.lineCap = 'butt';
+          break;
+        }
+
+        case 'berserk': {
+          // Red rage explosion — enemies fight each other now
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade * 0.6;
+          ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 25;
+          ctx.strokeStyle = '#ff2200'; ctx.lineWidth = 10 * (1 - p * 0.6);
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, p * W * 0.65, 0, Math.PI * 2); ctx.stroke();
+          // Rage sparks at enemies
+          for (let i = 0; i < fx.targets.length; i++) {
+            const e = fx.targets[i];
+            ctx.globalAlpha = fade * 0.9;
+            ctx.fillStyle = '#ff2200';
+            ctx.beginPath(); ctx.arc(e.x, e.y, (1 - p) * 18 + 4, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ff8800';
+            ctx.beginPath(); ctx.arc(e.x, e.y, (1 - p) * 10, 0, Math.PI * 2); ctx.fill();
+            ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('💢', e.x, e.y - 18 - p * 20);
+            ctx.textAlign = 'left';
+          }
+          ctx.shadowBlur = 0;
+          break;
+        }
+
+        case 'poison_cloud': {
+          // Green skull cloud drifts across the path
+          const fade = Math.max(0, 1 - p * 0.7);
+          ctx.globalAlpha = fade * 0.55;
+          // Rolling green cloud blobs
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const r3 = 40 + Math.sin(a * 3 + p * 4) * 15;
+            const cx2 = fx.x + Math.cos(a) * r3 * (0.3 + p * 0.7);
+            const cy2 = fx.y + Math.sin(a) * r3 * 0.5 - p * 30;
+            ctx.fillStyle = `rgba(40,180,40,${0.5 - p * 0.3})`;
+            ctx.beginPath(); ctx.arc(cx2, cy2, 22 + Math.sin(i) * 8, 0, Math.PI * 2); ctx.fill();
+          }
+          // Skull at center
+          ctx.globalAlpha = fade;
+          ctx.font = '30px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('☠️', fx.x, fx.y - p * 40);
+          ctx.textAlign = 'left';
+          break;
+        }
+
+        case 'gold_coins': {
+          // Gold coins rain down from top of screen
+          const fade = Math.max(0, 1 - p * 0.8);
+          for (let i = 0; i < 16; i++) {
+            const offset = (i / 16); // stagger across screen
+            const phase = (p + offset) % 1;
+            const cx2 = W * 0.05 + (i / 16) * W * 0.9;
+            const cy2 = -20 + phase * (H + 40);
+            ctx.globalAlpha = fade * (1 - Math.abs(phase - 0.5) * 1.4);
+            // Coin — yellow circle with $ or G
+            const coinR = 8 + Math.sin(i * 2.3) * 3;
+            ctx.fillStyle = '#aa8800'; ctx.beginPath(); ctx.arc(cx2, cy2, coinR + 1, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(cx2, cy2, coinR, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#886600'; ctx.font = `bold ${Math.round(coinR)}px sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('$', cx2, cy2);
+          }
+          ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+          break;
+        }
+
+        case 'castle_fortify': {
+          // Castle glows gold then massive shield/crown materializes
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade;
+          ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 30;
+          // Concentric gold rings
+          for (let i = 0; i < 3; i++) {
+            const rp = (p + i * 0.33) % 1;
+            ctx.strokeStyle = `rgba(255,215,0,${(1 - rp) * 0.9})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(fx.x, fx.y, rp * 100, 0, Math.PI * 2); ctx.stroke();
+          }
+          // Gold crown floating above castle
+          ctx.fillStyle = '#ffd700'; ctx.globalAlpha = fade;
+          const cr = 18 - p * 5;
+          ctx.beginPath();
+          ctx.moveTo(fx.x - cr, fx.y - 40 - p * 20);
+          ctx.lineTo(fx.x - cr, fx.y - 40 - p * 20 - cr * 0.8);
+          ctx.lineTo(fx.x - cr * 0.4, fx.y - 40 - p * 20 - cr * 0.4);
+          ctx.lineTo(fx.x, fx.y - 40 - p * 20 - cr * 1.2);
+          ctx.lineTo(fx.x + cr * 0.4, fx.y - 40 - p * 20 - cr * 0.4);
+          ctx.lineTo(fx.x + cr, fx.y - 40 - p * 20 - cr * 0.8);
+          ctx.lineTo(fx.x + cr, fx.y - 40 - p * 20);
+          ctx.closePath(); ctx.fill();
+          ctx.shadowBlur = 0;
+          break;
+        }
+
+        case 'upg_buff': {
+          // Generic upgrade buff — colored energy burst at x,y
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade;
+          ctx.shadowColor = fx.color || '#ffd700'; ctx.shadowBlur = 12;
+          // Expanding ring
+          ctx.strokeStyle = fx.color || '#ffd700'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, p * 44, 0, Math.PI * 2); ctx.stroke();
+          // Rays
+          ctx.lineWidth = 2; ctx.lineCap = 'round';
+          for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + p * 2;
+            ctx.beginPath();
+            ctx.moveTo(fx.x + Math.cos(a) * p * 20, fx.y + Math.sin(a) * p * 20);
+            ctx.lineTo(fx.x + Math.cos(a) * (p * 38 + 6), fx.y + Math.sin(a) * (p * 38 + 6));
+            ctx.stroke();
+          }
+          ctx.shadowBlur = 0; ctx.lineCap = 'butt';
+          break;
+        }
+
+        case 'speed_lines': {
+          // White/blue horizontal streaks — everything speeds up
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade * 0.7;
+          for (let i = 0; i < 12; i++) {
+            const lineY = (H * 0.1) + (i / 12) * H * 0.8;
+            const lineLen = 60 + Math.sin(i * 1.7) * 40;
+            const lineX = -lineLen + p * (W + lineLen * 2);
+            ctx.strokeStyle = i % 3 === 0 ? '#88eeff' : '#ffffff';
+            ctx.lineWidth = i % 3 === 0 ? 2.5 : 1.2;
+            ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(lineX, lineY); ctx.lineTo(lineX + lineLen, lineY); ctx.stroke();
+          }
+          ctx.lineCap = 'butt';
+          break;
+        }
+
+        case 'regen_pulse': {
+          // Green healing pulse across screen
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade * 0.5;
+          ctx.shadowColor = '#22aa44'; ctx.shadowBlur = 18;
+          ctx.strokeStyle = '#44ff88'; ctx.lineWidth = 6;
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, p * Math.max(W, H) * 0.9, 0, Math.PI * 2); ctx.stroke();
+          // Tiny heart particles
+          ctx.globalAlpha = fade * 0.9;
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2 + p;
+            const r4 = p * 120;
+            ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('💚', fx.x + Math.cos(a) * r4, fx.y + Math.sin(a) * r4 - p * 20);
+          }
+          ctx.textAlign = 'left'; ctx.shadowBlur = 0;
+          break;
+        }
+
+        case 'armor_flash': {
+          // Silver plate armor flash — towers are now protected
+          const fade = Math.max(0, 1 - p);
+          ctx.globalAlpha = fade * 0.65;
+          ctx.shadowColor = '#aabbcc'; ctx.shadowBlur = 16;
+          ctx.strokeStyle = '#ccd8e8'; ctx.lineWidth = 8 * (1 - p * 0.5);
+          ctx.beginPath(); ctx.arc(fx.x, fx.y, p * W * 0.6, 0, Math.PI * 2); ctx.stroke();
+          // Shield shape in center
+          ctx.fillStyle = '#8899aa'; ctx.globalAlpha = fade * 0.7;
+          ctx.beginPath();
+          ctx.moveTo(fx.x, fx.y - 30);
+          ctx.lineTo(fx.x + 22, fx.y - 18); ctx.lineTo(fx.x + 22, fx.y + 5);
+          ctx.lineTo(fx.x, fx.y + 20);
+          ctx.lineTo(fx.x - 22, fx.y + 5); ctx.lineTo(fx.x - 22, fx.y - 18);
+          ctx.closePath(); ctx.fill();
+          ctx.shadowBlur = 0;
+          break;
+        }
+      }
+      ctx.restore();
     }
   }
 
@@ -4854,9 +6098,9 @@ class Game {
       this._drawGemItemIcon(div.querySelector('.gi-icon-canvas'), item.id);
     }
 
-    addSection('📦 Level Loadout — buy to use next level (stackable)');
+    addSection('📦 Inventory — buy to add to your inventory (stackable)');
     for (const item of GEM_SHOP_ITEMS.filter(i => !i.permanent)) {
-      const count = this.pendingConsumables.filter(id => id === item.id).length;
+      const count = this.gemInventory.filter(id => id === item.id).length;
       const canAfford = this.gems >= item.cost;
       const div = document.createElement('div');
       div.className = 'gem-item' + (canAfford ? '' : ' cant-afford');
@@ -5493,10 +6737,11 @@ class Game {
       purchases.push(item.id);
       localStorage.setItem('td_gem_purchases', JSON.stringify(purchases));
     } else {
-      // Consumable: queue for next level (can buy multiple copies)
+      // Consumable: add to persistent inventory
       this.gems -= item.cost;
       localStorage.setItem('td_gems', String(this.gems));
-      this.pendingConsumables.push(item.id);
+      this.gemInventory.push(item.id);
+      this._saveInventory();
     }
 
     this._buildGemShop(); // refresh UI

@@ -141,6 +141,10 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="side-btns" style="position:fixed;right:8px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:50;">
+  <button id="btn-notebook" title="Achievements" style="width:38px;height:38px;border-radius:50%;background:rgba(20,10,5,0.85);border:2px solid #c8a060;color:#f0d090;font-size:20px;cursor:pointer;display:none;">📓</button>
+  <button id="btn-trophy" title="Leaderboard" style="width:38px;height:38px;border-radius:50%;background:rgba(10,10,30,0.85);border:2px solid #ffd700;color:#ffd700;font-size:20px;cursor:pointer;display:none;">🏆</button>
+</div>
 <div id="ui"></div>
 
 <!-- Title screen overlay -->
@@ -179,7 +183,7 @@
   </div>
 </div>
 
-<script type="module" src="js/Game.js?v=44"></script>
+<script type="module" src="js/Game.js?v=47"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

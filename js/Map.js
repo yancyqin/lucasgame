@@ -1,4 +1,4 @@
-import { distance } from './constants.js?v=39';
+import { distance } from './constants.js?v=47';
 
 // GameMap owns the terrain: path, terrain features, and structures.
 // isFinalLevel = true → medieval wasteland theme; false → normal green battlefield.
@@ -114,23 +114,41 @@ export class GameMap {
 
   // ── Normal green battlefield (levels 1-99) ───────────────────────────────────
   _drawBattlefield(ctx) {
-    ctx.fillStyle = '#4a7c4e';
+    // Rich sky+ground gradient background
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, this.H);
+    bgGrad.addColorStop(0,   '#3a6b3e');
+    bgGrad.addColorStop(0.4, '#4a7c4e');
+    bgGrad.addColorStop(1,   '#3d6b40');
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, this.W, this.H);
 
-    // Grass variation patches
-    ctx.fillStyle = '#3d6e42';
-    for (let i = 0; i < 14; i++) {
+    // Grass variation patches — more colors, more depth
+    const patchColors = ['#3d6e42','#336638','#4a7a44','#2f5e35','#527c3e'];
+    for (let i = 0; i < 22; i++) {
       const px = (this.W * ((i * 137 + 53) % 100)) / 100;
       const py = (this.H * ((i * 97  + 29) % 100)) / 100;
+      ctx.fillStyle = patchColors[i % patchColors.length];
       ctx.save(); ctx.translate(px, py); ctx.scale(1, 0.55);
-      ctx.beginPath(); ctx.arc(0, 0, 28 + (i % 4) * 12, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, 28 + (i % 4) * 14, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
 
-    // Grass tufts
+    // Grass tufts — drawn as tiny strokes for texture
     for (const g of this.grassTufts) {
       ctx.fillStyle = g.c;
       ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.fill();
+      // Extra tuft strokes
+      if (g.r > 3) {
+        ctx.strokeStyle = g.c; ctx.lineWidth = 1; ctx.lineCap = 'round';
+        for (let k = 0; k < 3; k++) {
+          const a = (k / 3) * Math.PI - Math.PI * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(g.x, g.y);
+          ctx.lineTo(g.x + Math.cos(a) * g.r * 1.6, g.y + Math.sin(a) * g.r * 1.2 - g.r);
+          ctx.stroke();
+        }
+        ctx.lineCap = 'butt';
+      }
     }
 
     // Rocks
@@ -181,20 +199,38 @@ export class GameMap {
       ctx.restore();
     }
 
-    // Green trees
+    // Green trees — multi-layer canopy with specular highlight
     for (const tr of this.trees) {
-      ctx.fillStyle = 'rgba(0,0,0,0.14)';
-      ctx.save(); ctx.translate(tr.x + tr.r*0.5, tr.y + tr.r*0.35); ctx.scale(1.15, 0.38);
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.save(); ctx.translate(tr.x + tr.r*0.5, tr.y + tr.r*0.38); ctx.scale(1.2, 0.3);
       ctx.beginPath(); ctx.arc(0, 0, tr.r, 0, Math.PI*2); ctx.fill(); ctx.restore();
-      ctx.fillStyle = '#5a3310'; ctx.fillRect(tr.x - 3, tr.y, 6, tr.r * 0.75);
-      ctx.fillStyle = '#1e4220';
-      ctx.beginPath(); ctx.arc(tr.x, tr.y, tr.r, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#2d6b32';
-      ctx.beginPath(); ctx.arc(tr.x - tr.r*0.18, tr.y - tr.r*0.22, tr.r*0.74, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#3a8040';
-      ctx.beginPath(); ctx.arc(tr.x - tr.r*0.28, tr.y - tr.r*0.38, tr.r*0.48, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#52a052';
-      ctx.beginPath(); ctx.arc(tr.x - tr.r*0.34, tr.y - tr.r*0.52, tr.r*0.26, 0, Math.PI*2); ctx.fill();
+      // Trunk with gradient
+      const trunkG = ctx.createLinearGradient(tr.x-3, tr.y, tr.x+3, tr.y);
+      trunkG.addColorStop(0, '#3a2008'); trunkG.addColorStop(0.5, '#6b4020'); trunkG.addColorStop(1, '#3a2008');
+      ctx.fillStyle = trunkG; ctx.fillRect(tr.x - 3, tr.y, 6, tr.r * 0.8);
+      // Root flares
+      ctx.fillStyle = '#4a2c10';
+      ctx.fillRect(tr.x - 5, tr.y + tr.r * 0.6, 3, tr.r * 0.18);
+      ctx.fillRect(tr.x + 2, tr.y + tr.r * 0.6, 3, tr.r * 0.18);
+      // Dark base canopy layer
+      ctx.fillStyle = '#1a3c1e';
+      ctx.beginPath(); ctx.arc(tr.x, tr.y, tr.r * 1.05, 0, Math.PI*2); ctx.fill();
+      // Mid canopy
+      ctx.fillStyle = '#2a6030';
+      ctx.beginPath(); ctx.arc(tr.x - tr.r*0.1, tr.y - tr.r*0.18, tr.r*0.82, 0, Math.PI*2); ctx.fill();
+      // Lighter upper canopy
+      ctx.fillStyle = '#3a7a3e';
+      ctx.beginPath(); ctx.arc(tr.x - tr.r*0.22, tr.y - tr.r*0.34, tr.r*0.62, 0, Math.PI*2); ctx.fill();
+      // Upper highlight circle
+      ctx.fillStyle = '#4d9450';
+      ctx.beginPath(); ctx.arc(tr.x - tr.r*0.30, tr.y - tr.r*0.48, tr.r*0.40, 0, Math.PI*2); ctx.fill();
+      // Specular top highlight
+      ctx.fillStyle = '#62b060';
+      ctx.beginPath(); ctx.arc(tr.x - tr.r*0.38, tr.y - tr.r*0.60, tr.r*0.20, 0, Math.PI*2); ctx.fill();
+      // Tiny white glint
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.beginPath(); ctx.arc(tr.x - tr.r*0.42, tr.y - tr.r*0.68, tr.r*0.10, 0, Math.PI*2); ctx.fill();
     }
 
     // Animated fires
@@ -665,7 +701,37 @@ export class GameMap {
       for (let i = 1; i < this.path.length; i++) ctx.lineTo(this.path[i].x, this.path[i].y);
       ctx.stroke();
     };
+    // Base path layers (shadow, dark border, mid, light center)
     drawLine(shadow, 52); drawLine(dark, 44); drawLine(mid, 30); drawLine(light, 16);
+
+    // Cobblestone texture — draw stone blocks along path segments
+    const stoneW = 16, stoneH = 10;
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1;
+    for (let seg = 0; seg < this.path.length - 1; seg++) {
+      const a = this.path[seg], b = this.path[seg + 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      const steps = Math.floor(len / stoneW);
+      for (let st = 0; st < steps; st++) {
+        const t = (st + 0.5) / steps;
+        const cx = a.x + (b.x - a.x) * t;
+        const cy = a.y + (b.y - a.y) * t;
+        // Draw a rotated rectangle (stone block)
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(ang);
+        // Alternate offset for brick pattern
+        const yOff = (st % 2 === 0) ? -stoneH * 0.5 : 0;
+        ctx.strokeRect(-stoneW * 0.5, yOff - stoneH * 0.5, stoneW * 0.92, stoneH * 0.85);
+        // Stone highlight
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.beginPath();
+        ctx.moveTo(-stoneW * 0.45, yOff - stoneH * 0.42);
+        ctx.lineTo(stoneW * 0.42, yOff - stoneH * 0.42);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+        ctx.restore();
+      }
+    }
     ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
   }
 }

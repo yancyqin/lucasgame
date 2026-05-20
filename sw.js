@@ -1,17 +1,17 @@
 // Service Worker for Tower Defense — enables offline play
-const CACHE = 'td-v42';
+const CACHE = 'td-v47';
 const FILES = [
   './',
   './index.html',
-  './js/Game.js?v=42',
-  './js/Enemy.js?v=42',
-  './js/Projectile.js?v=42',
-  './js/Tower.js?v=42',
-  './js/Map.js?v=42',
-  './js/WaveManager.js?v=42',
-  './js/Mine.js?v=42',
-  './js/Trap.js?v=42',
-  './js/constants.js?v=42',
+  './js/Game.js?v=47',
+  './js/Enemy.js?v=47',
+  './js/Projectile.js?v=47',
+  './js/Tower.js?v=47',
+  './js/Map.js?v=47',
+  './js/WaveManager.js?v=47',
+  './js/Mine.js?v=47',
+  './js/Trap.js?v=47',
+  './js/constants.js?v=47',
 ];
 
 self.addEventListener('install', e => {
