@@ -1,11 +1,11 @@
-import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=48';
-import { GameMap }     from './Map.js?v=48';
-import { Tower }       from './Tower.js?v=48';
-import { Enemy }       from './Enemy.js?v=48';
-import { Projectile }  from './Projectile.js?v=48';
-import { Trap }        from './Trap.js?v=48';
-import { Mine }        from './Mine.js?v=48';
-import { WaveManager } from './WaveManager.js?v=48';
+import { TYPES, TRAPS, MINE, CAMP, CAMP_TYPES, LEVELS, ENEMIES, ACHIEVEMENTS, GEM_SHOP_ITEMS, UPGRADE_COST, UPGRADE_MULT, makePath, MAX_MONEY, distance } from './constants.js?v=49';
+import { GameMap }     from './Map.js?v=49';
+import { Tower }       from './Tower.js?v=49';
+import { Enemy }       from './Enemy.js?v=49';
+import { Projectile }  from './Projectile.js?v=49';
+import { Trap }        from './Trap.js?v=49';
+import { Mine }        from './Mine.js?v=49';
+import { WaveManager } from './WaveManager.js?v=49';
 
 // ── Button icon renderer ─────────────────────────────────────────────────────
 // Draws the actual in-game unit/tower at small scale onto a canvas context.
@@ -3287,7 +3287,7 @@ class Game {
     const maxUnlocked = parseInt(localStorage.getItem('td_maxLevel') || '1');
     const achUnlocked = JSON.parse(localStorage.getItem('td_achievements') || '[]');
     // Version badge — helps confirm the right code is loaded
-    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v48';
+    document.querySelector('.ts-subtitle').textContent = 'Build towers, place mines, hire workers and defend your castle!  •  v49';
 
     // Draw map background
     this._drawTitleBg();
@@ -3685,6 +3685,16 @@ class Game {
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
 
+      // Close achievement / leaderboard panels when ✕ is tapped
+      if (this.achOpen && this._achPanelClose) {
+        const b = this._achPanelClose;
+        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { this.achOpen = false; return; }
+      }
+      if (this.lbOpen && this._lbPanelClose) {
+        const b = this._lbPanelClose;
+        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { this.lbOpen = false; return; }
+      }
+
       // Handle wheel clicks even from title screen
       if (this.wheelOpen) { this._handleWheelClick(x, y); return; }
 
@@ -3770,6 +3780,53 @@ class Game {
         this._updateButtons();
       }
     });
+
+    // ── Touch controls (iPad / iPhone) ──────────────────────────────────────
+    // Converts the first changedTouch into canvas-relative {x, y}
+    const touchCoords = e => {
+      const rect = this.canvas.getBoundingClientRect();
+      const t = e.changedTouches[0];
+      return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    };
+
+    this.canvas.addEventListener('touchstart', e => {
+      e.preventDefault(); // stop iOS from scrolling / zooming
+      const { x, y } = touchCoords(e);
+      this.mouse.x = x; this.mouse.y = y;
+      // Mirror mousedown — begin 3D camera drag
+      if (this.viewMode === '3d') {
+        this._3dDragging   = true;
+        this._3dDragLastX  = x;
+        this._3dDragStartX = x;
+      }
+      this._touchStartX = x; this._touchStartY = y;
+      this._touchMoved  = false;
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const { x, y } = touchCoords(e);
+      this.mouse.x = x; this.mouse.y = y;
+      // Camera rotation in 3D mode
+      if (this._3dDragging && this.viewMode === '3d') {
+        const delta = x - this._3dDragLastX;
+        this._3dDragLastX = x;
+        this.camYaw += delta * 0.005;
+      }
+      // Mark as drag if finger moved more than 6 px
+      if (Math.hypot(x - this._touchStartX, y - this._touchStartY) > 6) this._touchMoved = true;
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchend', e => {
+      e.preventDefault();
+      this._3dDragging = false;
+      if (this._touchMoved) return; // was a drag, not a tap — skip click logic
+      // Re-use all existing click logic by dispatching a synthetic MouseEvent
+      const t = e.changedTouches[0];
+      this.canvas.dispatchEvent(new MouseEvent('click', {
+        clientX: t.clientX, clientY: t.clientY, bubbles: true
+      }));
+    }, { passive: false });
 
     document.addEventListener('keydown', e => {
       if (e.key === 'r' || e.key === 'R') { this.restart(); return; }
@@ -4763,6 +4820,15 @@ class Game {
     if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.fill(); ctx.stroke(); }
     else { ctx.fillRect(px, py, pw, ph); ctx.strokeRect(px, py, pw, ph); }
 
+    // ✕ close button — store bounds so click handler can detect taps
+    const cx = px + pw - 28, cy = py + 6, cw = 22, ch = 22;
+    this._achPanelClose = { x: cx, y: cy, w: cw, h: ch };
+    ctx.fillStyle = 'rgba(200,60,60,0.8)';
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(cx, cy, cw, ch, 4); ctx.fill(); }
+    else { ctx.fillRect(cx, cy, cw, ch); }
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('✕', cx + cw / 2, cy + ch - 5);
+
     ctx.fillStyle = '#f0d090'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('📓  ACHIEVEMENTS', px + pw/2, py + 26);
     ctx.strokeStyle = '#c8a06055'; ctx.lineWidth = 1;
@@ -4817,6 +4883,15 @@ class Game {
     ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2;
     if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.fill(); ctx.stroke(); }
     else { ctx.fillRect(px, py, pw, ph); ctx.strokeRect(px, py, pw, ph); }
+
+    // ✕ close button — store bounds so click handler can detect taps
+    const cx = px + pw - 28, cy = py + 6, cw = 22, ch = 22;
+    this._lbPanelClose = { x: cx, y: cy, w: cw, h: ch };
+    ctx.fillStyle = 'rgba(200,60,60,0.8)';
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(cx, cy, cw, ch, 4); ctx.fill(); }
+    else { ctx.fillRect(cx, cy, cw, ch); }
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('✕', cx + cw / 2, cy + ch - 5);
 
     ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('🏆  WORLD LEADERBOARD', px + pw/2, py + 26);

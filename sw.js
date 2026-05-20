@@ -1,5 +1,5 @@
 // Service Worker for Tower Defense — enables offline play
-const CACHE = 'td-v48';
+const CACHE = 'td-v49';
 const FILES = [
   './',
   './index.html',
